@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Importar {{ sim.nome }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-person-plus-fill me-2" style="color:var(--or)"></i>Cadastrar Cliente</h1>
+    <a href="/simulador" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Voltar</a>
+</div>
+
+<div class="card mb-3" style="background:var(--orl);border:1px solid var(--or)">
+    <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong style="color:var(--db)">{{ sim.nome }}</strong>
+                <span class="text-muted ms-2" style="font-size:12px">Simulação de {{ sim.mes_referencia }}</span>
+            </div>
+            <div class="text-end">
+                <span style="font-size:13px">Economia: <strong style="color:var(--green)">{{ fmt(sim.economia_mes) }}/mês</strong></span>
+                <span class="ms-2" style="font-size:13px">COM: <strong style="color:var(--or)">{{ fmt(sim.total_com) }}</strong></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<form method="POST" class="row g-3">
+    <div class="col-md-6"><div class="card"><div class="card-body p-4">
+        <h6 class="fw-bold mb-3"><i class="bi bi-person-fill me-2" style="color:var(--or)"></i>Dados Obrigatórios</h6>
+        <div class="mb-3">
+            <label class="form-label">Unidade Consumidora (UC)</label>
+            <input type="text" name="uc" class="form-control" required placeholder="Ex: 14811832" autofocus>
+            <small class="text-muted">Número da fatura Equatorial</small>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">CPF/CNPJ</label>
+            <input type="text" name="cpf" class="form-control" placeholder="000.000.000-00">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Tipo de Fornecimento</label>
+            <select name="tipo_fornecimento" class="form-select">
+                <option value="MONOFASICO">MONOFASICO</option>
+                <option value="BIFASICO">BIFASICO</option>
+                <option value="TRIFASICO">TRIFASICO</option>
+            </select>
+        </div>
+    </div></div></div>
+
+    <div class="col-md-6"><div class="card"><div class="card-body p-4">
+        <h6 class="fw-bold mb-3"><i class="bi bi-geo-alt-fill me-2" style="color:var(--or)"></i>Endereço</h6>
+        <div class="mb-3">
+            <label class="form-label">Linha 1 (Rua, nº)</label>
+            <input type="text" name="endereco_linha1" class="form-control" value="{{ sim.endereco or '' }}">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Linha 2 (Bairro)</label>
+            <input type="text" name="endereco_linha2" class="form-control">
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Linha 3 (CEP, Cidade/UF)</label>
+            <input type="text" name="endereco_linha3" class="form-control" placeholder="CEP 00.000-000, Cidade/GO">
+        </div>
+    </div></div></div>
+
+    <div class="col-md-6"><div class="card"><div class="card-body p-4">
+        <h6 class="fw-bold mb-3"><i class="bi bi-sun-fill me-2" style="color:var(--or)"></i>Vincular à Usina</h6>
+        <div class="mb-3">
+            <label class="form-label">Usina</label>
+            <select name="id_usina" class="form-select" id="selUsina">
+                <option value="">Nenhuma (vincular depois)</option>
+                {% for u in usinas %}
+                <option value="{{ u.id_usina }}" data-geracao="{{ u.get('qtd_geracao_media_mensal', 0) or 0 }}">
+                    {{ u.desc_nome or u.id_usina }}
+                    {% if u.qtd_potencia_kwp %}({{ u.qtd_potencia_kwp }} kWp{% if u.qtd_geracao_media_mensal %} — {{ "{:,.0f}".format(u.qtd_geracao_media_mensal|float).replace(",", ".") }} kWh/mês{% endif %}){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Rateio (%)</label>
+            <div class="input-group">
+                <input type="text" name="rateio_pct" class="form-control" id="rateioInput" placeholder="Ex: 5.00">
+                <span class="input-group-text" id="kwhPreview" style="font-size:12px;min-width:120px">= 0 kWh</span>
+            </div>
+            <small class="text-muted">kWh calculado automaticamente com base na geração da usina</small>
+        </div>
+    </div></div></div>
+
+    <div class="col-md-6"><div class="card"><div class="card-body p-4">
+        <h6 class="fw-bold mb-3"><i class="bi bi-info-circle-fill me-2" style="color:var(--or)"></i>Dados da Simulação (pré-preenchidos)</h6>
+        <table class="table table-sm mb-0" style="font-size:12px">
+            <tr><td class="text-muted">Nome</td><td><strong>{{ sim.nome }}</strong></td></tr>
+            <tr><td class="text-muted">Consumo</td><td>{{ "{:,.0f}".format(sim.consumo).replace(",", ".") }} kWh</td></tr>
+            <tr><td class="text-muted">Tarifa</td><td>R$ {{ "%.6f"|format(sim.tarifa) }}</td></tr>
+            <tr><td class="text-muted">Desconto</td><td>{{ sim.desconto|int }}%</td></tr>
+            <tr><td class="text-muted">Telefone</td><td>{{ sim.telefone or '-' }}</td></tr>
+            <tr><td class="text-muted">E-mail</td><td>{{ sim.email or '-' }}</td></tr>
+        </table>
+    </div></div></div>
+
+    <div class="col-12 text-end">
+        <a href="/simulador" class="btn btn-outline-secondary me-2">Cancelar</a>
+        <button type="submit" class="btn btn-cta btn-lg px-5">
+            <i class="bi bi-person-plus me-1"></i> Cadastrar Cliente
+        </button>
+    </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+const selUsina = document.getElementById('selUsina');
+const rateioInput = document.getElementById('rateioInput');
+const kwhPreview = document.getElementById('kwhPreview');
+function calcKwh() {
+    const opt = selUsina.options[selUsina.selectedIndex];
+    const geracao = parseFloat(opt.getAttribute('data-geracao') || '0');
+    const pct = parseFloat((rateioInput.value || '0').replace(',', '.'));
+    if (geracao > 0 && pct > 0) {
+        const kwh = (geracao * pct / 100).toFixed(0);
+        kwhPreview.innerHTML = '= <strong>' + parseInt(kwh).toLocaleString('pt-BR') + ' kWh</strong>';
+        kwhPreview.style.color = 'var(--or)';
+    } else {
+        kwhPreview.innerHTML = '= 0 kWh';
+        kwhPreview.style.color = '#999';
+    }
+}
+selUsina.addEventListener('change', calcKwh);
+rateioInput.addEventListener('input', calcKwh);
+</script>
+{% endblock %}

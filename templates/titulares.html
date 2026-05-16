@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Titulares UC{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-person-badge-fill me-2" style="color:var(--or)"></i>Titulares das UCs</h1>
+    <a href="/titulares/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Titular</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        {% if titulares %}
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>CPF / CNPJ</th>
+                    <th>Telefone</th>
+                    <th>E-mail</th>
+                    <th>Usinas</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for t in titulares %}
+            <tr>
+                <td>
+                    <div class="fw-semibold" style="color:var(--db)">{{ t.desc_nome }}</div>
+                    {% if t.dt_nascimento %}
+                    <small class="text-muted" style="font-size:11px">
+                        <i class="bi bi-cake2"></i> {{ t.dt_nascimento }}
+                    </small>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if t.desc_cpf_cnpj %}
+                    <code style="font-size:12px;background:#f4f6f9;padding:2px 6px;border-radius:5px">
+                        {{ t.desc_cpf_cnpj }}
+                    </code>
+                    {% else %}
+                    <span class="text-muted" style="font-size:12px">—</span>
+                    {% endif %}
+                </td>
+                <td><span style="font-size:12px">{{ t.desc_telefone or '—' }}</span></td>
+                <td><span style="font-size:12px">{{ t.desc_email or '—' }}</span></td>
+                <td>
+                    {% if t._usinas_count > 0 %}
+                    <span class="badge" style="background:rgba(245,166,35,0.15);color:var(--or)"
+                          title="{{ t._usinas | map(attribute='desc_nome') | join(', ') }}">
+                        {{ t._usinas_count }} usina{% if t._usinas_count != 1 %}s{% endif %}
+                    </span>
+                    {% else %}
+                    <span class="text-muted" style="font-size:12px">nenhuma</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    <a href="/titulares/editar/{{ t.id_titular }}" class="btn btn-sm btn-outline-primary me-1">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    {% if t._usinas_count == 0 %}
+                    <a href="/titulares/excluir/{{ t.id_titular }}"
+                       class="btn btn-sm btn-outline-danger"
+                       onclick="return confirm('Excluir titular {{ t.desc_nome }}?')">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                    {% else %}
+                    <button class="btn btn-sm btn-outline-danger" disabled title="Vinculado a usinas">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-person-badge-fill" style="font-size:48px;color:var(--or);opacity:0.3"></i>
+            <p class="text-muted mt-3">Nenhum titular cadastrado.</p>
+            <a href="/titulares/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Cadastrar Primeiro Titular</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body p-4">
+        <h6 class="fw-bold mb-2" style="color:var(--sl)"><i class="bi bi-info-circle me-2"></i>Como funciona</h6>
+        <p class="text-muted mb-0" style="font-size:13px">
+            Cada titular representa o nome registrado na UC (Unidade Consumidora) da Equatorial
+            de uma ou mais usinas. Pode ser pessoa fisica ou juridica, e nem sempre coincide com o dono da usina.
+            Ao cadastrar/editar uma usina em <a href="/usinas">Usinas</a>, voce pode selecionar
+            um titular existente ou cadastrar um novo na hora.
+        </p>
+    </div>
+</div>
+{% endblock %}

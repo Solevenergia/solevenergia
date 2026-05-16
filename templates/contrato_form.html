@@ -1,0 +1,354 @@
+{% extends "base.html" %}
+{% block title %}Gerar Contrato{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1><i class="bi bi-file-earmark-text-fill me-2" style="color:var(--or)"></i>Gerar Contrato</h1>
+  <a href="/clientes" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Voltar</a>
+</div>
+
+<form method="POST" action="/contrato/visualizar" target="_blank">
+<div class="row g-4">
+
+  <!-- ── SELEÇÃO RÁPIDA ─────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card p-4">
+      <h6 class="fw-bold mb-3" style="color:var(--db)"><i class="bi bi-search me-2" style="color:var(--or)"></i>Pré-preencher a partir de cadastro</h6>
+      <div class="row g-3">
+        <div class="col-md-5">
+          <label class="form-label">Cliente (Locatário)</label>
+          <select class="form-select" id="sel_cliente" onchange="preencherCliente(this.value)">
+            <option value="">— Selecionar cliente —</option>
+            {% for c in clientes %}
+            <option value="{{ c.cod_uc }}"
+              data-nome="{{ c.desc_nome or '' }}"
+              data-cpf="{{ c.desc_cpf or '' }}"
+              data-email="{{ c.desc_email or '' }}"
+              data-desconto="{{ ((c.pct_desconto or 0.25)|float * 100)|int }}"
+              data-uc="{{ c.cod_uc_alternativa or c.cod_uc or '' }}"
+            >{{ c.desc_nome }} — UC {{ c.cod_uc_alternativa or c.cod_uc }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label">Usina (Anexo I)</label>
+          <select class="form-select" id="sel_usina" onchange="preencherUsina(this.value)">
+            <option value="">— Selecionar usina —</option>
+            {% for u in usinas %}
+            <option value="{{ u.id_usina }}"
+              data-potencia="{{ u.qtd_potencia_kwp or '' }}"
+              data-modulos="{{ u.desc_modulos_tipo or '' }}"
+              data-qtd-modulos="{{ u.qtd_modulos or '' }}"
+              data-inversor="{{ u.desc_inversor or '' }}"
+              data-estrutura="{{ u.desc_estrutura or '' }}"
+              data-local="{{ u.desc_endereco_usina or '' }}"
+              data-uc-geradora="{{ u.cod_uc_geradora or '' }}"
+              data-geracao="{{ u.qtd_geracao_media_mensal or '' }}"
+              data-comissionamento="{{ u.dt_comissionamento or '' }}"
+              data-garantia="{{ u.desc_garantia_modulos or '25 anos' }}"
+              data-observacoes="{{ u.desc_observacoes or '' }}"
+            >{{ u.desc_nome }} ({{ u.qtd_potencia_kwp }} kWp)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2 d-flex align-items-end">
+          <button type="button" class="btn btn-outline-secondary w-100" onclick="limparForm()"><i class="bi bi-x-circle me-1"></i>Limpar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LOCATÁRIO ──────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card p-4">
+      <h6 class="fw-bold mb-3" style="color:var(--db)"><i class="bi bi-person-badge-fill me-2" style="color:var(--or)"></i>Locatário</h6>
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label">Razão Social / Nome *</label>
+          <input type="text" class="form-control" name="locatario_razao_social" id="f_nome" required placeholder="Nome completo ou razão social">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">CNPJ <small class="text-muted fw-normal">(deixar vazio se PF)</small></label>
+          <input type="text" class="form-control" name="locatario_cnpj" id="f_cnpj" placeholder="00.000.000/0000-00">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">E-mail</label>
+          <input type="email" class="form-control" name="locatario_email" id="f_email" placeholder="email@exemplo.com">
+        </div>
+        <div class="col-md-8">
+          <label class="form-label">Endereço completo *</label>
+          <input type="text" class="form-control" name="locatario_endereco" id="f_endereco" required placeholder="Rua, n.º, Bairro, CEP, Cidade/UF">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Representante Legal *</label>
+          <input type="text" class="form-control" name="locatario_representante" id="f_representante" required placeholder="Nome do representante">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Cargo *</label>
+          <input type="text" class="form-control" name="locatario_cargo" id="f_cargo" required placeholder="Síndico, Sócio...">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Profissão</label>
+          <input type="text" class="form-control" name="locatario_profissao" id="f_profissao" placeholder="Empresário...">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">CPF do Representante *</label>
+          <input type="text" class="form-control" name="locatario_cpf" id="f_cpf" required placeholder="000.000.000-00">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">RG do Representante</label>
+          <input type="text" class="form-control" name="locatario_rg" id="f_rg" placeholder="0.000.000 SSP/UF">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Nacionalidade</label>
+          <input type="text" class="form-control" name="locatario_nacionalidade" id="f_nacionalidade" value="Brasileiro(a)" placeholder="Brasileiro(a)">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Estado Civil</label>
+          <select class="form-select" name="locatario_estado_civil" id="f_estado_civil">
+            <option>Solteiro(a)</option>
+            <option>Casado(a)</option>
+            <option>Divorciado(a)</option>
+            <option>Viúvo(a)</option>
+            <option>União Estável</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONTRATO ───────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card p-4">
+      <h6 class="fw-bold mb-3" style="color:var(--db)"><i class="bi bi-file-earmark-ruled-fill me-2" style="color:var(--or)"></i>Dados do Contrato</h6>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label">UC Beneficiada (número) *</label>
+          <input type="text" class="form-control" name="uc_numero" id="f_uc" required placeholder="Ex: 10001780407">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Desconto (%) *</label>
+          <input type="number" class="form-control" name="desconto_percent" id="f_desc" required min="1" max="100" value="25" oninput="atualizarExtenso('desc')">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Desconto por extenso *</label>
+          <input type="text" class="form-control" name="desconto_extenso" id="f_desc_ext" required placeholder="vinte e cinco">
+        </div>
+        <div class="col-md-1">
+          <label class="form-label">Prazo (meses) *</label>
+          <input type="number" class="form-control" name="prazo_meses" id="f_prazo" required min="1" value="24" oninput="atualizarExtenso('prazo')">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Prazo por extenso *</label>
+          <input type="text" class="form-control" name="prazo_extenso" id="f_prazo_ext" required placeholder="vinte e quatro">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Data de Assinatura *</label>
+          <input type="text" class="form-control" name="data_assinatura" id="f_data" required placeholder="21 de Março de 2026">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Cidade de Assinatura *</label>
+          <input type="text" class="form-control" name="cidade_assinatura" id="f_cidade" required value="Goiânia/GO">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TESTEMUNHAS ────────────────────────────────────── -->
+  <div class="col-md-6">
+    <div class="card p-4 h-100">
+      <h6 class="fw-bold mb-3" style="color:var(--db)"><i class="bi bi-person-check-fill me-2" style="color:var(--or)"></i>Testemunha 1</h6>
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">Nome *</label>
+          <input type="text" class="form-control" name="testemunha1_nome" required placeholder="Nome completo">
+        </div>
+        <div class="col-6">
+          <label class="form-label">CPF *</label>
+          <input type="text" class="form-control" name="testemunha1_cpf" required placeholder="000.000.000-00">
+        </div>
+        <div class="col-6">
+          <label class="form-label">RG</label>
+          <input type="text" class="form-control" name="testemunha1_rg" placeholder="0.000.000 SSP/UF">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card p-4 h-100">
+      <h6 class="fw-bold mb-3" style="color:var(--db)"><i class="bi bi-person-check-fill me-2" style="color:var(--or)"></i>Testemunha 2</h6>
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">Nome *</label>
+          <input type="text" class="form-control" name="testemunha2_nome" required placeholder="Nome completo">
+        </div>
+        <div class="col-6">
+          <label class="form-label">CPF *</label>
+          <input type="text" class="form-control" name="testemunha2_cpf" required placeholder="000.000.000-00">
+        </div>
+        <div class="col-6">
+          <label class="form-label">RG</label>
+          <input type="text" class="form-control" name="testemunha2_rg" placeholder="0.000.000 SSP/UF">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ANEXO I ─────────────────────────────────────────── -->
+  <div class="col-12">
+    <div class="card p-4">
+      <h6 class="fw-bold mb-3" style="color:var(--db)"><i class="bi bi-cpu-fill me-2" style="color:var(--or)"></i>Anexo I — Especificações Técnicas</h6>
+      <div class="row g-3">
+        <div class="col-md-2">
+          <label class="form-label">Potência (kWp) *</label>
+          <input type="text" class="form-control" name="anexo_potencia_kwp" id="f_kwp" required placeholder="75">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Módulos (modelo/tipo) *</label>
+          <input type="text" class="form-control" name="anexo_modulos" id="f_modulos" required placeholder="DMEC 625 W">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Qtd. módulos</label>
+          <input type="text" class="form-control" name="anexo_qtd_modulos" id="f_qtd_mod" placeholder="200">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Inversor *</label>
+          <input type="text" class="form-control" name="anexo_inversor" id="f_inversor" required placeholder="PHB 75 kW">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Estrutura de Fixação *</label>
+          <input type="text" class="form-control" name="anexo_estrutura" id="f_estrutura" required placeholder="Estrutura Modular Monoposte de solo">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Local de Instalação *</label>
+          <input type="text" class="form-control" name="anexo_local" id="f_local" required placeholder="Rua ..., Bairro, Cidade/UF">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Geração Média Mensal (kWh) *</label>
+          <input type="text" class="form-control" name="anexo_geracao_media" id="f_geracao" required placeholder="15.000">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Data de Comissionamento *</label>
+          <input type="text" class="form-control" name="anexo_comissionamento" id="f_comissionamento" required placeholder="Outubro de 2025">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Garantia Equipamentos *</label>
+          <input type="text" class="form-control" name="anexo_garantia" id="f_garantia" required value="25 anos">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Observações Técnicas</label>
+          <input type="text" class="form-control" name="anexo_observacoes" id="f_obs" placeholder="Sem observações">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SUBMIT ─────────────────────────────────────────── -->
+  <div class="col-12 d-flex justify-content-end gap-3 pb-4">
+    <a href="/clientes" class="btn btn-outline-secondary px-4">Cancelar</a>
+    <button type="submit" class="btn btn-cta px-5">
+      <i class="bi bi-file-earmark-pdf-fill me-2"></i>Gerar Contrato
+    </button>
+  </div>
+
+</div>
+</form>
+
+<script>
+const EXTENSO = {
+  1:'um', 2:'dois', 3:'três', 4:'quatro', 5:'cinco', 6:'seis', 7:'sete', 8:'oito',
+  9:'nove', 10:'dez', 11:'onze', 12:'doze', 13:'treze', 14:'quatorze', 15:'quinze',
+  16:'dezesseis', 17:'dezessete', 18:'dezoito', 19:'dezenove', 20:'vinte',
+  21:'vinte e um', 22:'vinte e dois', 23:'vinte e três', 24:'vinte e quatro',
+  25:'vinte e cinco', 26:'vinte e seis', 27:'vinte e sete', 28:'vinte e oito',
+  29:'vinte e nove', 30:'trinta', 36:'trinta e seis', 48:'quarenta e oito',
+  60:'sessenta', 72:'setenta e dois', 84:'oitenta e quatro', 120:'cento e vinte',
+};
+
+function atualizarExtenso(tipo) {
+  if (tipo === 'desc') {
+    const v = parseInt(document.getElementById('f_desc').value) || 0;
+    document.getElementById('f_desc_ext').value = EXTENSO[v] || '';
+  } else {
+    const v = parseInt(document.getElementById('f_prazo').value) || 0;
+    document.getElementById('f_prazo_ext').value = EXTENSO[v] || '';
+  }
+}
+
+function preencherCliente(uc) {
+  if (!uc) return;
+  const sel = document.getElementById('sel_cliente');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('f_nome').value       = opt.dataset.nome || '';
+  document.getElementById('f_cpf').value        = opt.dataset.cpf  || '';
+  document.getElementById('f_email').value      = opt.dataset.email || '';
+  const desc = parseInt(opt.dataset.desconto) || 25;
+  document.getElementById('f_desc').value       = desc;
+  document.getElementById('f_desc_ext').value   = EXTENSO[desc] || '';
+  const ucVal = opt.dataset.uc || uc;
+  document.getElementById('f_uc').value         = ucVal;
+  // busca endereço via API
+  fetch('/api/cliente/' + encodeURIComponent(uc))
+    .then(r => r.json())
+    .then(data => {
+      if (data.erro) return;
+      const end = [
+        data.desc_logradouro, data.desc_numero,
+        data.desc_complemento, data.desc_setor,
+        data.desc_cidade, data.desc_estado, data.cod_cep
+      ].filter(Boolean).join(', ');
+      if (end) document.getElementById('f_endereco').value = end;
+      if (data.desc_titular_fatura)
+        document.getElementById('f_representante').value = data.desc_titular_fatura;
+    });
+}
+
+function preencherUsina(id) {
+  if (!id) return;
+  const sel = document.getElementById('sel_usina');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('f_kwp').value            = opt.dataset.potencia || '';
+  document.getElementById('f_modulos').value        = opt.dataset.modulos || '';
+  document.getElementById('f_qtd_mod').value        = opt.dataset.qtdModulos || '';
+  document.getElementById('f_inversor').value       = opt.dataset.inversor || '';
+  document.getElementById('f_estrutura').value      = opt.dataset.estrutura || '';
+  document.getElementById('f_local').value          = opt.dataset.local || '';
+  document.getElementById('f_geracao').value        = opt.dataset.geracao || '';
+  document.getElementById('f_comissionamento').value = opt.dataset.comissionamento || '';
+  document.getElementById('f_garantia').value       = opt.dataset.garantia || '25 anos';
+  document.getElementById('f_obs').value            = opt.dataset.observacoes || '';
+  // preenche UC se ainda vazio
+  if (!document.getElementById('f_uc').value && opt.dataset.ucGeradora)
+    document.getElementById('f_uc').value = opt.dataset.ucGeradora;
+}
+
+function limparForm() {
+  document.getElementById('sel_cliente').value = '';
+  document.getElementById('sel_usina').value = '';
+  ['f_nome','f_cnpj','f_email','f_endereco','f_representante','f_cargo',
+   'f_profissao','f_cpf','f_rg','f_uc','f_kwp','f_modulos','f_qtd_mod',
+   'f_inversor','f_estrutura','f_local','f_geracao','f_comissionamento','f_obs']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  document.getElementById('f_desc').value = '25';
+  document.getElementById('f_desc_ext').value = 'vinte e cinco';
+  document.getElementById('f_prazo').value = '24';
+  document.getElementById('f_prazo_ext').value = 'vinte e quatro';
+  document.getElementById('f_cidade').value = 'Goiânia/GO';
+  document.getElementById('f_garantia').value = '25 anos';
+  document.getElementById('f_nacionalidade').value = 'Brasileiro(a)';
+}
+
+// Inicializa extenso nos valores default
+document.addEventListener('DOMContentLoaded', () => {
+  atualizarExtenso('desc');
+  atualizarExtenso('prazo');
+  // Data atual formatada
+  const hoje = new Date();
+  const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  document.getElementById('f_data').value =
+    `${hoje.getDate()} de ${meses[hoje.getMonth()]} de ${hoje.getFullYear()}`;
+});
+</script>
+{% endblock %}

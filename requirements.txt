@@ -1,0 +1,37 @@
+# CONTALEV - Dependencias
+# Instale com: pip install -r requirements.txt
+#
+# AMBIENTE ATUAL: Python 3.12 ARM64 (Windows ARM)
+#   Caminho: C:\Users\danil\AppData\Local\Programs\Python\Python312-arm64\python.exe
+#   Restricao: PyMuPDF nao tem wheel para ARM64 — substituido por pypdfium2 + pdfplumber
+#
+# MIGRACAO FUTURA para Python x64:
+#   - Ja existe Python 3.14 x64 em: C:\Users\danil\AppData\Local\Python\pythoncore-3.14-64\
+#   - Nao migrar agora: ~50 pacotes para reinstalar + risco com winocr/winrt/pythonnet
+#   - Quando migrar: descomentar PyMuPDF abaixo e rodar pip install -r requirements.txt
+#   - Tambem rodar: playwright install  (browsers precisam ser reinstalados)
+
+flask
+reportlab
+qrcode[pil]
+Pillow
+pypdfium2
+pdfplumber
+pypdf
+
+# Extracao avancada de PDF — coberto por pypdfium2/pdfplumber no ARM64
+# Descomentar ao migrar para Python x64:
+# PyMuPDF
+
+# Variaveis de ambiente (.env)
+python-dotenv
+
+# Sincronizacao com Supabase (via REST API, sem build tools)
+httpx
+
+# Servidor WSGI para producao (Render, Heroku, etc)
+gunicorn
+
+# Launcher com janela nativa (icone proprio na barra de tarefas)
+# Apenas local — comentado para deploy em servidor Linux:
+# pywebview

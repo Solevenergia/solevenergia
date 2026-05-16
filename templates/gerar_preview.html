@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block title %}Pré-visualizar Cobrança — SOLEV{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <div class="d-flex align-items-center mb-3 flex-wrap gap-2">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-eye-fill me-2" style="color:var(--or)"></i>
+            Pré-visualizar Cobrança
+        </h3>
+        <span class="badge" style="background:var(--or);color:var(--db);font-weight:700">
+            {% if origem == 'manual' %}MANUAL{% elif origem == 'pdf' %}PDF EQUATORIAL{% else %}{{ origem|upper }}{% endif %}
+        </span>
+        <small class="text-muted ms-auto">
+            <i class="bi bi-info-circle"></i>
+            Edite qualquer valor e os totais são recalculados ao vivo. Nenhum PDF foi gerado ainda.
+        </small>
+    </div>
+
+    <!-- IDENTIFICAÇÃO CLIENTE (read-only) -->
+    <div class="card mb-3" style="border-left:4px solid var(--or)">
+        <div class="card-body py-3 px-4">
+            <div class="row align-items-center">
+                <div class="col-md-7">
+                    <strong class="fs-5">{{ dados.nome }}</strong>
+                    <div class="text-muted" style="font-size:13px">
+                        UC <code>{{ dados.unidade_consumidora }}</code>
+                        &middot; CPF/CNPJ: {{ dados.cpf or '—' }}
+                        &middot; Mês ref.: <strong>{{ dados.mes_referencia }}</strong>
+                    </div>
+                </div>
+                <div class="col-md-5 text-md-end">
+                    <span class="text-muted" style="font-size:12px">Vencimento SOLEV</span>
+                    <strong class="ms-2">{{ calc.venc_contalev or '—' }}</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST" action="{{ post_url }}" id="form_confirmar" enctype="multipart/form-data">
+        <!-- Dispara geração definitiva -->
+        <input type="hidden" name="acao" value="gerar">
+
+        <!-- Identificação cliente (não editáveis aqui) -->
+        <input type="hidden" name="uc"                          value="{{ dados.unidade_consumidora }}">
+        <input type="hidden" name="nome"                        value="{{ dados.nome }}">
+        <input type="hidden" name="cpf"                         value="{{ dados.cpf }}">
+        <input type="hidden" name="endereco"                    value="{{ dados.endereco }}">
+        <input type="hidden" name="modo_bandeira"               value="{{ dados.modo_bandeira or 'com_bandeira' }}">
+        <input type="hidden" name="valor_cobranca_anterior"     value="{{ dados.valor_cobranca_anterior or 0 }}">
+        <input type="hidden" name="venc_contalev_anterior"      value="{{ dados.venc_contalev_anterior or '' }}">
+        <input type="hidden" name="data_pagamento_anterior"     value="{{ dados.data_pagamento_anterior or '' }}">
+        <input type="hidden" name="economia_acumulada_anterior" value="{{ dados.economia_acumulada_anterior or 0 }}">
+        <input type="hidden" name="titular_fatura"              value="{{ dados.titular_fatura or '' }}">
+        <input type="hidden" name="tipo_fornecimento"           value="{{ dados.tipo_fornecimento or 'Bifásico' }}">
+        <input type="hidden" name="anterior_leitura"            value="{{ dados.anterior_leitura or '' }}">
+        <input type="hidden" name="data_leitura"                value="{{ dados.data_leitura or '' }}">
+        <input type="hidden" name="proxima_leitura"             value="{{ dados.proxima_leitura or '' }}">
+        <input type="hidden" name="n_dias"                      value="{{ dados.n_dias or '' }}">
+        <input type="hidden" name="_equatorial_pdf_path"        value="{{ equatorial_pdf_path }}">
+
+        <div class="row">
+            <!-- COLUNA 1: VALORES EDITÁVEIS -->
+            <div class="col-lg-7">
+                <div class="card mb-3">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold mb-3 text-uppercase" style="color:var(--sl);font-size:12px;letter-spacing:.5px">
+                            <i class="bi bi-pencil-square me-1" style="color:var(--or)"></i>Valores editáveis
+                        </h6>
+
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Mês referência</label>
+                                <input type="text" name="mes_referencia" id="e_mes_ref"
+                                       class="form-control" value="{{ dados.mes_referencia }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Venc. Equatorial</label>
+                                <input type="text" name="venc_equatorial" id="e_venc_eq"
+                                       class="form-control" value="{{ dados.venc_equatorial or '' }}"
+                                       placeholder="dd/mm/aaaa">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Venc. SOLEV</label>
+                                <input type="text" name="vencimento_contalev" id="e_venc"
+                                       class="form-control" value="{{ calc.venc_contalev or dados.vencimento_contalev or '' }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Desconto (%)</label>
+                                <input type="text" name="desconto_pct_override" id="e_desconto"
+                                       class="form-control" value="{{ '%.2f'|format(desconto_pct_input)|replace('.', ',') }}">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Consumo (kWh)</label>
+                                <input type="text" name="consumo_kwh" id="e_consumo"
+                                       class="form-control" value="{{ '%.2f'|format(dados.consumo_kwh)|replace('.', ',') }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Tarifa (R$/kWh)</label>
+                                <input type="text" name="tarifa" id="e_tarifa"
+                                       class="form-control" value="{{ '%.6f'|format(dados.tarifa_sem)|replace('.', ',') }}" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Compensado (kWh)</label>
+                                <input type="text" name="consumo_compensado" id="e_comp"
+                                       class="form-control" value="{{ '%.2f'|format(dados.consumo_compensado)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Não Comp. (kWh)</label>
+                                <input type="text" name="consumo_nao_comp" id="e_nao_comp"
+                                       class="form-control" value="{{ '%.2f'|format(dados.consumo_nao_comp)|replace('.', ',') }}">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Ilum. Pública (R$)</label>
+                                <input type="text" name="iluminacao_publica" id="e_ilum"
+                                       class="form-control" data-no-persist="true"
+                                       value="{{ '%.2f'|format(dados.iluminacao_publica)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Multa Equatorial (R$)</label>
+                                <input type="text" name="multa" id="e_multa"
+                                       class="form-control" data-no-persist="true"
+                                       value="{{ '%.2f'|format(dados.multa)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Juros Equatorial (R$)</label>
+                                <input type="text" name="juros" id="e_juros"
+                                       class="form-control" data-no-persist="true"
+                                       value="{{ '%.2f'|format(dados.juros)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Correção IPCA (R$)</label>
+                                <input type="text" name="correcao_ipca" id="e_ipca"
+                                       class="form-control" data-no-persist="true"
+                                       value="{{ '%.2f'|format(dados.correcao_ipca or 0)|replace('.', ',') }}">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="text-muted small mb-2"><i class="bi bi-flag-fill me-1"></i>Bandeiras (R$/kWh)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Bandeira Amarela</label>
+                                <input type="text" name="bandeira_amarela" id="e_band_am"
+                                       class="form-control" value="{{ '%.6f'|format(band_am)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Bandeira Vermelha</label>
+                                <input type="text" name="bandeira_vermelha" id="e_band_vm"
+                                       class="form-control" value="{{ '%.6f'|format(band_vm)|replace('.', ',') }}">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="text-muted small mb-2"><i class="bi bi-cash-coin me-1"></i>COM SOLEV (atrasos & ajustes)</h6>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Multa COM (R$)</label>
+                                <input type="text" name="multa_com" id="e_multa_com"
+                                       class="form-control" value="{{ '%.2f'|format(dados.multa_com_override or 0)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Juros COM (R$)</label>
+                                <input type="text" name="juros_com" id="e_juros_com"
+                                       class="form-control" value="{{ '%.2f'|format(dados.juros_com_override or 0)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">DIFCI (R$)</label>
+                                <input type="text" name="difci" id="e_difci"
+                                       class="form-control" value="{{ '%.2f'|format(dados.difci or 0)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">ECNISENTA (R$)</label>
+                                <input type="text" name="ecnisenta" id="e_ecnisenta"
+                                       class="form-control" value="{{ '%.2f'|format(dados.ecnisenta or 0)|replace('.', ',') }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Ajuste (R$)</label>
+                                <input type="text" name="ajuste_valor" id="e_ajuste_valor"
+                                       class="form-control" value="{{ '%.2f'|format(dados.ajuste_valor or 0)|replace('.', ',') }}">
+                                <small class="text-muted">+ acréscimo / - desconto</small>
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Economia Acumulada (R$)</label>
+                                <input type="text" name="economia_acumulada" id="e_eco_acum_in"
+                                       class="form-control"
+                                       value="{{ economia_acum_input or ('%.2f'|format(dados.economia_acumulada_anterior or 0)|replace('.', ',')) }}">
+                                <small class="text-muted">Sobrescreve o acumulado anterior do cadastro.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- COLUNA 2: TOTAIS CALCULADOS (live) -->
+            <div class="col-lg-5">
+                <div class="card mb-3" style="border-left:4px solid var(--green)">
+                    <div class="card-body p-4">
+                        <h6 class="fw-bold mb-3 text-uppercase" style="color:var(--sl);font-size:12px;letter-spacing:.5px">
+                            <i class="bi bi-calculator-fill me-1" style="color:var(--green)"></i>Totais (recalculados ao vivo)
+                        </h6>
+
+                        <table class="table table-sm mb-0" style="font-size:13px">
+                            <tbody>
+                                <tr>
+                                    <td class="text-muted">Subtotal SEM SOLEV</td>
+                                    <td class="text-end" id="t_subtotal_sem">R$ 0,00</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">+ Iluminação / Multa / Juros</td>
+                                    <td class="text-end" id="t_extras_sem">R$ 0,00</td>
+                                </tr>
+                                <tr style="border-top:2px solid #e9ecef">
+                                    <td class="fw-bold">TOTAL SEM SOLEV</td>
+                                    <td class="text-end fw-bold fs-5" id="t_total_sem">R$ 0,00</td>
+                                </tr>
+
+                                <tr><td colspan="2" style="height:14px"></td></tr>
+
+                                <tr>
+                                    <td class="text-muted">Tarifa COM SOLEV</td>
+                                    <td class="text-end" id="t_tarifa_com">R$ 0,000000</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Subtotal COM SOLEV</td>
+                                    <td class="text-end" id="t_subtotal_com">R$ 0,00</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">+ Ilum / Multa / Juros / DIFCI / ECNI</td>
+                                    <td class="text-end" id="t_extras_com">R$ 0,00</td>
+                                </tr>
+                                <tr style="border-top:2px solid #e9ecef">
+                                    <td class="fw-bold" style="color:var(--or)">TOTAL COM SOLEV</td>
+                                    <td class="text-end fw-bold fs-5" style="color:var(--or)" id="t_total_com">R$ 0,00</td>
+                                </tr>
+
+                                <tr><td colspan="2" style="height:14px"></td></tr>
+
+                                <tr>
+                                    <td class="fw-bold text-success">Economia neste mês</td>
+                                    <td class="text-end fw-bold fs-5 text-success" id="t_eco_mes">R$ 0,00</td>
+                                </tr>
+                                <tr>
+                                    <td class="text-muted">Economia acumulada total</td>
+                                    <td class="text-end" id="t_eco_acum">R$ 0,00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- BOTÕES -->
+                <div class="d-flex gap-2 justify-content-end">
+                    <a href="{{ post_url }}" class="btn btn-outline-secondary px-4">
+                        <i class="bi bi-arrow-left me-1"></i>Voltar e ajustar
+                    </a>
+                    <button type="submit" class="btn btn-cta px-4 btn-lg">
+                        <i class="bi bi-file-earmark-pdf-fill me-1"></i>Confirmar e gerar PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+// ── Helpers ────────────────────────────────────────────────
+function parseBR(v) {
+    if (v === null || v === undefined) return 0;
+    return parseFloat(String(v).replace(/\./g, '').replace(',', '.')) || 0;
+}
+function fmtBRL(v) {
+    return 'R$ ' + (Math.round(v * 100) / 100).toFixed(2)
+                    .replace('.', ',')
+                    .replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+function fmtTarifa(v) {
+    return 'R$ ' + v.toFixed(6).replace('.', ',');
+}
+
+// ── Recalc completo (espelha calcular() em Python) ─────────
+function recalc() {
+    const consumo  = parseBR(document.getElementById('e_consumo').value);
+    const tarifa   = parseBR(document.getElementById('e_tarifa').value);
+    const comp     = parseBR(document.getElementById('e_comp').value);
+    const naoComp  = parseBR(document.getElementById('e_nao_comp').value);
+    const ilum     = parseBR(document.getElementById('e_ilum').value);
+    const multa    = parseBR(document.getElementById('e_multa').value);
+    const juros    = parseBR(document.getElementById('e_juros').value);
+    const ipca     = parseBR(document.getElementById('e_ipca').value);
+    const multaCom = parseBR(document.getElementById('e_multa_com').value);
+    const jurosCom = parseBR(document.getElementById('e_juros_com').value);
+    const difci    = parseBR(document.getElementById('e_difci').value);
+    const ecni     = parseBR(document.getElementById('e_ecnisenta').value);
+    const ajuste   = parseBR(document.getElementById('e_ajuste_valor').value);
+    let desc       = parseBR(document.getElementById('e_desconto').value);
+    desc = desc > 1 ? desc / 100 : desc;
+    const ecoAnt   = parseBR(document.getElementById('e_eco_acum_in').value);
+
+    // SEM SOLEV
+    const subSem    = consumo * tarifa;
+    const extrasSem = ilum + multa + juros + ipca + ajuste;
+    const totSem    = subSem + extrasSem;
+
+    // COM SOLEV
+    const tarifaCom = tarifa * (1 - desc);
+    const subCom    = (comp * tarifaCom) + (naoComp * tarifa);
+    const extrasCom = ilum + multa + juros + ipca + multaCom + jurosCom + difci + ecni + ajuste;
+    const totCom    = subCom + extrasCom;
+
+    // ECONOMIA
+    const ecoMes  = totSem - totCom;
+    const ecoAcum = Math.max(0, ecoAnt + ecoMes);
+
+    document.getElementById('t_subtotal_sem').textContent = fmtBRL(subSem);
+    document.getElementById('t_extras_sem').textContent   = fmtBRL(extrasSem);
+    document.getElementById('t_total_sem').textContent    = fmtBRL(totSem);
+    document.getElementById('t_tarifa_com').textContent   = fmtTarifa(tarifaCom);
+    document.getElementById('t_subtotal_com').textContent = fmtBRL(subCom);
+    document.getElementById('t_extras_com').textContent   = fmtBRL(extrasCom);
+    document.getElementById('t_total_com').textContent    = fmtBRL(totCom);
+    document.getElementById('t_eco_mes').textContent      = fmtBRL(ecoMes);
+    document.getElementById('t_eco_acum').textContent     = fmtBRL(ecoAcum);
+}
+
+// Inicializa com totais já calculados pelo backend
+window.addEventListener('DOMContentLoaded', () => {
+    recalc();
+    [
+      'e_consumo','e_tarifa','e_comp','e_nao_comp','e_ilum','e_multa','e_juros','e_ipca',
+      'e_multa_com','e_juros_com','e_difci','e_ecnisenta','e_ajuste_valor','e_desconto','e_eco_acum_in',
+      'e_band_am','e_band_vm'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', recalc);
+            el.addEventListener('change', recalc);
+        }
+    });
+});
+</script>
+{% endblock %}

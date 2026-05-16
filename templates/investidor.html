@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Investidores{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-briefcase-fill me-2" style="color:var(--or)"></i>Investidores</h1></div>
+
+<div class="row g-3 mb-4">
+{% for uid, u in usinas.items() %}{% if u.get('investidor_nome') %}
+<div class="col-md-6 col-lg-4"><div class="card h-100"><div class="card-body p-4">
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h6 class="fw-bold mb-0" style="color:var(--db)">{{ u.investidor_nome }}</h6>
+            <small class="text-muted">{{ u.investidor_cpf_cnpj }}</small>
+        </div>
+        <span class="badge" style="background:rgba(245,166,35,0.1);color:var(--or);font-size:12px">{{ u.get('investidor_deságio_pct', 0) }}% deságio</span>
+    </div>
+    <div style="font-size:13px" class="mb-3">
+        <div class="text-muted mb-1"><i class="bi bi-sun me-1"></i>Usina: <strong>{{ u.nome or uid }}</strong></div>
+        <div class="text-muted mb-1"><i class="bi bi-lightning-charge me-1"></i>UC: <strong>{{ u.uc_geradora }}</strong></div>
+        <div class="text-muted mb-1"><i class="bi bi-calendar me-1"></i>Pagamento: <strong>{{ u.investidor_dia_pagamento or 'Não definido' }}</strong></div>
+        <div class="text-muted"><i class="bi bi-bank me-1"></i>PIX: {{ u.investidor_pix or u.investidor_banco or 'Não cadastrado' }}</div>
+    </div>
+    <a href="/investidor/gerar/{{ uid }}" class="btn btn-cta btn-sm w-100"><i class="bi bi-file-earmark-pdf me-1"></i>Gerar Demonstrativo</a>
+</div></div></div>
+{% endif %}{% endfor %}
+{% if not usinas %}
+<div class="col-12"><div class="card"><div class="card-body text-center py-5">
+    <i class="bi bi-briefcase" style="font-size:44px;color:#ccc"></i>
+    <p class="text-muted mt-3">Nenhuma usina com investidor cadastrado.</p>
+    <a href="/usinas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i>Cadastrar Usina</a>
+</div></div></div>
+{% endif %}
+</div>
+
+{% if historico %}
+<div class="card"><div class="card-body">
+    <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-1" style="color:var(--or)"></i>Últimos Demonstrativos</h6>
+    <table class="table table-sm mb-0" style="font-size:13px">
+        <thead><tr><th>Data</th><th>Investidor</th><th>Usina</th><th>Mês</th><th>kWh</th><th>Bruto</th><th>Líquido</th><th></th></tr></thead>
+        <tbody>{% for r in historico %}<tr>
+            <td style="font-size:11px">{{ r.data_geracao }}</td>
+            <td><strong>{{ r.investidor_nome }}</strong></td>
+            <td>{{ r.usina_nome }}</td>
+            <td>{{ r.mes_referencia }}</td>
+            <td>{{ "{:,.0f}".format(r.kwh_gerado).replace(",", ".") }}</td>
+            <td class="text-muted">{{ fmt(r.valor_bruto) }}</td>
+            <td style="color:var(--green);font-weight:700">{{ fmt(r.valor_liquido) }}</td>
+            <td>{% if r.pdf %}<a href="/download/{{ r.pdf }}" class="btn btn-sm btn-db"><i class="bi bi-download"></i></a>{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+    </table>
+</div></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}{% if rec %}Editar{% else %}Novo{% endif %} Recebedor PIX{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-qr-code me-2" style="color:var(--or)"></i>{% if rec %}Editar Recebedor{% else %}Novo Recebedor PIX{% endif %}</h1>
+    <a href="/recebedores" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+</div>
+
+<form method="POST" class="row g-3">
+    <div class="col-md-6">
+        <div class="card mb-3"><div class="card-body p-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-person-fill me-2" style="color:var(--or)"></i>Identificação</h6>
+            <div class="mb-3">
+                <label class="form-label">Nome Completo <span class="text-danger">*</span></label>
+                <input type="text" name="desc_nome" class="form-control" required
+                    value="{{ rec.desc_nome if rec else '' }}"
+                    placeholder="Ex: DANILO EVANGELISTA DE SOUSA LEMES">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">CPF / CNPJ</label>
+                <input type="text" name="desc_cpf_cnpj" class="form-control" id="campo_cpf"
+                    value="{{ rec.desc_cpf_cnpj if rec else '' }}"
+                    placeholder="000.000.000-00">
+            </div>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">E-mail</label>
+                    <input type="email" name="desc_email" class="form-control"
+                        value="{{ rec.desc_email if rec else '' }}"
+                        placeholder="email@exemplo.com">
+                </div>
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Telefone</label>
+                    <input type="text" name="desc_telefone" class="form-control"
+                        value="{{ rec.desc_telefone if rec else '' }}"
+                        placeholder="(62) 99999-9999">
+                </div>
+            </div>
+        </div></div>
+
+        <div class="card"><div class="card-body p-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-bank me-2" style="color:var(--or)"></i>Dados Bancários</h6>
+            <div class="mb-3">
+                <label class="form-label">Banco</label>
+                <input type="text" name="desc_banco" class="form-control"
+                    value="{{ rec.desc_banco if rec else '' }}"
+                    placeholder="Ex: Inter, Nubank, Bradesco">
+            </div>
+            <div class="row">
+                <div class="col-6 mb-3">
+                    <label class="form-label">Agência</label>
+                    <input type="text" name="desc_agencia" class="form-control"
+                        value="{{ rec.desc_agencia if rec else '' }}">
+                </div>
+                <div class="col-6 mb-3">
+                    <label class="form-label">Conta</label>
+                    <input type="text" name="desc_conta" class="form-control"
+                        value="{{ rec.desc_conta if rec else '' }}">
+                </div>
+            </div>
+        </div></div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-3"><div class="card-body p-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-qr-code me-2" style="color:var(--or)"></i>Configuração PIX</h6>
+
+            <div class="mb-3">
+                <label class="form-label">Chave PIX <span class="text-danger">*</span></label>
+                <input type="text" name="desc_pix" class="form-control" required
+                    value="{{ rec.desc_pix if rec else '' }}"
+                    placeholder="CPF, e-mail, telefone ou chave aleatória">
+                <small class="text-muted">Chave cadastrada no seu banco</small>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Nome no QR Code <span class="text-danger">*</span>
+                    <span class="text-muted fw-normal">(máx. 25 caracteres, sem acentos)</span>
+                </label>
+                <input type="text" name="desc_nome_pix" class="form-control" required maxlength="25"
+                    id="campo_nome_pix"
+                    value="{{ rec.desc_nome_pix if rec else '' }}"
+                    placeholder="Ex: DANILO E S LEMES"
+                    oninput="this.value = this.value.toUpperCase()">
+                <div class="d-flex justify-content-between mt-1">
+                    <small class="text-muted">Aparece no app do pagador ao escanear</small>
+                    <small id="contador_nome" class="text-muted">0/25</small>
+                </div>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Cidade no QR Code <span class="text-danger">*</span>
+                    <span class="text-muted fw-normal">(máx. 15 caracteres, sem acentos)</span>
+                </label>
+                <input type="text" name="desc_cidade_pix" class="form-control" required maxlength="15"
+                    id="campo_cidade_pix"
+                    value="{{ rec.desc_cidade_pix if rec else '' }}"
+                    placeholder="Ex: GOIANIA"
+                    oninput="this.value = this.value.toUpperCase()">
+                <div class="d-flex justify-content-between mt-1">
+                    <small class="text-muted">Obrigatório pelo padrão BRCode</small>
+                    <small id="contador_cidade" class="text-muted">0/15</small>
+                </div>
+            </div>
+        </div></div>
+
+        <div class="card"><div class="card-body p-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-percent me-2" style="color:var(--or)"></i>Condições Financeiras</h6>
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Deságio (%)</label>
+                    <input type="text" name="pct_desagio" class="form-control"
+                        value="{{ rec.pct_desagio if rec else '' }}"
+                        placeholder="Ex: 15">
+                    <small class="text-muted">% retido pela SOLEV</small>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Dia de Pagamento</label>
+                    <input type="number" name="qtd_dia_pagamento" class="form-control" min="1" max="31"
+                        value="{{ rec.qtd_dia_pagamento if rec else '' }}"
+                        placeholder="Ex: 15">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Valor Mínimo (R$)</label>
+                    <input type="text" name="vlr_minimo" class="form-control"
+                        value="{{ rec.vlr_minimo if rec else '' }}"
+                        placeholder="0,00">
+                </div>
+            </div>
+        </div></div>
+    </div>
+
+    <div class="col-12 text-end mb-4">
+        <a href="/recebedores" class="btn btn-outline-secondary me-2">Cancelar</a>
+        <button type="submit" class="btn btn-cta btn-lg px-5">
+            <i class="bi bi-check-lg me-1"></i>
+            {% if rec %}Salvar Alterações{% else %}Cadastrar Recebedor{% endif %}
+        </button>
+    </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+function mascaraCpfCnpj(v) {
+    v = v.replace(/\D/g, '');
+    if (v.length <= 11) {
+        v = v.replace(/(\d{3})(\d)/, '$1.$2');
+        v = v.replace(/(\d{3})(\d)/, '$1.$2');
+        v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else {
+        v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+        v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+        v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+        v = v.replace(/(\d{4})(\d)/, '$1-$2');
+    }
+    return v;
+}
+document.addEventListener('DOMContentLoaded', function () {
+    var cpf = document.getElementById('campo_cpf');
+    if (cpf) {
+        cpf.addEventListener('input', function () {
+            var pos = this.selectionStart, ant = this.value.length;
+            this.value = mascaraCpfCnpj(this.value);
+            var novo = this.value.length;
+            this.setSelectionRange(pos + (novo - ant), pos + (novo - ant));
+        });
+    }
+    // Contadores de caracteres
+    ['campo_nome_pix', 'campo_cidade_pix'].forEach(function (id) {
+        var el = document.getElementById(id);
+        var cnt = document.getElementById('contador_' + (id === 'campo_nome_pix' ? 'nome' : 'cidade'));
+        var max = id === 'campo_nome_pix' ? 25 : 15;
+        if (!el || !cnt) return;
+        function atualizar() {
+            cnt.textContent = el.value.length + '/' + max;
+            cnt.style.color = el.value.length >= max ? '#dc3545' : '#999';
+        }
+        el.addEventListener('input', atualizar);
+        atualizar();
+    });
+});
+</script>
+{% endblock %}

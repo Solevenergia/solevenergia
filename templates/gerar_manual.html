@@ -1,0 +1,511 @@
+{% extends "base.html" %}
+{% block title %}Gerar Cobrança Manual — SOLEV{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-pencil-square me-2" style="color:var(--orange)"></i>
+            Gerar Cobrança Manual
+        </h3>
+        <a href="{{ url_for('gerar') }}" class="btn btn-outline-secondary btn-sm ms-3">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Via Fatura Equatorial
+        </a>
+    </div>
+
+    <!-- BUSCA POR UC OU NOME -->
+    <div class="card mb-4">
+        <div class="card-body p-4">
+            <h5 class="fw-bold mb-3"><i class="bi bi-search me-2" style="color:var(--orange)"></i>Buscar Cliente</h5>
+            <div class="row align-items-end">
+                <div class="col-md-4" style="position:relative">
+                    <label class="form-label">UC (nova ou antiga) ou Nome do cliente</label>
+                    <div class="input-group">
+                        <input type="text" id="busca_uc" name="busca_uc"
+                               class="form-control form-control-lg"
+                               data-format="uc-nova"
+                               placeholder="Ex: 2026.034.798.403-00, 14811832 ou nome do cliente"
+                               autofocus autocomplete="off"
+                               oninput="autocompleteBusca(this.value)">
+                        <button class="btn btn-cta" type="button" id="btn_buscar" onclick="buscarCliente()">
+                            <i class="bi bi-search"></i> Buscar
+                        </button>
+                    </div>
+                    <div id="busca_dropdown" class="d-none shadow"
+                         style="position:absolute;z-index:9999;width:100%;max-height:280px;
+                                overflow-y:auto;background:var(--bg-card);
+                                border:1px solid var(--orange);border-radius:0 0 8px 8px;margin-top:-1px"></div>
+                </div>
+                <div class="col-md-8">
+                    <div id="info_cliente" class="d-none">
+                        <div class="d-flex align-items-center gap-3 p-3 rounded" style="background:var(--bg-card); border:1px solid var(--orange)">
+                            <i class="bi bi-person-check-fill fs-3" style="color:var(--orange)"></i>
+                            <div>
+                                <strong id="cli_nome" class="fs-5"></strong><br>
+                                <small class="text-muted">
+                                    UC: <span id="cli_uc_label"></span> &middot;
+                                    CPF: <span id="cli_cpf_label"></span> &middot;
+                                    Desconto: <span id="cli_desc_label"></span>%
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="info_erro" class="d-none">
+                        <div class="alert alert-danger mb-0 d-flex align-items-center gap-2">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <span id="erro_msg"></span>
+                            <a href="{{ url_for('cliente_novo') }}" class="btn btn-sm btn-outline-danger ms-auto">Cadastrar Cliente</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FORMULÁRIO DE COBRANÇA (aparece após buscar) -->
+    <form method="POST" id="form_cobranca" class="d-none" enctype="multipart/form-data">
+        <!-- Identificação do cliente (preenchidos por JS após buscar) -->
+        <input type="hidden" name="uc" id="f_uc">
+        <input type="hidden" name="nome" id="f_nome">
+        <input type="hidden" name="cpf" id="f_cpf">
+        <input type="hidden" name="endereco" id="f_endereco">
+        <input type="hidden" name="desconto_pct" id="f_desconto_pct">
+        <input type="hidden" name="modo_bandeira" id="f_modo_bandeira">
+        <input type="hidden" name="valor_cobranca_anterior" id="f_valor_cobranca_anterior">
+        <input type="hidden" name="venc_contalev_anterior" id="f_venc_contalev_anterior">
+        <input type="hidden" name="data_pagamento_anterior" id="f_data_pagamento_anterior">
+        <input type="hidden" name="economia_acumulada_anterior" id="f_economia_acumulada_anterior">
+        <input type="hidden" name="titular_fatura" id="f_titular_fatura">
+
+        <div class="row">
+            <!-- Coluna 1: Dados da Fatura -->
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3"><i class="bi bi-lightning-fill me-2" style="color:var(--orange)"></i>Dados da Fatura</h5>
+
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Mês de Referência <span class="text-danger">*</span></label>
+                                <input type="text" name="mes_referencia" id="f_mes_ref" class="form-control" placeholder="MM/AAAA" required>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Tipo de Fornecimento</label>
+                                <select name="tipo_fornecimento" id="f_tipo_forn" class="form-select">
+                                    <option value="Monofásico">Monofásico</option>
+                                    <option value="Bifásico" selected>Bifásico</option>
+                                    <option value="Trifásico">Trifásico</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-4 mb-3">
+                                <label class="form-label">Consumo (kWh) <span class="text-danger">*</span></label>
+                                <input type="text" name="consumo_kwh" id="f_consumo" class="form-control" placeholder="855" required>
+                            </div>
+                            <div class="col-4 mb-3">
+                                <label class="form-label">Compensado (kWh)</label>
+                                <input type="text" name="consumo_compensado" id="f_compensado" class="form-control" placeholder="855">
+                            </div>
+                            <div class="col-4 mb-3">
+                                <label class="form-label">Não Compensado</label>
+                                <input type="text" name="consumo_nao_comp" id="f_nao_comp" class="form-control" placeholder="0" value="0">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Tarifa (R$/kWh) <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="text" name="tarifa" id="f_tarifa" class="form-control" placeholder="1,135823" required>
+                                    <span class="input-group-text" id="tarifa_origem" title="Origem da tarifa"><i class="bi bi-info-circle"></i></span>
+                                </div>
+                                <small class="text-muted" id="tarifa_hint">Preencha o mês para buscar automaticamente</small>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Vencimento Equatorial</label>
+                                <input type="text" name="venc_equatorial" id="f_venc_eq" class="form-control" placeholder="dd/mm/aaaa">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3"><i class="bi bi-calendar3 me-2" style="color:var(--orange)"></i>Leituras</h5>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Leitura Anterior</label>
+                                <input type="text" name="anterior_leitura" id="f_leit_ant" class="form-control" placeholder="dd/mm/aaaa">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Leitura Atual</label>
+                                <input type="text" name="data_leitura" id="f_leit_atual" class="form-control" placeholder="dd/mm/aaaa">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Próxima Leitura</label>
+                                <input type="text" name="proxima_leitura" id="f_prox_leit" class="form-control" placeholder="dd/mm/aaaa">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Nº Dias</label>
+                                <input type="text" name="n_dias" id="f_n_dias" class="form-control" placeholder="30">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna 2: Itens Financeiros + Vencimento -->
+            <div class="col-md-6">
+                <div class="card mb-4">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3"><i class="bi bi-currency-dollar me-2" style="color:var(--orange)"></i>Itens Financeiros</h5>
+
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Iluminação Pública (R$)</label>
+                                <input type="text" name="iluminacao_publica" id="f_ilum" class="form-control" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Vencimento SOLEV <span class="text-danger">*</span></label>
+                                <input type="text" name="vencimento_contalev" id="f_venc_contalev" class="form-control" placeholder="dd/mm/aaaa" required>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-4 mb-3">
+                                <label class="form-label">Multa Equatorial (R$)</label>
+                                <input type="text" name="multa" id="f_multa" class="form-control" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-4 mb-3">
+                                <label class="form-label">Juros Equatorial (R$)</label>
+                                <input type="text" name="juros" id="f_juros" class="form-control" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-4 mb-3">
+                                <label class="form-label">Correção IPCA (R$)</label>
+                                <input type="text" name="correcao_ipca" id="f_ipca" class="form-control" placeholder="0,00" value="0">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="text-muted mb-3"><i class="bi bi-flag-fill me-1"></i>Bandeiras Tarifárias</h6>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Bandeira Amarela (R$/kWh)</label>
+                                <input type="text" name="bandeira_amarela" id="f_band_am" class="form-control" placeholder="0,000000" value="0">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Bandeira Vermelha (R$/kWh)</label>
+                                <input type="text" name="bandeira_vermelha" id="f_band_vm" class="form-control" placeholder="0,000000" value="0">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="text-muted mb-3"><i class="bi bi-cash-coin me-1"></i>Multa / Juros COM SOLEV</h6>
+                        <small class="text-muted d-block mb-2">Preencha somente se houver atraso na cobrança anterior (valores em R$).</small>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Multa COM (R$)</label>
+                                <input type="text" name="multa_com" id="f_multa_com" class="form-control" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Juros COM (R$)</label>
+                                <input type="text" name="juros_com" id="f_juros_com" class="form-control" placeholder="0,00" value="0">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="text-muted mb-3"><i class="bi bi-plus-circle me-1"></i>Itens Adicionais COM SOLEV</h6>
+                        <small class="text-muted d-block mb-2">Aparecem na cobrança somente se preenchidos (valores em R$).</small>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">DIFCI (R$)</label>
+                                <input type="text" name="difci" id="f_difci" class="form-control" placeholder="0,00">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">ECNISENTA (R$)</label>
+                                <input type="text" name="ecnisenta" id="f_ecnisenta" class="form-control" placeholder="0,00">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Ajuste (R$)</label>
+                                <input type="text" name="ajuste_valor" id="f_ajuste_valor" class="form-control" placeholder="0,00">
+                                <small class="text-muted">Positivo = acréscimo, negativo = desconto</small>
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="text-muted mb-3"><i class="bi bi-piggy-bank me-1"></i>Economia Acumulada</h6>
+                        <small class="text-muted d-block mb-2">Informe o total acumulado até o mês anterior (para clientes em transição).</small>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label">Economia Acumulada (R$)</label>
+                                <input type="text" name="economia_acumulada" id="f_eco_acum" class="form-control" placeholder="0,00">
+                            </div>
+                        </div>
+
+                        <hr class="my-3">
+                        <h6 class="text-muted mb-3"><i class="bi bi-paperclip me-1"></i>Fatura Equatorial (anexo)</h6>
+                        <small class="text-muted d-block mb-2">Anexe o PDF da fatura apenas para referência — nenhum dado será extraído.</small>
+                        <div class="mb-3">
+                            <input type="file" name="equatorial_pdf" id="f_equatorial_pdf" class="form-control" accept=".pdf">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preview da economia -->
+                <div class="card mb-4" id="card_preview" style="border-left:4px solid var(--green)">
+                    <div class="card-body p-4">
+                        <h5 class="fw-bold mb-3"><i class="bi bi-graph-up-arrow me-2 text-success"></i>Prévia da Economia</h5>
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <small class="text-muted d-block">SEM SOLEV</small>
+                                <strong class="fs-5" id="prev_sem">R$ 0,00</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">COM SOLEV</small>
+                                <strong class="fs-5" style="color:var(--orange)" id="prev_com">R$ 0,00</strong>
+                            </div>
+                            <div class="col-4">
+                                <small class="text-muted d-block">ECONOMIA</small>
+                                <strong class="fs-5 text-success" id="prev_eco">R$ 0,00</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2 justify-content-end flex-wrap">
+                    <a href="{{ url_for('gerar') }}" class="btn btn-outline-secondary px-4">Cancelar</a>
+                    <button type="submit" name="acao" value="preview"
+                            class="btn btn-outline-primary px-4 btn-lg">
+                        <i class="bi bi-eye-fill me-1"></i>Pré-visualizar
+                    </button>
+                    <button type="submit" name="acao" value="gerar"
+                            class="btn btn-cta px-4 btn-lg">
+                        <i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF direto
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% include '_modal_pix_validacao.html' %}
+<script src="{{ url_for('static', filename='js/pix-validacao.js') }}"></script>
+<script>
+// ── Intercepta submit "gerar" para validar PIX antes ──
+(function () {
+    var formCob = document.getElementById('form_cobranca');
+    if (!formCob) return;
+    formCob.addEventListener('submit', function (ev) {
+        var sub = ev.submitter;
+        // Só valida no botão "Gerar PDF direto" (acao=gerar). Preview passa direto.
+        if (!sub || sub.value !== 'gerar') return;
+        if (formCob.dataset.pixOk === '1') return;   // já validado, deixa seguir
+        ev.preventDefault();
+        var uc = (document.getElementById('f_uc') || {}).value || '';
+        validarPixAntesDeGerar(uc).then(function (podeGerar) {
+            if (podeGerar) {
+                formCob.dataset.pixOk = '1';
+                sub.click();   // re-aciona o submit do botão original
+            }
+        });
+    });
+})();
+</script>
+<script>
+// ── Busca cliente por UC ──
+function buscarCliente() {
+    const uc = document.getElementById('busca_uc').value.trim();
+    if (!uc) return;
+
+    fetch(`/api/cliente/${uc}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.erro) {
+            document.getElementById('info_cliente').classList.add('d-none');
+            document.getElementById('info_erro').classList.remove('d-none');
+            document.getElementById('erro_msg').textContent = data.erro;
+            document.getElementById('form_cobranca').classList.add('d-none');
+            return;
+        }
+        // Mostra info do cliente
+        document.getElementById('info_erro').classList.add('d-none');
+        document.getElementById('info_cliente').classList.remove('d-none');
+        document.getElementById('cli_nome').textContent = data.nome;
+        document.getElementById('cli_uc_label').textContent = data.uc;
+        document.getElementById('cli_cpf_label').textContent = data.cpf || '—';
+        const desc = data.desconto_pct <= 1 ? (data.desconto_pct * 100).toFixed(1) : data.desconto_pct;
+        document.getElementById('cli_desc_label').textContent = desc;
+
+        // Preenche hidden fields
+        document.getElementById('f_uc').value = data.uc;
+        document.getElementById('f_nome').value = data.nome;
+        document.getElementById('f_cpf').value = data.cpf || '';
+        document.getElementById('f_endereco').value = data.endereco || '';
+        document.getElementById('f_desconto_pct').value = data.desconto_pct;
+        document.getElementById('f_modo_bandeira').value = data.modo_bandeira || 'com_bandeira';
+        document.getElementById('f_valor_cobranca_anterior').value = data.valor_cobranca_anterior || 0;
+        document.getElementById('f_venc_contalev_anterior').value = data.venc_contalev_anterior || '';
+        document.getElementById('f_data_pagamento_anterior').value = data.data_pagamento_anterior || '';
+        document.getElementById('f_economia_acumulada_anterior').value = data.economia_acumulada_anterior || 0;
+        document.getElementById('f_titular_fatura').value = data.titular_fatura || '';
+
+        // Mostra formulário
+        document.getElementById('form_cobranca').classList.remove('d-none');
+
+        // Foca no mês de referência
+        document.getElementById('f_mes_ref').focus();
+    })
+    .catch(err => {
+        document.getElementById('info_erro').classList.remove('d-none');
+        document.getElementById('erro_msg').textContent = 'Erro de conexão: ' + err;
+    });
+}
+
+// Enter na busca
+document.getElementById('busca_uc').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); buscarCliente(); }
+    if (e.key === 'Escape') { document.getElementById('busca_dropdown').classList.add('d-none'); }
+});
+
+// ── Autocomplete por UC ou nome ──
+let _autocomplete_timer = null;
+function autocompleteBusca(q) {
+    clearTimeout(_autocomplete_timer);
+    const drop = document.getElementById('busca_dropdown');
+    if (!q || q.length < 2) { drop.classList.add('d-none'); return; }
+    _autocomplete_timer = setTimeout(() => {
+        fetch(`/api/clientes/busca?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!Array.isArray(data) || data.length === 0) { drop.classList.add('d-none'); return; }
+            drop.innerHTML = data.map(c => {
+                // Mostra UC nova (alternativa formatada) com prioridade; UC antiga abaixo
+                const ucPrincipal = c.uc_alt_fmt || c.uc_alt || c.uc;
+                const temAntiga   = c.uc && c.uc !== ucPrincipal;
+                const subUcAntiga = temAntiga
+                    ? `<small class="text-muted ms-2" style="font-size:10px">UC antiga: ${c.uc}</small>`
+                    : '';
+                return `<div class="px-3 py-2 border-bottom"
+                      style="cursor:pointer;font-size:13px"
+                      onmousedown="selecionarCliente('${c.uc}')"
+                      onmouseover="this.style.background='rgba(245,166,35,.15)'"
+                      onmouseout="this.style.background=''">
+                    <strong>${c.nome}</strong>
+                    <code class="ms-2" style="font-size:11px;color:var(--orange)">${ucPrincipal}</code>
+                    ${subUcAntiga}
+                 </div>`;
+            }).join('');
+            drop.classList.remove('d-none');
+        })
+        .catch(() => drop.classList.add('d-none'));
+    }, 280);
+}
+
+function selecionarCliente(uc) {
+    document.getElementById('busca_uc').value = uc;
+    document.getElementById('busca_dropdown').classList.add('d-none');
+    buscarCliente();
+}
+
+// Fecha dropdown ao clicar fora
+document.addEventListener('click', e => {
+    if (!e.target.closest('#busca_uc') && !e.target.closest('#busca_dropdown'))
+        document.getElementById('busca_dropdown').classList.add('d-none');
+});
+
+// ── Auto-busca tarifa ao mudar mês ──
+document.getElementById('f_mes_ref').addEventListener('change', function() {
+    const mes = this.value.trim();
+    if (!mes || !mes.match(/^\d{1,2}\/\d{4}$/)) return;
+    fetch(`/api/tarifa/${mes}`)
+    .then(r => r.json())
+    .then(data => {
+        if (data.tarifa) {
+            document.getElementById('f_tarifa').value = data.tarifa.toString().replace('.', ',');
+            const hint = document.getElementById('tarifa_hint');
+            hint.textContent = `✓ Tarifa carregada de ${data.origem}`;
+            hint.style.color = 'var(--green)';
+            const badge = document.getElementById('tarifa_origem');
+            badge.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i>`;
+            badge.title = data.origem;
+        }
+        if (data.bandeira_amarela) {
+            document.getElementById('f_band_am').value = data.bandeira_amarela.toString().replace('.', ',');
+        }
+        if (data.bandeira_vermelha) {
+            document.getElementById('f_band_vm').value = data.bandeira_vermelha.toString().replace('.', ',');
+        }
+    });
+    calcularPrevia();
+});
+
+// ── Cálculo prévio em tempo real ──
+function parseBR(v) {
+    if (!v) return 0;
+    return parseFloat(v.toString().replace(/\./g, '').replace(',', '.')) || 0;
+}
+function fmtBRL(v) {
+    return 'R$ ' + v.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+function calcularPrevia() {
+    const consumo   = parseBR(document.getElementById('f_consumo').value);
+    const tarifa    = parseBR(document.getElementById('f_tarifa').value);
+    const comp      = parseBR(document.getElementById('f_compensado').value);
+    const nao_comp  = parseBR(document.getElementById('f_nao_comp').value);
+    const ilum      = parseBR(document.getElementById('f_ilum').value);
+    const multa     = parseBR(document.getElementById('f_multa').value);
+    const juros     = parseBR(document.getElementById('f_juros').value);
+    const ipca      = parseBR(document.getElementById('f_ipca').value);
+    const multa_com = parseBR(document.getElementById('f_multa_com').value);
+    const juros_com = parseBR(document.getElementById('f_juros_com').value);
+    const difci     = parseBR(document.getElementById('f_difci').value);
+    const ecnisenta = parseBR(document.getElementById('f_ecnisenta').value);
+    const ajuste    = parseBR(document.getElementById('f_ajuste_valor').value);
+    const desconto  = parseBR(document.getElementById('f_desconto_pct').value);
+    const desc = desconto <= 1 ? desconto : desconto / 100;
+
+    if (consumo <= 0 || tarifa <= 0) return;
+
+    // Espelha calcular() Python
+    // SEM SOLEV: consumo total × tarifa
+    const tot_sem = consumo * tarifa + ilum + multa + juros + ipca + ajuste;
+
+    // COM SOLEV: compensado × tarifa_com + nao_comp × tarifa_sem
+    const tarifa_com  = tarifa * (1 - desc);
+    const subtotal_com = comp * tarifa_com + nao_comp * tarifa;
+    const tot_com = subtotal_com + ilum + multa + juros + ipca + multa_com + juros_com + difci + ecnisenta + ajuste;
+
+    document.getElementById('prev_sem').textContent = fmtBRL(tot_sem);
+    document.getElementById('prev_com').textContent = fmtBRL(tot_com);
+    document.getElementById('prev_eco').textContent = fmtBRL(tot_sem - tot_com);
+}
+
+// Atualiza prévia ao mudar qualquer campo
+['f_consumo', 'f_tarifa', 'f_compensado', 'f_nao_comp', 'f_ilum', 'f_multa', 'f_juros', 'f_ipca', 'f_multa_com', 'f_juros_com', 'f_difci', 'f_ecnisenta', 'f_ajuste_valor'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+        el.addEventListener('input', calcularPrevia);
+        el.addEventListener('change', calcularPrevia);
+    }
+});
+
+// Ao mudar compensado, calcula não compensado
+document.getElementById('f_compensado').addEventListener('input', function() {
+    const consumo = parseBR(document.getElementById('f_consumo').value);
+    const comp = parseBR(this.value);
+    document.getElementById('f_nao_comp').value = Math.max(0, consumo - comp).toFixed(0);
+});
+
+// Ao mudar consumo, atualiza compensado se vazio
+document.getElementById('f_consumo').addEventListener('input', function() {
+    const comp = document.getElementById('f_compensado');
+    if (!comp.value) comp.value = this.value;
+    calcularPrevia();
+});
+</script>
+{% endblock %}

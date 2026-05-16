@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Conciliação — SOLEV{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex align-items-center mb-4">
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-clipboard-check-fill me-2" style="color:var(--orange)"></i>Conciliação Mensal
+        </h3>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body p-3">
+            <form method="GET" class="d-flex align-items-center gap-2">
+                <label class="form-label mb-0 me-2"><strong>Mês de referência:</strong></label>
+                <input type="text" name="mes" class="form-control" style="max-width:140px" value="{{ mes_filtro }}" placeholder="MM/AAAA">
+                <button type="submit" class="btn btn-cta btn-sm"><i class="bi bi-search me-1"></i>Filtrar</button>
+            </form>
+        </div>
+    </div>
+
+    {% if overview %}
+    <div class="row g-3">
+        {% for u in overview %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100" style="border-left:4px solid
+                {% if u.status == 'ok' %}#22c55e
+                {% elif u.status == 'divergente' %}#dc3545
+                {% elif u.status == 'pendente' %}#f5a623
+                {% elif u.status == 'incompleto' %}#888
+                {% else %}#ccc{% endif %}">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h6 class="fw-bold mb-0">
+                            <i class="bi bi-lightning-charge-fill me-1" style="color:var(--orange)"></i>
+                            {{ u.nome }}
+                        </h6>
+                        {% if u.status == 'ok' %}
+                            <span class="badge" style="background:#22c55e;color:white"><i class="bi bi-check-lg"></i> OK</span>
+                        {% elif u.status == 'divergente' %}
+                            <span class="badge" style="background:#dc3545;color:white"><i class="bi bi-exclamation-triangle"></i> Divergente</span>
+                        {% elif u.status == 'pendente' %}
+                            <span class="badge badge-pendente"><i class="bi bi-clock"></i> Pendente</span>
+                        {% elif u.status == 'incompleto' %}
+                            <span class="badge bg-secondary"><i class="bi bi-hourglass"></i> Incompleto</span>
+                        {% else %}
+                            <span class="badge bg-light text-muted">Sem dados</span>
+                        {% endif %}
+                    </div>
+
+                    <table class="table table-sm mb-3" style="font-size:12px">
+                        <tr>
+                            <td class="text-muted">Geração</td>
+                            <td class="text-end"><strong>{{ "%.2f"|format(u.kwh_gerado) }} kWh</strong></td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Esperado (rateio)</td>
+                            <td class="text-end">{{ "%.2f"|format(u.soma_esperado) }} kWh</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Recebido (faturas)</td>
+                            <td class="text-end">{{ "%.2f"|format(u.soma_real) }} kWh</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Diferença</td>
+                            <td class="text-end">
+                                <strong style="color:{% if u.diff == 0 %}#22c55e{% else %}#dc3545{% endif %}">
+                                    {{ "%+.2f"|format(u.diff) }} kWh
+                                </strong>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Beneficiários</td>
+                            <td class="text-end">{{ u.n_beneficiarios }}</td>
+                        </tr>
+                    </table>
+
+                    <a href="{{ url_for('conciliacao.conciliacao_detalhe', uid=u.uid, mes=mes_filtro) }}" class="btn btn-cta w-100 btn-sm">
+                        <i class="bi bi-eye me-1"></i>Abrir Conciliação
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-lightning-charge fs-1 text-muted"></i>
+            <p class="text-muted mt-3 mb-0">Nenhuma usina cadastrada. <a href="{{ url_for('usina_nova') }}">Cadastre uma usina</a> para começar.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

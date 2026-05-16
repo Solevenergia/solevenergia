@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+{% block title %}{{ usina.nome or uid }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-sun-fill me-2" style="color:var(--or)"></i>{{ usina.nome or uid }}</h1>
+    <div>
+        <a href="/usinas/rateio/{{ uid }}" class="btn btn-cta btn-sm"><i class="bi bi-pie-chart-fill me-1"></i>Rateio</a>
+        <a href="/usinas/editar/{{ id_usina }}" class="btn btn-outline-primary btn-sm"><i class="bi bi-pencil me-1"></i>Editar</a>
+        <a href="/usinas" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Voltar</a>
+    </div>
+</div>
+
+<!-- Info Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(245,166,35,0.1);color:var(--or)"><i class="bi bi-lightning-charge-fill"></i></div>
+        <div class="stat-value">{{ usina.potencia_kwp }} kWp</div><div class="stat-label">Potência instalada</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(34,197,94,0.1);color:var(--green)"><i class="bi bi-graph-up-arrow"></i></div>
+        <div class="stat-value">{{ "{:,.0f}".format(total_kwh).replace(",", ".") }}</div><div class="stat-label">kWh gerados no período</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(26,42,74,0.08);color:var(--db)"><i class="bi bi-calendar-check"></i></div>
+        <div class="stat-value">{{ dias_registrados }}</div><div class="stat-label">Dias registrados</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6"><i class="bi bi-bullseye"></i></div>
+        <div class="stat-value">{{ "{:,.0f}".format(estimativa_periodo).replace(",", ".") }}</div><div class="stat-label">Estimativa do período (kWh)</div>
+    </div></div>
+</div>
+
+<div class="row g-3">
+    <!-- Coluna esquerda: Geração -->
+    <div class="col-md-8">
+        <!-- Gráfico -->
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-graph-up me-1" style="color:var(--or)"></i>Geração Diária (kWh)</h6>
+            <canvas id="chartGeracao" height="160"></canvas>
+        </div></div>
+
+        <!-- Registrar geração -->
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-plus-circle-fill me-1" style="color:var(--or)"></i>Registrar Geração Diária</h6>
+            <form method="POST" action="/usinas/geracao/{{ uid }}" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Data</label>
+                    <input type="text" name="data" class="form-control form-control-sm" required placeholder="dd/mm/aaaa">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">kWh gerado</label>
+                    <input type="text" name="kwh" class="form-control form-control-sm" required placeholder="Ex: 520">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Observação (opcional)</label>
+                    <input type="text" name="obs" class="form-control form-control-sm" placeholder="Ex: Dia nublado">
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-cta btn-sm w-100"><i class="bi bi-plus-lg"></i> Registrar</button>
+                </div>
+            </form>
+        </div></div>
+
+        <!-- ── REGISTRO MENSAL (a partir de fatura da unidade geradora) ── -->
+        <div class="card mb-3" style="border-left:4px solid var(--or)"><div class="card-body p-3">
+            <h6 class="fw-bold mb-3"><i class="bi bi-file-earmark-pdf-fill me-1" style="color:var(--or)"></i>Anexar Fatura Equatorial</h6>
+            <p class="text-muted small mb-3">Anexe a fatura da unidade geradora. Os dados (kWh, datas de leitura, mês de referência) serão extraídos automaticamente do PDF.</p>
+            <form method="POST" action="/usinas/geracao_mensal/{{ uid }}" enctype="multipart/form-data" id="formFaturaUsina{{ uid }}">
+                <input type="hidden" name="extrair" value="1">
+                <div class="upload-area p-3" id="dropArea{{ uid }}" onclick="document.getElementById('inputFatura{{ uid }}').click()" style="border:2px dashed #d0d5dd;border-radius:12px;cursor:pointer;transition:all 0.3s;background:white;text-align:center">
+                    <div id="dropPlaceholder{{ uid }}">
+                        <i class="bi bi-file-earmark-pdf" style="font-size:32px;color:var(--or)"></i>
+                        <p class="mb-1 mt-2" style="font-size:13px;font-weight:600;color:var(--db)">Clique ou arraste a fatura aqui</p>
+                        <p class="mb-0 text-muted" style="font-size:11px">PDF da fatura Equatorial da usina</p>
+                    </div>
+                    <div id="dropSelected{{ uid }}" style="display:none">
+                        <i class="bi bi-file-earmark-check-fill" style="font-size:32px;color:var(--green)"></i>
+                        <p class="mb-1 mt-2" style="font-size:13px;font-weight:600;color:var(--green)" id="dropFileName{{ uid }}"></p>
+                        <p class="mb-0 text-muted" style="font-size:11px">Pronto para enviar</p>
+                    </div>
+                    <input type="file" name="fatura_pdf" id="inputFatura{{ uid }}" accept=".pdf" style="display:none" required>
+                </div>
+                <button type="submit" class="btn btn-cta w-100 mt-3" id="btnEnviarFatura{{ uid }}" disabled>
+                    <i class="bi bi-cloud-arrow-up me-1"></i>Enviar e Extrair Dados
+                </button>
+            </form>
+            <script>
+            (function(){
+                var input = document.getElementById('inputFatura{{ uid }}');
+                var area = document.getElementById('dropArea{{ uid }}');
+                var ph = document.getElementById('dropPlaceholder{{ uid }}');
+                var sel = document.getElementById('dropSelected{{ uid }}');
+                var fname = document.getElementById('dropFileName{{ uid }}');
+                var btn = document.getElementById('btnEnviarFatura{{ uid }}');
+
+                input.addEventListener('change', function(){
+                    if(this.files && this.files.length > 0){
+                        ph.style.display = 'none';
+                        sel.style.display = 'block';
+                        fname.textContent = this.files[0].name;
+                        btn.disabled = false;
+                        area.style.borderColor = 'var(--green)';
+                        area.style.background = 'rgba(34,197,94,0.03)';
+                    }
+                });
+
+                area.addEventListener('dragover', function(e){ e.preventDefault(); area.style.borderColor='var(--or)'; area.style.background='var(--orl)'; });
+                area.addEventListener('dragleave', function(){ area.style.borderColor='#d0d5dd'; area.style.background='white'; });
+                area.addEventListener('drop', function(e){
+                    e.preventDefault();
+                    area.style.borderColor='#d0d5dd'; area.style.background='white';
+                    if(e.dataTransfer.files && e.dataTransfer.files.length > 0){
+                        input.files = e.dataTransfer.files;
+                        input.dispatchEvent(new Event('change'));
+                    }
+                });
+            })();
+            </script>
+
+            {% if leituras_mensais %}
+            <hr class="my-3">
+            <h6 class="fw-bold mb-2 small text-muted">HISTÓRICO DE LEITURAS MENSAIS — {{ leituras_mensais|length }} registros · Total: {{ "{:,.0f}".format(total_kwh_mensal).replace(",", ".") }} kWh</h6>
+            <div class="table-responsive" style="max-height:280px;overflow-y:auto">
+                <table class="table table-sm mb-0" style="font-size:11px">
+                    <thead class="sticky-top" style="background:#f8f9fa">
+                        <tr>
+                            <th>Mês</th>
+                            <th class="text-end">Geração kWh</th>
+                            <th class="text-end">Saldo kWh</th>
+                            <th>Leit. Ant.</th>
+                            <th>Leit. Atual</th>
+                            <th class="text-center">Dias</th>
+                            <th class="text-end">Média/dia</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for l in leituras_mensais %}
+                        <tr>
+                            <td><strong>{{ l.mes_ref }}</strong></td>
+                            <td class="text-end"><strong style="color:var(--or)">{{ "{:,.0f}".format(l.kwh_gerado).replace(",", ".") }}</strong></td>
+                            <td class="text-end">{% if l.saldo_kwh %}<strong style="color:#3b82f6">{{ "{:,.2f}".format(l.saldo_kwh).replace(",", "X").replace(".", ",").replace("X", ".") }}</strong>{% else %}—{% endif %}</td>
+                            <td>{{ l.data_leitura_anterior or '—' }}</td>
+                            <td>{{ l.data_leitura_atual or '—' }}</td>
+                            <td class="text-center">{{ l.n_dias or '—' }}</td>
+                            <td class="text-end">{% if l.n_dias and l.n_dias > 0 %}{{ "{:.1f}".format(l.kwh_gerado / l.n_dias) }}{% else %}—{% endif %}</td>
+                            <td class="text-end">
+                                {% if l.fatura_pdf %}<a href="/download/{{ l.fatura_pdf|basename }}" target="_blank" title="Ver PDF"><i class="bi bi-paperclip"></i></a>{% endif %}
+                                <a href="/usinas/geracao_mensal/{{ uid }}/remover/{{ l.mes_ref }}" class="text-danger ms-1" title="Remover" onclick="return confirm('Remover fatura de {{ l.mes_ref }}?')"><i class="bi bi-x-lg"></i></a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div></div>
+
+        <!-- Histórico completo de geração diária -->
+        <div class="card mb-3"><div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="fw-bold mb-0"><i class="bi bi-list-check me-1" style="color:var(--or)"></i>Histórico Diário ({{ registros|length }} registros)</h6>
+                {% if registros %}
+                <a href="/usinas/zerar/{{ uid }}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Zerar todos os registros do período? (Para iniciar nova leitura)')">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Zerar Período</a>
+                {% endif %}
+            </div>
+            {% if registros %}
+            <div class="table-responsive" style="max-height:400px;overflow-y:auto">
+                <table class="table table-sm mb-0" style="font-size:12px">
+                    <thead class="sticky-top" style="background:#f8f9fa"><tr><th>Data</th><th>kWh</th><th>Obs</th><th></th></tr></thead>
+                    <tbody>{% for r in registros|reverse %}
+                    <tr>
+                        <td>{{ r.data }}</td>
+                        <td><strong style="color:var(--or)">{{ "%.1f"|format(r.kwh) }}</strong></td>
+                        <td class="text-muted">{{ r.obs or '-' }}</td>
+                        <td><a href="/usinas/geracao/{{ uid }}/remover/{{ r.data }}" class="text-danger" title="Remover" onclick="return confirm('Remover este registro de geração de {{ r.data }}?')"><i class="bi bi-x-lg"></i></a></td>
+                    </tr>{% endfor %}</tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted text-center py-2 mb-0">Nenhum registro ainda.</p>
+            {% endif %}
+        </div></div>
+
+        <!-- Estimativa -->
+        {% if dias_registrados > 0 %}
+        <div class="card" style="background:linear-gradient(135deg, var(--db), #0f1d35);color:white">
+            <div class="card-body p-4">
+                <h6 class="mb-3" style="color:rgba(255,255,255,0.6)"><i class="bi bi-calculator me-1"></i> Estimativa do Período</h6>
+                <div class="row text-center">
+                    <div class="col-4">
+                        <div style="color:rgba(255,255,255,0.5);font-size:11px">Média diária</div>
+                        <div class="fw-bold" style="font-size:20px;color:var(--or)">{{ "%.1f"|format(media_diaria) }} kWh</div>
+                    </div>
+                    <div class="col-4">
+                        <div style="color:rgba(255,255,255,0.5);font-size:11px">Gerado até agora</div>
+                        <div class="fw-bold" style="font-size:20px">{{ "{:,.0f}".format(total_kwh).replace(",", ".") }} kWh</div>
+                    </div>
+                    <div class="col-4">
+                        <div style="color:rgba(255,255,255,0.5);font-size:11px">Estimativa 30 dias</div>
+                        <div class="fw-bold" style="font-size:20px;color:var(--green)">{{ "{:,.0f}".format(estimativa_periodo).replace(",", ".") }} kWh</div>
+                    </div>
+                </div>
+                {% if usina.geracao_media_mensal > 0 %}
+                <div class="mt-3 text-center" style="font-size:12px;color:rgba(255,255,255,0.4)">
+                    Previsto: {{ "{:,.0f}".format(usina.geracao_media_mensal).replace(",", ".") }} kWh/mês
+                    — Performance: <strong style="color:{% if estimativa_periodo >= usina.geracao_media_mensal * 0.8 %}var(--green){% else %}#ef4444{% endif %}">
+                    {{ "%.0f"|format(estimativa_periodo / usina.geracao_media_mensal * 100) }}%</strong>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Coluna direita: Rateio + Info + Clientes -->
+    <div class="col-md-4">
+        <!-- Controle de Rateio -->
+        <div class="card mb-3" style="{% if status_rateio == 'atrasado' %}border-left:4px solid #dc3545{% elif status_rateio == 'urgente' %}border-left:4px solid #ffc107{% elif status_rateio == 'proximo' %}border-left:4px solid #3b82f6{% elif prox_leitura %}border-left:4px solid var(--green){% else %}border-left:4px solid #ccc{% endif %}">
+            <div class="card-body p-3">
+                <h6 class="fw-bold mb-2"><i class="bi bi-pie-chart-fill me-1" style="color:var(--or)"></i>Controle de Rateio</h6>
+
+                {% if prox_leitura %}
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="p-2 rounded" style="background:rgba(59,130,246,0.06);text-align:center">
+                            <div style="font-size:10px;color:#666">Próx. Leitura</div>
+                            <div class="fw-bold" style="font-size:14px;color:#3b82f6">{{ prox_leitura }}</div>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 rounded" style="background:{% if status_rateio == 'atrasado' %}rgba(220,53,69,0.06){% elif status_rateio == 'urgente' %}rgba(255,193,7,0.08){% else %}rgba(34,197,94,0.06){% endif %};text-align:center">
+                            <div style="font-size:10px;color:#666">Rateio até</div>
+                            <div class="fw-bold" style="font-size:14px;color:{% if status_rateio == 'atrasado' %}#dc3545{% elif status_rateio == 'urgente' %}#ffc107{% else %}var(--green){% endif %}">{{ data_rateio }}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if dias_para_rateio is not none %}
+                <div class="text-center mb-3">
+                    {% if status_rateio == 'atrasado' %}
+                        <span class="badge" style="background:#dc3545;color:white;font-size:12px;padding:6px 14px">
+                            <i class="bi bi-exclamation-circle-fill me-1"></i>ATRASADO {{ (-dias_para_rateio) }} dia{{ 's' if (-dias_para_rateio) != 1 }}
+                        </span>
+                    {% elif status_rateio == 'urgente' %}
+                        <span class="badge" style="background:#ffc107;color:#333;font-size:12px;padding:6px 14px">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Faltam {{ dias_para_rateio }} dia{{ 's' if dias_para_rateio != 1 }}
+                        </span>
+                    {% elif status_rateio == 'proximo' %}
+                        <span class="badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;font-size:12px;padding:6px 14px">
+                            <i class="bi bi-clock me-1"></i>Faltam {{ dias_para_rateio }} dia{{ 's' if dias_para_rateio != 1 }}
+                        </span>
+                    {% else %}
+                        <span class="badge" style="background:rgba(34,197,94,0.1);color:var(--green);font-size:12px;padding:6px 14px">
+                            <i class="bi bi-check-circle me-1"></i>{{ dias_para_rateio }} dia{{ 's' if dias_para_rateio != 1 }} restantes
+                        </span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Info resumida -->
+                <table class="table table-sm mb-2" style="font-size:11px">
+                    {% if tem_fatura_usina %}
+                    <tr><td class="text-muted" style="width:55%">Geração real <span class="badge" style="background:#dcfce7;color:#166534;font-size:9px">{{ mes_fatura_usina }}</span></td>
+                        <td class="text-end fw-bold" style="color:var(--green)">{{ "{:,.0f}".format(base_kwh_rateio).replace(",", ".") }} kWh</td></tr>
+                    {% else %}
+                    <tr><td class="text-muted" style="width:55%">Geração prevista <span class="badge" style="background:#fef9c3;color:#854d0e;font-size:9px">estimativa</span></td>
+                        <td class="text-end fw-bold" style="color:var(--or)">{{ "{:,.0f}".format(geracao_mensal_prev).replace(",", ".") }} kWh</td></tr>
+                    {% endif %}
+                    <tr><td class="text-muted">Rateio total</td><td class="text-end fw-bold">
+                        {% if total_rateio_pct == 100 %}<span style="color:var(--green)">100%</span>
+                        {% else %}<span style="color:#dc3545">{{ total_rateio_pct }}%</span>{% endif %}
+                    </td></tr>
+                </table>
+
+                <!-- Clientes no rateio -->
+                {% if rateio_clientes %}
+                <div style="font-size:10px;color:#999;text-transform:uppercase;font-weight:600;margin-bottom:4px">
+                    Alocação por cliente
+                    {% if tem_fatura_usina %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:8px;vertical-align:middle">fatura real</span>
+                    {% else %}<span class="badge" style="background:#fef9c3;color:#854d0e;font-size:8px;vertical-align:middle">estimativa</span>{% endif %}
+                </div>
+                {% for rc in rateio_clientes %}
+                <div class="d-flex justify-content-between align-items-center py-1 {% if not loop.last %}border-bottom{% endif %}" style="font-size:11px;border-color:rgba(0,0,0,0.06)!important">
+                    <span>{{ rc.nome[:20] }} <code style="font-size:9px">{{ rc.uc }}</code></span>
+                    <span>
+                        <strong style="color:var(--or)">{{ rc.rateio_pct }}%</strong>
+                        <span class="text-muted ms-1">({{ "{:,.2f}".format(rc.kwh_alocado).replace(",", "X").replace(".", ",").replace("X", ".") }} kWh)</span>
+                    </span>
+                </div>
+                {% endfor %}
+                {% endif %}
+
+                <a href="/usinas/rateio/{{ uid }}" class="btn btn-cta btn-sm w-100 mt-3"><i class="bi bi-pie-chart-fill me-1"></i>Gerenciar Rateio</a>
+
+                {% else %}
+                <p class="text-muted text-center py-2 mb-2" style="font-size:12px">Próxima leitura não cadastrada.</p>
+                <p class="text-muted text-center mb-0" style="font-size:11px">Registre uma fatura mensal com extração automática ou informe a data manualmente abaixo.</p>
+                {% endif %}
+
+                <!-- Campo manual para próxima leitura -->
+                <form method="POST" action="/usinas/proxima_leitura/{{ uid }}" class="mt-3">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text" style="font-size:11px"><i class="bi bi-calendar-event"></i></span>
+                        <input type="text" name="proxima_leitura" class="form-control form-control-sm" placeholder="Próx. leitura dd/mm/aaaa" value="{{ prox_leitura }}">
+                        <button type="submit" class="btn btn-cta btn-sm"><i class="bi bi-save"></i></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Dados da usina -->
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-info-circle-fill me-1" style="color:var(--or)"></i>Dados da Usina</h6>
+            <table class="table table-sm mb-0" style="font-size:12px">
+                <tr><td class="text-muted">UC Geradora</td><td><strong>{{ usina.uc_geradora }}</strong></td></tr>
+                <tr><td class="text-muted">Titular</td><td>{{ usina.titular_uc }}</td></tr>
+                <tr><td class="text-muted">Módulos</td><td>{{ usina.modulos_tipo }} × {{ usina.modulos_qtd }}</td></tr>
+                <tr><td class="text-muted">Inversor</td><td>{{ usina.inversor }}</td></tr>
+                <tr><td class="text-muted">Estrutura</td><td>{{ usina.estrutura }}</td></tr>
+                <tr><td class="text-muted">Local</td><td>{{ usina.endereco }}<br>{{ usina.cidade_uf }} — {{ usina.cep }}</td></tr>
+                <tr><td class="text-muted">Comissionamento</td><td>{{ usina.data_comissionamento }}</td></tr>
+                <tr><td class="text-muted">Garantia</td><td>Módulos: {{ usina.garantia_modulos }}<br>Inversor: {{ usina.garantia_inversor }}</td></tr>
+            </table>
+        </div></div>
+
+        <!-- Clientes vinculados -->
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-link-45deg me-1" style="color:var(--or)"></i>Clientes Vinculados ({{ vinculados|length }})</h6>
+            {% if vinculados %}
+            {% for uc, c in vinculados.items() %}
+            <div class="d-flex justify-content-between align-items-center py-2 {% if not loop.last %}border-bottom{% endif %}">
+                <div>
+                    <strong style="font-size:12px">{{ c.nome[:25] }}</strong>
+                    <br><code style="font-size:10px">UC: {{ c.uc_display or uc }}</code>
+                </div>
+                <div class="text-end">
+                    <span class="badge" style="background:rgba(245,166,35,0.1);color:var(--or);font-size:11px">{{ "%.2f"|format(c.get('rateio_pct', 0)) }}%</span>
+                    <br><a href="/usinas/desvincular/{{ uid }}/{{ uc }}" class="text-danger" style="font-size:10px" title="Desvincular" onclick="return confirm('Desvincular {{ c.nome }}?')"><i class="bi bi-x-lg"></i></a>
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-muted text-center py-2 mb-0" style="font-size:13px">Nenhum cliente vinculado.</p>
+            {% endif %}
+        </div></div>
+
+        <!-- Vincular novo cliente -->
+        {% if nao_vinculados %}
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-person-plus-fill me-1" style="color:var(--or)"></i>Vincular Cliente</h6>
+            <form method="POST" action="/usinas/vincular/{{ uid }}">
+                <div class="mb-2">
+                    <select name="uc" class="form-select form-select-sm" required>
+                        <option value="">Selecione...</option>
+                        {% for uc, c in nao_vinculados.items() %}
+                        <option value="{{ uc }}">{{ c.nome }} ({{ c.uc_display or uc }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-2">
+                    <input type="text" name="rateio_pct" class="form-control form-control-sm" placeholder="% do rateio (ex: 5.00)">
+                </div>
+                <button type="submit" class="btn btn-cta btn-sm w-100"><i class="bi bi-link-45deg me-1"></i>Vincular</button>
+            </form>
+        </div></div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const ctx = document.getElementById('chartGeracao');
+if (ctx) { new Chart(ctx, {
+    type: 'line', data: { labels: {{ graf_labels|safe }},
+    datasets: [{ label: 'kWh', data: {{ graf_valores|safe }},
+        borderColor: '#f5a623', backgroundColor: 'rgba(245,166,35,0.1)',
+        fill: true, tension: 0.3, pointRadius: 3, borderWidth: 2 }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { callback: v => v + ' kWh' } } } }
+}); }
+</script>
+{% endblock %}

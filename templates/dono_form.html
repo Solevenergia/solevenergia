@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}{% if dono %}Editar{% else %}Novo{% endif %} Dono{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        <i class="bi bi-person-fill-check me-2" style="color:var(--or)"></i>
+        {% if dono %}Editar Dono{% else %}Novo Dono{% endif %}
+    </h1>
+    <a href="/donos" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+</div>
+
+<form method="POST" autocomplete="off">
+    <div class="row g-3">
+        <div class="col-md-8">
+            <div class="card"><div class="card-body p-4">
+                <h6 class="fw-bold mb-3">
+                    <i class="bi bi-person-vcard me-2" style="color:var(--or)"></i>Dados do Dono
+                </h6>
+
+                <div class="mb-3">
+                    <label class="form-label">Nome Completo <span class="text-danger">*</span></label>
+                    <input type="text" name="desc_nome" class="form-control" required
+                        value="{{ dono.desc_nome if dono else '' }}"
+                        placeholder="Nome completo do proprietario">
+                </div>
+
+                <div class="row">
+                    <div class="col-md-7 mb-3">
+                        <label class="form-label">CPF / CNPJ</label>
+                        <input type="text" name="desc_cpf_cnpj" id="campo_cpf" class="form-control"
+                            value="{{ dono.desc_cpf_cnpj if dono else '' }}"
+                            placeholder="000.000.000-00">
+                    </div>
+                    <div class="col-md-5 mb-3">
+                        <label class="form-label">Data de Nascimento</label>
+                        <input type="text" name="dt_nascimento" id="campo_nasc" class="form-control"
+                            value="{{ dono._dt_nascimento_br if dono and dono._dt_nascimento_br else (dono.dt_nascimento if dono else '') }}"
+                            placeholder="dd/mm/aaaa" maxlength="10">
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Telefone</label>
+                        <input type="text" name="desc_telefone" id="campo_tel" class="form-control"
+                            value="{{ dono.desc_telefone if dono else '' }}"
+                            placeholder="(62) 99999-9999">
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">E-mail</label>
+                        <input type="email" name="desc_email" class="form-control"
+                            value="{{ dono.desc_email if dono else '' }}"
+                            placeholder="email@exemplo.com">
+                    </div>
+                </div>
+            </div></div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card"><div class="card-body p-4">
+                <h6 class="fw-bold mb-2" style="color:var(--sl)">
+                    <i class="bi bi-info-circle me-2"></i>Dica
+                </h6>
+                <p class="text-muted mb-0" style="font-size:13px">
+                    O CPF/CNPJ eh usado como chave para evitar duplicar o mesmo dono.
+                    Se cadastrar dois donos com o mesmo CPF, o banco retorna erro de
+                    duplicidade.
+                </p>
+            </div></div>
+
+            <div class="mt-3">
+                <button type="submit" class="btn btn-cta w-100">
+                    <i class="bi bi-check-lg me-1"></i> {% if dono %}Salvar Alteracoes{% else %}Cadastrar Dono{% endif %}
+                </button>
+                <a href="/donos" class="btn btn-outline-secondary w-100 mt-2">
+                    Cancelar
+                </a>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function mascaraCpfCnpj(v) {
+    v = v.replace(/\D/g, '');
+    if (v.length <= 11) {
+        v = v.replace(/(\d{3})(\d)/,   '$1.$2');
+        v = v.replace(/(\d{3})(\d)/,   '$1.$2');
+        v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else {
+        v = v.replace(/^(\d{2})(\d)/,           '$1.$2');
+        v = v.replace(/^(\d{2})\.(\d{3})(\d)/,  '$1.$2.$3');
+        v = v.replace(/\.(\d{3})(\d)/,           '.$1/$2');
+        v = v.replace(/(\d{4})(\d)/,             '$1-$2');
+    }
+    return v;
+}
+function mascaraData(v) {
+    v = v.replace(/\D/g, '').slice(0, 8);
+    if (v.length > 4)      v = v.slice(0,2)+'/'+v.slice(2,4)+'/'+v.slice(4);
+    else if (v.length > 2) v = v.slice(0,2)+'/'+v.slice(2);
+    return v;
+}
+function mascaraTelefone(v) {
+    v = v.replace(/\D/g, '').slice(0, 11);
+    if (v.length > 6)      v = '('+v.slice(0,2)+') '+v.slice(2,7)+'-'+v.slice(7);
+    else if (v.length > 2) v = '('+v.slice(0,2)+') '+v.slice(2);
+    return v;
+}
+function aplicarMascara(id, fn) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    if (el.value) {
+        // Se data vier em ISO (YYYY-MM-DD), converte pra BR antes de aplicar mascara
+        if (id === 'campo_nasc' && /^\d{4}-\d{2}-\d{2}/.test(el.value)) {
+            var p = el.value.slice(0,10).split('-');
+            el.value = p[2] + '/' + p[1] + '/' + p[0];
+        }
+        el.value = fn(el.value);
+    }
+    el.addEventListener('input', function() {
+        var p = this.selectionStart, ant = this.value.length;
+        this.value = fn(this.value);
+        var novo = this.value.length;
+        this.setSelectionRange(p + (novo - ant), p + (novo - ant));
+    });
+}
+document.addEventListener('DOMContentLoaded', function() {
+    aplicarMascara('campo_cpf',  mascaraCpfCnpj);
+    aplicarMascara('campo_nasc', mascaraData);
+    aplicarMascara('campo_tel',  mascaraTelefone);
+});
+</script>
+{% endblock %}

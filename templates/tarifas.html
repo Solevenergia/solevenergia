@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Tarifas{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-tag-fill me-2" style="color:var(--or)"></i>Tarifas por Mês</h1>
+    <a href="/tarifas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Nova Tarifa</a>
+</div>
+<p class="text-muted mb-3" style="font-size:13px">
+    Cadastre a tarifa e bandeiras da distribuidora por mês de referência.
+    Esses valores serão usados automaticamente ao gerar cobranças e simulações.
+</p>
+{% if tarifas %}
+<div class="card"><div class="card-body p-0">
+    <table class="table table-sm mb-0" style="font-size:13px">
+        <thead><tr>
+            <th style="padding-left:16px">Mês/Ano</th>
+            <th>Tarifa (R$/kWh)</th>
+            <th>Fio B (R$/kWh)</th>
+            <th>Band. Amarela (R$/kWh)</th>
+            <th>Band. Vermelha (R$/kWh)</th>
+            <th>Observação</th>
+            <th class="text-end" style="padding-right:16px">Ações</th>
+        </tr></thead>
+        <tbody>
+        {% for mes_ref, t in tarifas %}
+        <tr>
+            <td style="padding-left:16px"><strong>{{ mes_ref }}</strong></td>
+            <td>R$ {{ "%.6f"|format(t.tarifa_sem) }}</td>
+            <td>{% if t.fio_b and t.fio_b > 0 %}R$ {{ "%.6f"|format(t.fio_b) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>{% if t.bandeira_amarela > 0 %}R$ {{ "%.6f"|format(t.bandeira_amarela) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td>{% if t.bandeira_vermelha > 0 %}R$ {{ "%.6f"|format(t.bandeira_vermelha) }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="text-muted">{{ t.observacao or '—' }}</td>
+            <td class="text-end" style="padding-right:16px">
+                <a href="/tarifas/editar/{{ mes_ref }}" class="btn btn-sm btn-outline-secondary" title="Editar"><i class="bi bi-pencil"></i></a>
+                <a href="/tarifas/remover/{{ mes_ref }}" class="btn btn-sm btn-outline-danger" title="Remover"
+                   onclick="return confirm('Remover tarifa de {{ mes_ref }}?')"><i class="bi bi-trash"></i></a>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div></div>
+{% else %}
+<div class="card"><div class="card-body text-center py-5">
+    <i class="bi bi-tag" style="font-size:48px;color:#ccc"></i>
+    <p class="text-muted mt-3 mb-3">Nenhuma tarifa cadastrada ainda.</p>
+    <a href="/tarifas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Cadastrar Tarifa</a>
+</div></div>
+{% endif %}
+{% endblock %}

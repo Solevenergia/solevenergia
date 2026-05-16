@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Recebedores PIX{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-qr-code me-2" style="color:var(--or)"></i>Recebedores PIX</h1>
+    <a href="/recebedores/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Recebedor</a>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        {% if recebedores %}
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Chave PIX</th>
+                    <th>Nome no QR</th>
+                    <th>Cidade QR</th>
+                    <th>Banco</th>
+                    <th>Usinas</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for r in recebedores %}
+            <tr>
+                <td>
+                    <div class="fw-semibold" style="color:var(--db)">{{ r.desc_nome }}</div>
+                    {% if r.desc_cpf_cnpj %}<small class="text-muted">{{ r.desc_cpf_cnpj }}</small>{% endif %}
+                </td>
+                <td>
+                    {% if r.desc_pix %}
+                    <code style="font-size:12px;background:#f4f6f9;padding:2px 6px;border-radius:5px">{{ r.desc_pix }}</code>
+                    {% else %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Não configurada</span>
+                    {% endif %}
+                </td>
+                <td><span style="font-size:12px">{{ r.desc_nome_pix or '—' }}</span></td>
+                <td><span style="font-size:12px">{{ r.desc_cidade_pix or '—' }}</span></td>
+                <td><span style="font-size:12px">{{ r.desc_banco or '—' }}</span></td>
+                <td>
+                    <span class="badge" style="background:rgba(26,42,74,0.1);color:var(--db)">
+                        {{ r._usinas_count }} usina{% if r._usinas_count != 1 %}s{% endif %}
+                    </span>
+                </td>
+                <td class="text-end">
+                    <a href="/recebedores/editar/{{ r.id_investidor }}" class="btn btn-sm btn-outline-primary me-1">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    {% if r._usinas_count == 0 %}
+                    <a href="/recebedores/excluir/{{ r.id_investidor }}"
+                       class="btn btn-sm btn-outline-danger"
+                       onclick="return confirm('Excluir recebedor {{ r.desc_nome }}?')">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                    {% else %}
+                    <button class="btn btn-sm btn-outline-danger" disabled title="Vinculado a usinas">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-qr-code" style="font-size:48px;color:var(--or);opacity:0.3"></i>
+            <p class="text-muted mt-3">Nenhum recebedor cadastrado.</p>
+            <a href="/recebedores/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Cadastrar Primeiro Recebedor</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-body p-4">
+        <h6 class="fw-bold mb-2" style="color:var(--sl)"><i class="bi bi-info-circle me-2"></i>Como funciona</h6>
+        <p class="text-muted mb-0" style="font-size:13px">
+            Cada recebedor representa quem vai receber o pagamento via PIX de um grupo de clientes.
+            Para ativar, vincule o recebedor à usina correspondente em <a href="/usinas">Usinas</a>.
+            Ao gerar uma cobrança, o sistema busca automaticamente a chave PIX correta para aquele cliente.
+        </p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Importar Clientes{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-cloud-arrow-up-fill me-2" style="color:var(--or)"></i>Importar Clientes</h1>
+    <a href="/importar/modelo" class="btn btn-db btn-sm"><i class="bi bi-download me-1"></i>Baixar Planilha Modelo</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-7">
+        <form method="POST" enctype="multipart/form-data">
+        <div class="card mb-3"><div class="card-body p-4">
+            <h6 class="fw-bold mb-3">Enviar Planilha Excel</h6>
+
+            <div class="mb-3">
+                <label class="form-label">Formato da planilha</label>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="form-check p-3 rounded" style="background:var(--orl);border:2px solid var(--or)">
+                            <input class="form-check-input" type="radio" name="formato" value="padrao" id="fmtPadrao" checked>
+                            <label class="form-check-label" for="fmtPadrao">
+                                <strong style="font-size:13px">Modelo Padrão</strong>
+                                <br><small class="text-muted">Clientes em linhas (modelo SOLEV)</small>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="form-check p-3 rounded" style="background:#f8f9fa;border:2px solid #e0e0e0">
+                            <input class="form-check-input" type="radio" name="formato" value="controle" id="fmtControle">
+                            <label class="form-check-label" for="fmtControle">
+                                <strong style="font-size:13px">Controle SOLEV</strong>
+                                <br><small class="text-muted">Clientes em colunas (planilha de controle)</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('xlsxInput').click()">
+                <i class="bi bi-file-earmark-spreadsheet mb-2 d-block" style="font-size:44px;color:var(--or)"></i>
+                <h6 class="fw-bold" id="uploadText">Arraste o Excel aqui ou clique</h6>
+                <p class="text-muted mb-0 small">Formatos: .xlsx, .xls</p>
+            </div>
+            <input type="file" name="xlsx" id="xlsxInput" accept=".xlsx,.xls" class="d-none">
+
+            <button type="submit" class="btn btn-cta w-100 mt-3" id="btnImportar" disabled>
+                <i class="bi bi-cloud-arrow-up me-1"></i> Importar Clientes
+            </button>
+        </div></div>
+        </form>
+    </div>
+
+    <div class="col-md-5">
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-file-earmark-spreadsheet me-1" style="color:var(--or)"></i>Modelo Padrão</h6>
+            <p class="text-muted mb-2" style="font-size:12px">Uma linha por cliente com as colunas:</p>
+            <div style="font-size:11px">
+                <span class="badge" style="background:var(--db);margin:1px">UC</span>
+                <span class="badge" style="background:var(--db);margin:1px">NOME</span>
+                <span class="badge" style="background:var(--sl);margin:1px">CPF</span>
+                <span class="badge" style="background:var(--sl);margin:1px">TELEFONE</span>
+                <span class="badge" style="background:var(--sl);margin:1px">EMAIL</span>
+                <span class="badge" style="background:var(--sl);margin:1px">APELIDO</span>
+                <span class="badge" style="background:var(--sl);margin:1px">LOGRADOURO</span>
+                <span class="badge" style="background:var(--sl);margin:1px">NÚMERO</span>
+                <span class="badge" style="background:var(--sl);margin:1px">COMPLEMENTO</span>
+                <span class="badge" style="background:var(--sl);margin:1px">BAIRRO</span>
+                <span class="badge" style="background:var(--sl);margin:1px">CEP</span>
+                <span class="badge" style="background:var(--sl);margin:1px">CIDADE</span>
+                <span class="badge" style="background:var(--sl);margin:1px">ESTADO</span>
+                <span class="badge" style="background:var(--sl);margin:1px">TIPO FORN.</span>
+                <span class="badge" style="background:var(--sl);margin:1px">TARIFA</span>
+                <span class="badge" style="background:var(--sl);margin:1px">DESCONTO</span>
+                <span class="badge" style="background:var(--sl);margin:1px">ID USINA</span>
+            </div>
+            <a href="/importar/modelo" class="btn btn-outline-primary btn-sm w-100 mt-2"><i class="bi bi-download me-1"></i>Baixar Modelo</a>
+        </div></div>
+
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-table me-1" style="color:var(--or)"></i>Planilha de Controle</h6>
+            <p class="text-muted mb-2" style="font-size:12px">Formato das planilhas CONTROLE que você já usa. Clientes em colunas, campos nas linhas (NOME, CPF, TEL, UC, TARIFA, etc.)</p>
+            <p class="text-muted mb-0" style="font-size:11px"><i class="bi bi-info-circle me-1"></i>O sistema lê a <strong>última aba</strong> da planilha.</p>
+        </div></div>
+
+<div class="card"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-lightbulb-fill me-1" style="color:var(--or)"></i>Dicas</h6>
+            <ul class="small text-muted mb-0" style="padding-left:16px;font-size:12px">
+                <li class="mb-1">Se o cliente já existir (mesma UC), os dados são <strong>atualizados</strong></li>
+                <li class="mb-1">Dados de cobrança anterior, economia e vínculo com usina são <strong>preservados</strong></li>
+                <li class="mb-1">Campos vazios usam valores padrão (tarifa 1.135823, desconto 20%)</li>
+            </ul>
+        </div></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const a=document.getElementById('uploadArea'),i=document.getElementById('xlsxInput'),b=document.getElementById('btnImportar'),t=document.getElementById('uploadText');
+if(a){['dragenter','dragover'].forEach(e=>a.addEventListener(e,ev=>{ev.preventDefault();a.classList.add('drag-over')}));
+['dragleave','drop'].forEach(e=>a.addEventListener(e,ev=>{ev.preventDefault();a.classList.remove('drag-over')}));
+a.addEventListener('drop',ev=>{i.files=ev.dataTransfer.files;u()});i.addEventListener('change',u)}
+function u(){if(i.files.length>0){t.innerHTML='<i class="bi bi-file-earmark-spreadsheet-fill me-2" style="color:var(--or)"></i>'+i.files[0].name;a.style.borderColor='var(--or)';a.style.background='var(--orl)';b.disabled=false}}
+</script>
+{% endblock %}

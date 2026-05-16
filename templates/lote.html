@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Gerar em Lote{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-files me-2" style="color:var(--or)"></i>Gerar em Lote</h1></div>
+<form method="POST" enctype="multipart/form-data">
+<div class="row g-3">
+    <div class="col-md-8"><div class="card"><div class="card-body p-4">
+        <h6 class="fw-bold mb-2">Selecione múltiplas faturas da Equatorial</h6>
+        <p class="text-muted mb-3" style="font-size:13px">O sistema gera a cobrança de cada cliente automaticamente.</p>
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('pdfInput').click()">
+            <i class="bi bi-files mb-2 d-block" style="font-size:44px;color:var(--or)"></i>
+            <h6 class="fw-bold" id="uploadText">Selecione vários PDFs de uma vez</h6>
+            <p class="text-muted mb-0 small">Segure Ctrl e clique em cada arquivo</p>
+        </div>
+        <input type="file" name="pdfs" id="pdfInput" accept=".pdf" multiple class="d-none">
+    </div></div></div>
+    <div class="col-md-4">
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold"><i class="bi bi-info-circle me-1" style="color:var(--or)"></i>Como funciona</h6>
+            <ol class="small text-muted mb-0" style="padding-left:18px">
+                <li>Selecione todos os PDFs da Equatorial</li>
+                <li>O sistema extrai a UC de cada um</li>
+                <li>Busca o cliente e gera a cobrança</li>
+                <li>Mostra o resultado de todos</li>
+            </ol>
+        </div></div>
+        <button type="submit" class="btn btn-cta btn-lg w-100" id="btnGerar" disabled>
+            <i class="bi bi-lightning-charge-fill me-1"></i> Gerar Todas</button>
+    </div>
+</div></form>
+{% endblock %}
+{% block scripts %}
+<script>
+const a=document.getElementById('uploadArea'),i=document.getElementById('pdfInput'),b=document.getElementById('btnGerar'),t=document.getElementById('uploadText');
+if(a){i.addEventListener('change',()=>{if(i.files.length>0){t.innerHTML='<i class="bi bi-check-circle-fill me-2" style="color:var(--green)"></i>'+i.files.length+' arquivo(s) selecionado(s)';a.style.borderColor='var(--or)';b.disabled=false}})}
+</script>
+{% endblock %}

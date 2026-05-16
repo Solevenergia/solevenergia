@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Painel{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-grid-1x2-fill me-2" style="color:var(--or)"></i>Painel</h1>
+    <a href="/gerar" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Nova Cobrança</a>
+</div>
+
+{# ══════ ALERTAS ══════ #}
+{% if alertas_vencidas %}
+<div class="alert alert-danger d-flex align-items-start mb-3" style="border-left:4px solid #dc3545;border-radius:8px">
+    <i class="bi bi-exclamation-triangle-fill me-2 mt-1" style="font-size:18px"></i>
+    <div style="width:100%">
+        <strong>Cobranças vencidas ({{ alertas_vencidas|length }})</strong>
+        <div class="mt-2" style="font-size:12px">
+        {% for item in alertas_vencidas %}
+            <div class="d-flex justify-content-between align-items-center py-1 {% if not loop.last %}border-bottom{% endif %}" style="border-color:rgba(0,0,0,0.1)!important">
+                <span><strong>{{ item.nome[:30] }}</strong> <code style="font-size:10px">{{ item.uc }}</code></span>
+                <span>{{ fmt(item.total_com) }} — venc. {{ item.vencimento }}</span>
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if alertas_vencendo %}
+<div class="alert alert-warning d-flex align-items-start mb-3" style="border-left:4px solid #ffc107;border-radius:8px">
+    <i class="bi bi-alarm-fill me-2 mt-1" style="font-size:18px"></i>
+    <div style="width:100%">
+        <strong>Vencendo hoje ({{ alertas_vencendo|length }})</strong>
+        <div class="mt-2" style="font-size:12px">
+        {% for item in alertas_vencendo %}
+            <div class="d-flex justify-content-between align-items-center py-1 {% if not loop.last %}border-bottom{% endif %}" style="border-color:rgba(0,0,0,0.1)!important">
+                <span><strong>{{ item.nome[:30] }}</strong> <code style="font-size:10px">{{ item.uc }}</code></span>
+                <span>{{ fmt(item.total_com) }}</span>
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if alertas_rateio_ativos %}
+<div class="alert d-flex align-items-start mb-3" style="background:{% if alertas_rateio_ativos[0].status == 'atrasado' %}rgba(220,53,69,0.06);border:1px solid rgba(220,53,69,0.2);border-left:4px solid #dc3545{% elif alertas_rateio_ativos[0].status == 'urgente' %}rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.25);border-left:4px solid #ffc107{% else %}rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-left:4px solid #3b82f6{% endif %};border-radius:8px">
+    <i class="bi bi-pie-chart-fill me-2 mt-1" style="font-size:18px;color:{% if alertas_rateio_ativos[0].status == 'atrasado' %}#dc3545{% elif alertas_rateio_ativos[0].status == 'urgente' %}#ffc107{% else %}#3b82f6{% endif %}"></i>
+    <div style="width:100%">
+        <div class="d-flex justify-content-between align-items-center">
+            <strong>Rateio pendente ({{ alertas_rateio_ativos|length }} usina{{ 's' if alertas_rateio_ativos|length > 1 }})</strong>
+            <a href="/whatsapp/enviar_rateio" class="btn btn-sm" style="background:#25d366;color:white;font-size:11px;border-radius:6px" title="Enviar alerta via WhatsApp">
+                <i class="bi bi-whatsapp me-1"></i>Enviar Alerta
+            </a>
+        </div>
+        <div class="mt-2" style="font-size:12px">
+        {% for a in alertas_rateio_ativos %}
+            <div class="d-flex justify-content-between align-items-center py-1 {% if not loop.last %}border-bottom{% endif %}" style="border-color:rgba(0,0,0,0.08)!important">
+                <span>
+                    {% if a.status == 'atrasado' %}<i class="bi bi-exclamation-circle-fill me-1" style="color:#dc3545"></i>
+                    {% elif a.status == 'urgente' %}<i class="bi bi-exclamation-triangle-fill me-1" style="color:#ffc107"></i>
+                    {% else %}<i class="bi bi-clock-fill me-1" style="color:#3b82f6"></i>{% endif %}
+                    <strong>{{ a.nome[:25] }}</strong> <code style="font-size:10px">UC {{ a.uc_geradora }}</code>
+                </span>
+                <span>
+                    {% if a.dias_restantes <= 0 %}
+                        <span class="badge" style="background:#dc3545;color:white;font-size:10px">ATRASADO {{ (-a.dias_restantes) }}d</span>
+                    {% elif a.dias_restantes <= 3 %}
+                        <span class="badge" style="background:#ffc107;color:#333;font-size:10px">{{ a.dias_restantes }}d restantes</span>
+                    {% else %}
+                        <span class="badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;font-size:10px">{{ a.dias_restantes }}d</span>
+                    {% endif %}
+                    <small class="text-muted ms-1">Rateio: {{ a.data_rateio }} | Leitura: {{ a.proxima_leitura }}</small>
+                </span>
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if clientes_sem_usina %}
+<div class="alert d-flex align-items-start mb-3" style="background:rgba(26,42,74,0.06);border:1px solid rgba(26,42,74,0.15);border-left:4px solid var(--db);border-radius:8px;color:var(--db)">
+    <i class="bi bi-sun me-2 mt-1" style="font-size:18px"></i>
+    <div style="width:100%">
+        <strong>Clientes sem usina vinculada ({{ clientes_sem_usina|length }})</strong>
+        <div class="mt-2" style="font-size:12px">
+        {% for c in clientes_sem_usina[:10] %}
+            <span class="badge me-1 mb-1" style="background:rgba(26,42,74,0.1);color:var(--db);font-weight:500;font-size:11px">
+                {{ c.nome[:25] }} <code style="font-size:9px">{{ c.uc }}</code>
+            </span>
+        {% endfor %}
+        {% if clientes_sem_usina|length > 10 %}
+            <span class="text-muted" style="font-size:11px">e mais {{ clientes_sem_usina|length - 10 }}...</span>
+        {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(245,166,35,0.1);color:var(--or)"><i class="bi bi-people-fill"></i></div>
+        <div class="stat-value">{{ total_clientes }}</div><div class="stat-label">Clientes</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(34,197,94,0.1);color:var(--green)"><i class="bi bi-piggy-bank-fill"></i></div>
+        <div class="stat-value" style="color:var(--green)">{{ total_economia }}</div><div class="stat-label">Economia gerada</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(26,42,74,0.08);color:var(--db)"><i class="bi bi-cash-stack"></i></div>
+        <div class="stat-value">{{ total_receita }}</div><div class="stat-label">Receita faturada</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(234,179,8,0.1);color:#eab308"><i class="bi bi-hourglass-split"></i></div>
+        <div class="stat-value">{{ pendentes }}</div><div class="stat-label">Aguardando pagamento</div>
+    </div></div>
+</div>
+<div class="row g-3 mb-4">
+    <div class="col-md-7"><div class="card p-3">
+        <h6 class="fw-bold mb-1"><i class="bi bi-sun-fill me-1" style="color:var(--or)"></i> Geração (kWh) × Receita (R$) por Usina</h6>
+        <p class="text-muted mb-2" style="font-size:11px">Comparativo de energia gerada e receita faturada</p>
+        {% if usinas_chart %}<canvas id="chartUsinas" height="200"></canvas>
+        {% else %}<div class="text-center py-4"><i class="bi bi-sun" style="font-size:36px;color:#ccc"></i>
+        <p class="text-muted mt-2 mb-0" style="font-size:13px">Cadastre usinas e gere cobranças para ver o gráfico.</p></div>{% endif %}
+    </div></div>
+    <div class="col-md-5"><div class="card p-3">
+        <h6 class="fw-bold mb-1"><i class="bi bi-pie-chart-fill me-1" style="color:var(--or)"></i> Economia por Usina</h6>
+        <p class="text-muted mb-2" style="font-size:11px">Economia gerada para os clientes de cada usina</p>
+        {% if usinas_chart %}<canvas id="chartEconomia" height="200"></canvas>
+        {% else %}<div class="text-center py-4"><i class="bi bi-pie-chart" style="font-size:36px;color:#ccc"></i>
+        <p class="text-muted mt-2 mb-0" style="font-size:13px">Sem dados ainda.</p></div>{% endif %}
+    </div></div>
+</div>
+<div class="row g-3">
+    <div class="col-md-5"><div class="card p-3">
+        <h6 class="fw-bold mb-3"><i class="bi bi-sun-fill me-1" style="color:var(--or)"></i> Usinas</h6>
+        {% if usinas_chart %}{% for u in usinas_chart %}
+        <div class="d-flex justify-content-between align-items-center py-2 {% if not loop.last %}border-bottom{% endif %}">
+            <div><strong style="font-size:13px">{{ u.nome }}</strong><br>
+            <small class="text-muted">{{ u.potencia }} kWp — {{ u.clientes }} clientes</small></div>
+            <div class="text-end">
+                <div style="font-size:12px"><i class="bi bi-lightning-charge me-1" style="color:var(--or)"></i><strong>{{ "{:,.0f}".format(u.kwh).replace(",", ".") }}</strong> kWh</div>
+                <div style="font-size:12px"><i class="bi bi-cash me-1" style="color:var(--green)"></i><strong>{{ fmt(u.receita) }}</strong></div>
+            </div>
+        </div>{% endfor %}
+        {% else %}<div class="text-center py-3"><a href="/usinas/nova" class="btn btn-cta btn-sm"><i class="bi bi-plus-lg me-1"></i>Cadastrar Usina</a></div>{% endif %}
+    </div></div>
+    <div class="col-md-7"><div class="card p-3">
+        <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-1" style="color:var(--or)"></i> Últimas Cobranças</h6>
+        {% if ultimas %}
+        <table class="table table-sm mb-0" style="font-size:12px">
+            <thead><tr><th>Cliente</th><th>Mês</th><th class="text-end">COM</th><th class="text-end">Economia</th><th>Status</th><th>Venc.</th></tr></thead>
+            <tbody>{% for item in ultimas %}<tr>
+                <td><strong>{{ item.nome[:22] }}</strong><br><code style="font-size:10px">{{ item.uc }}</code></td>
+                <td>{{ item.mes_referencia }}</td>
+                <td class="text-end"><strong>{{ fmt(item.total_com) }}</strong></td>
+                <td class="text-end" style="color:var(--green);font-weight:600">{{ fmt(item.economia_mes) }}</td>
+                <td>{% if 'Pago' in item.status %}<span class="badge badge-pago" style="font-size:10px">Pago</span>
+                {% else %}<span class="badge badge-pendente" style="font-size:10px">Pendente</span>{% endif %}</td>
+                <td style="font-size:11px;white-space:nowrap">{{ item.vencimento }}
+                {% if item in alertas_vencidas %}<i class="bi bi-exclamation-triangle-fill ms-1" style="color:#dc3545" title="Vencida"></i>
+                {% elif item in alertas_vencendo %}<i class="bi bi-alarm-fill ms-1" style="color:#ffc107" title="Vence hoje"></i>
+                {% endif %}</td>
+            </tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<p class="text-muted text-center py-3 mb-0">Nenhuma cobrança gerada ainda.</p>{% endif %}
+    </div></div>
+</div>
+
+{# ══════ CONTROLE DE RATEIO — TIMELINE ══════ #}
+{% if alertas_rateio %}
+<div class="row g-3 mt-1">
+    <div class="col-12"><div class="card p-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h6 class="fw-bold mb-0"><i class="bi bi-pie-chart-fill me-1" style="color:var(--or)"></i> Controle de Rateio</h6>
+            <a href="/whatsapp/config" class="btn btn-outline-secondary btn-sm" style="font-size:11px"><i class="bi bi-whatsapp me-1"></i>Config. WhatsApp</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm mb-0" style="font-size:12px">
+                <thead><tr>
+                    <th>Usina</th>
+                    <th>UC Geradora</th>
+                    <th class="text-center">Clientes</th>
+                    <th class="text-end">Geração Prev.</th>
+                    <th class="text-center">Rateio %</th>
+                    <th>Próx. Leitura</th>
+                    <th>Data Rateio</th>
+                    <th class="text-center">Status</th>
+                </tr></thead>
+                <tbody>
+                {% for a in alertas_rateio %}
+                <tr style="{% if a.status == 'atrasado' %}background:rgba(220,53,69,0.04){% elif a.status == 'urgente' %}background:rgba(255,193,7,0.06){% endif %}">
+                    <td><a href="/usinas/ver/{{ a.uid }}" class="text-decoration-none"><strong>{{ a.nome[:22] }}</strong></a></td>
+                    <td><code style="font-size:11px">{{ a.uc_geradora }}</code></td>
+                    <td class="text-center">{{ a.total_clientes }}</td>
+                    <td class="text-end"><strong style="color:var(--or)">{{ "{:,.0f}".format(a.geracao_media).replace(",", ".") }}</strong> kWh</td>
+                    <td class="text-center">
+                        {% if a.total_rateio_pct == 100 %}<span class="badge badge-pago" style="font-size:10px">100%</span>
+                        {% else %}<span class="badge badge-pendente" style="font-size:10px">{{ a.total_rateio_pct }}%</span>{% endif %}
+                    </td>
+                    <td style="white-space:nowrap">{{ a.proxima_leitura }}</td>
+                    <td style="white-space:nowrap"><strong>{{ a.data_rateio }}</strong></td>
+                    <td class="text-center">
+                        {% if a.status == 'atrasado' %}
+                            <span class="badge" style="background:#dc3545;color:white;font-size:10px"><i class="bi bi-exclamation-circle-fill me-1"></i>Atrasado ({{ (-a.dias_restantes) }}d)</span>
+                        {% elif a.status == 'urgente' %}
+                            <span class="badge" style="background:#ffc107;color:#333;font-size:10px"><i class="bi bi-exclamation-triangle-fill me-1"></i>Urgente ({{ a.dias_restantes }}d)</span>
+                        {% elif a.status == 'proximo' %}
+                            <span class="badge" style="background:rgba(59,130,246,0.15);color:#3b82f6;font-size:10px"><i class="bi bi-clock me-1"></i>{{ a.dias_restantes }}d</span>
+                        {% else %}
+                            <span class="badge" style="background:rgba(34,197,94,0.1);color:var(--green);font-size:10px"><i class="bi bi-check-circle me-1"></i>{{ a.dias_restantes }}d</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div></div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if usinas_chart %}
+<script>
+const ctxU = document.getElementById('chartUsinas');
+if (ctxU) { new Chart(ctxU, {
+    type: 'bar',
+    data: {
+        labels: {{ usinas_labels|safe }},
+        datasets: [
+            { label: 'Geração (kWh)', data: {{ usinas_kwh|safe }},
+              backgroundColor: 'rgba(245,166,35,0.75)', borderRadius: 6, borderSkipped: false, yAxisID: 'y' },
+            { label: 'Receita (R$)', data: {{ usinas_receita|safe }},
+              backgroundColor: 'rgba(26,42,74,0.75)', borderRadius: 6, borderSkipped: false, yAxisID: 'y1' }
+        ]
+    },
+    options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { position: 'top', labels: { font: { size: 11 } } } },
+        scales: {
+            y: { type: 'linear', position: 'left', beginAtZero: true,
+                title: { display: true, text: 'kWh', font: { size: 11 } },
+                ticks: { callback: v => v.toLocaleString('pt-BR') + ' kWh' } },
+            y1: { type: 'linear', position: 'right', beginAtZero: true,
+                grid: { drawOnChartArea: false },
+                title: { display: true, text: 'R$', font: { size: 11 } },
+                ticks: { callback: v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 0}) } }
+        }
+    }
+}); }
+const ctxE = document.getElementById('chartEconomia');
+if (ctxE) {
+    const ecoData = {{ usinas_economia|safe }};
+    if (ecoData.some(v => v > 0)) {
+        new Chart(ctxE, { type: 'doughnut',
+            data: { labels: {{ usinas_labels|safe }},
+                datasets: [{ data: ecoData,
+                    backgroundColor: ['#f5a623','#1a2a4a','#22c55e','#3b82f6','#ef4444','#8b5cf6','#ec4899','#14b8a6'],
+                    borderWidth: 2, borderColor: '#fff' }] },
+            options: { responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } },
+                    tooltip: { callbacks: { label: ctx => ctx.label + ': R$ ' + ctx.parsed.toLocaleString('pt-BR', {minimumFractionDigits: 2}) } } } }
+        });
+    } else { ctxE.parentElement.innerHTML += '<div class="text-center py-3"><p class="text-muted mb-0" style="font-size:12px">Gere cobranças para ver a economia por usina.</p></div>'; ctxE.style.display = 'none'; }
+}
+</script>
+{% endif %}
+{% endblock %}

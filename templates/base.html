@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoLev Energia — {% block title %}Sistema{% endblock %}</title>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/icon-192.png">
+    <link rel="manifest" href="/static/site.webmanifest">
+    <meta name="theme-color" content="#0d1b2a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="SoLev Energia">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root { --db: #1a2a4a; --or: #f5a623; --or2: #e09500; --orl: #fff8ee; --sl: #455a64; --bg: #f4f6f9; --green: #22c55e; }
+        * { font-family: 'Plus Jakarta Sans', sans-serif; }
+        body { background: var(--bg); margin: 0; }
+        .sidebar { width: 250px; min-height: 100vh; background: linear-gradient(180deg, #0f1d35 0%, var(--db) 100%); position: fixed; left: 0; top: 0; z-index: 100; display: flex; flex-direction: column; }
+        .sidebar-logo { padding: 24px 20px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .sidebar-logo img { height: 38px; width: auto; filter: brightness(1.1); }
+        .sidebar-logo .slogan { color: rgba(255,255,255,0.35); font-size: 10px; margin-top: 6px; letter-spacing: 0.5px; }
+        .sidebar-nav { padding: 14px 10px; flex: 1; }
+        .sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 10px; color: rgba(255,255,255,0.5); text-decoration: none; font-weight: 500; font-size: 13px; margin-bottom: 2px; transition: all 0.2s; }
+        .sidebar-nav a:hover { background: rgba(255,255,255,0.07); color: white; }
+        .sidebar-nav a.active { background: var(--or); color: var(--db); font-weight: 700; box-shadow: 0 2px 8px rgba(245,166,35,0.3); }
+        .sidebar-nav a i { font-size: 17px; width: 20px; text-align: center; }
+        .sidebar-nav .nav-divider { border-top: 1px solid rgba(255,255,255,0.06); margin: 10px 14px; }
+        /* Grupo expansivel (dropdown na sidebar) */
+        .sidebar-nav .nav-group { margin-bottom: 2px; }
+        .sidebar-nav .nav-group-toggle {
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            padding: 11px 14px; border-radius: 10px; border: 0;
+            background: transparent; color: rgba(255,255,255,0.5);
+            font-weight: 500; font-size: 13px; cursor: pointer;
+            transition: all 0.2s; text-align: left;
+        }
+        .sidebar-nav .nav-group-toggle:hover { background: rgba(255,255,255,0.07); color: white; }
+        .sidebar-nav .nav-group-toggle .chevron {
+            margin-left: auto; font-size: 12px; transition: transform 0.2s;
+        }
+        .sidebar-nav .nav-group.open .nav-group-toggle .chevron { transform: rotate(180deg); }
+        .sidebar-nav .nav-group.has-active .nav-group-toggle { color: rgba(255,255,255,0.9); }
+        .sidebar-nav .nav-group-items {
+            max-height: 0; overflow: hidden; transition: max-height 0.25s ease;
+        }
+        .sidebar-nav .nav-group.open .nav-group-items { max-height: 500px; }
+        .sidebar-nav .nav-group-items a {
+            padding-left: 38px; font-size: 12.5px;
+        }
+        .sidebar-nav .nav-group-items a i {
+            font-size: 14px;
+        }
+        .sidebar-footer { padding: 12px 16px; color: rgba(255,255,255,0.2); font-size: 10px; text-align: center; }
+        .main { margin-left: 250px; padding: 28px 36px; min-height: 100vh; }
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+        .page-header h1 { font-size: 24px; font-weight: 800; color: var(--db); margin: 0; }
+        .card { border: none; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.03); }
+        .stat-card { padding: 22px; }
+        .stat-card .stat-icon { width: 44px; height: 44px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 14px; }
+        .stat-card .stat-value { font-size: 26px; font-weight: 800; color: var(--db); line-height: 1.1; }
+        .stat-card .stat-label { font-size: 12px; color: #999; font-weight: 500; margin-top: 4px; }
+        .table { font-size: 13px; }
+        .table th { font-weight: 600; color: var(--sl); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e9ecef; }
+        .table td { vertical-align: middle; padding: 12px 10px; }
+        .btn-cta { background: var(--or); color: var(--db); border: none; font-weight: 700; border-radius: 10px; padding: 10px 22px; transition: all 0.2s; }
+        .btn-cta:hover { background: var(--or2); color: var(--db); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(245,166,35,0.3); }
+        .btn-db { background: var(--db); color: white; border: none; font-weight: 600; border-radius: 10px; padding: 10px 22px; }
+        .btn-db:hover { background: #0f1d35; color: white; }
+        .upload-area { border: 2px dashed #d0d5dd; border-radius: 16px; padding: 50px 30px; text-align: center; transition: all 0.3s; cursor: pointer; background: white; }
+        .upload-area:hover, .upload-area.drag-over { border-color: var(--or); background: var(--orl); }
+        .upload-area i { font-size: 44px; color: var(--or); }
+        .badge-pago { background: #dcfce7; color: #166534; font-weight: 600; }
+        .badge-pendente { background: #fef9c3; color: #854d0e; font-weight: 600; }
+        .form-control:focus, .form-select:focus { border-color: var(--or); box-shadow: 0 0 0 3px rgba(245,166,35,0.12); }
+        .form-label { font-weight: 600; font-size: 12px; color: var(--sl); text-transform: uppercase; letter-spacing: 0.3px; }
+        .alert { border-radius: 12px; border: none; font-weight: 500; font-size: 14px; }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <div class="sidebar-logo">
+        <img src="/logo/logo_white_v_colored.png" alt="SoLev Energia" onerror="this.outerHTML='<div style=&quot;color:white;font-size:22px;font-weight:800&quot;>SoLe<span style=&quot;color:#f5a623&quot;>V</span></div>'">
+        <div class="slogan">O sol gera. A SoLev reduz.</div>
+    </div>
+    {% set ep = request.endpoint or '' %}
+    {% set in_cadastros = (
+        ('cliente' in ep and 'importar' not in ep) or
+        'importar' in ep or
+        ('usina' in ep and ep != 'rateio_consolidado') or
+        'dono' in ep or
+        'titular' in ep or
+        'recebedor' in ep or
+        'investidor' in ep
+    ) %}
+    {% set in_gerar = ep in ['gerar', 'gerar_auto', 'gerar_manual', 'gerar_lote'] %}
+    <nav class="sidebar-nav">
+        <a href="/" class="{% if ep == 'dashboard' %}active{% endif %}"><i class="bi bi-grid-1x2-fill"></i> Painel</a>
+
+        {# ── Grupo: Cadastros ───────────────────────── #}
+        <div class="nav-group {% if in_cadastros %}open has-active{% endif %}">
+            <button type="button" class="nav-group-toggle" onclick="this.parentElement.classList.toggle('open')">
+                <i class="bi bi-folder-fill"></i> Cadastros
+                <i class="bi bi-chevron-down chevron"></i>
+            </button>
+            <div class="nav-group-items">
+                <a href="/clientes" class="{% if 'cliente' in ep and 'importar' not in ep %}active{% endif %}"><i class="bi bi-people-fill"></i> Clientes</a>
+                <a href="/importar" class="{% if 'importar' in ep %}active{% endif %}"><i class="bi bi-cloud-arrow-up-fill"></i> Importar</a>
+                <a href="/usinas" class="{% if 'usina' in ep and ep != 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-sun-fill"></i> Usinas</a>
+                <a href="/donos" class="{% if 'dono' in ep %}active{% endif %}"><i class="bi bi-person-fill-check"></i> Donos</a>
+                <a href="/titulares" class="{% if 'titular' in ep %}active{% endif %}"><i class="bi bi-person-badge-fill"></i> Titulares UC</a>
+                <a href="/recebedores" class="{% if 'recebedor' in ep %}active{% endif %}"><i class="bi bi-qr-code"></i> Recebedores PIX</a>
+                <a href="/investidor" class="{% if 'investidor' in ep %}active{% endif %}"><i class="bi bi-briefcase-fill"></i> Investidores</a>
+            </div>
+        </div>
+
+        <a href="/rateio" class="{% if ep == 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-pie-chart-fill"></i> Rateio</a>
+        <a href="/conciliacao" class="{% if 'conciliacao' in ep %}active{% endif %}"><i class="bi bi-clipboard-check-fill"></i> Conciliação</a>
+        <a href="/tarifas" class="{% if 'tarifa' in ep %}active{% endif %}"><i class="bi bi-tag-fill"></i> Tarifas</a>
+
+        {# ── Grupo: Gerar Cobrança ───────────────────── #}
+        <div class="nav-group {% if in_gerar %}open has-active{% endif %}">
+            <button type="button" class="nav-group-toggle" onclick="this.parentElement.classList.toggle('open')">
+                <i class="bi bi-lightning-charge-fill"></i> Gerar Cobrança
+                <i class="bi bi-chevron-down chevron"></i>
+            </button>
+            <div class="nav-group-items">
+                <a href="/gerar/auto" class="{% if ep == 'gerar_auto' %}active{% endif %}"><i class="bi bi-lightning-charge-fill"></i> Automático</a>
+                <a href="/gerar" class="{% if ep == 'gerar' %}active{% endif %}"><i class="bi bi-file-earmark-pdf-fill"></i> Via Fatura Equatorial</a>
+                <a href="/gerar/manual" class="{% if ep == 'gerar_manual' %}active{% endif %}"><i class="bi bi-pencil-square"></i> Manual</a>
+                <a href="/lote" class="{% if ep == 'gerar_lote' %}active{% endif %}"><i class="bi bi-files"></i> Em Lote</a>
+            </div>
+        </div>
+
+        <div class="nav-divider"></div>
+        <a href="/pagamento" class="{% if ep == 'pagamento' %}active{% endif %}"><i class="bi bi-cash-coin"></i> Pagamentos</a>
+        <a href="/faturas" class="{% if ep == 'faturas' %}active{% endif %}"><i class="bi bi-receipt"></i> Faturas</a>
+        <a href="/relatorio" class="{% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-bar-chart-line-fill"></i> Relatórios</a>
+        <div class="nav-divider"></div>
+        <a href="/simulador" class="{% if ep == 'simulador' %}active{% endif %}"><i class="bi bi-calculator-fill"></i> Simulador</a>
+        <a href="/whatsapp/config" class="{% if 'whatsapp' in ep %}active{% endif %}"><i class="bi bi-whatsapp"></i> WhatsApp</a>
+        <a href="/sync" class="{% if 'sync' in ep %}active{% endif %}"><i class="bi bi-cloud-check-fill"></i> Supabase</a>
+        <div class="nav-divider"></div>
+        <a href="/contrato" class="{% if 'contrato' in ep %}active{% endif %}"><i class="bi bi-file-earmark-text-fill"></i> Gerar Contrato</a>
+    </nav>
+    <div class="sidebar-footer">SoLev Energia © 2026 — v1.0</div>
+</div>
+<div class="main">
+    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat, msg in messages %}
+    <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
+    {% endfor %}{% endif %}{% endwith %}
+    {% block content %}{% endblock %}
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+
+    // ── Utilitário: aplica função em todos os campos com esses nomes ──────────
+    function porNome(nomes, fn){
+        nomes.forEach(function(n){
+            document.querySelectorAll('input[name="'+n+'"]').forEach(fn);
+        });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  DUPLO-CLIQUE seleciona TUDO  (single-click NÃO seleciona — preserva caret)
+    //  Ao restaurar foco programaticamente (_restaurar abaixo), o caret é
+    //  preservado exatamente onde estava — sem seleção automática que apagaria
+    //  o conteúdo na próxima tecla.
+    // ═══════════════════════════════════════════════════════════════════════════
+    document.addEventListener('dblclick', function(e){
+        var el = e.target;
+        if(!el || !el.tagName) return;
+        if(el.tagName!=='INPUT' && el.tagName!=='TEXTAREA') return;
+        var t=(el.type||'').toLowerCase();
+        if(['file','hidden','password','checkbox','radio','submit','button','reset','image'].indexOf(t)>=0) return;
+        try{ el.select(); }catch(_){}
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MÁSCARA DATA  dd/mm/aaaa
+    // ═══════════════════════════════════════════════════════════════════════════
+    function maskData(){ var v=this.value.replace(/\D/g,''); if(v.length>2)v=v.slice(0,2)+'/'+v.slice(2); if(v.length>5)v=v.slice(0,5)+'/'+v.slice(5); if(v.length>10)v=v.slice(0,10); this.value=v; }
+    porNome(['data','data_pagamento','data_pagamento_anterior','venc_contalev_anterior',
+             'anterior_leitura','data_leitura','proxima_leitura','vencimento_contalev',
+             'venc_equatorial','data_adesao','dt_comissionamento','dt_nascimento_titular',
+             'dt_dono_nascimento','dt_inicio','dt_fim','dt_proxima_leitura',
+             'investidor_dia_pagamento'],
+        function(el){ el.setAttribute('inputmode','numeric'); if(!el.placeholder)el.placeholder='dd/mm/aaaa'; el.addEventListener('input',maskData); });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MÁSCARA MÊS/ANO  mm/aaaa
+    // ═══════════════════════════════════════════════════════════════════════════
+    porNome(['mes_referencia'],function(el){
+        el.setAttribute('inputmode','numeric'); if(!el.placeholder)el.placeholder='mm/aaaa';
+        el.addEventListener('input',function(){ var v=this.value.replace(/\D/g,''); if(v.length>2)v=v.slice(0,2)+'/'+v.slice(2); if(v.length>7)v=v.slice(0,7); this.value=v; });
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MÁSCARA CPF  xxx.xxx.xxx-xx  /  CNPJ  xx.xxx.xxx/xxxx-xx
+    // ═══════════════════════════════════════════════════════════════════════════
+    function maskCpfCnpj(){ var v=this.value.replace(/\D/g,'');
+        if(v.length<=11){
+            if(v.length>3)  v=v.slice(0,3)+'.'+v.slice(3);
+            if(v.length>7)  v=v.slice(0,7)+'.'+v.slice(7);
+            if(v.length>11) v=v.slice(0,11)+'-'+v.slice(11);
+            if(v.length>14) v=v.slice(0,14);
+        } else {
+            v=v.slice(0,14);
+            if(v.length>2)  v=v.slice(0,2)+'.'+v.slice(2);
+            if(v.length>6)  v=v.slice(0,6)+'.'+v.slice(6);
+            if(v.length>10) v=v.slice(0,10)+'/'+v.slice(10);
+            if(v.length>15) v=v.slice(0,15)+'-'+v.slice(15);
+        }
+        this.value=v;
+    }
+    porNome(['cpf','cpf_sim','cpf_titular','desc_cpf','desc_cpf_titular',
+             'investidor_cpf_cnpj','desc_cpf_cnpj','desc_dono_cpf_cnpj','inv_desc_cpf_cnpj'],
+        function(el){ el.setAttribute('inputmode','numeric'); el.addEventListener('input',maskCpfCnpj); });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MÁSCARA TELEFONE  (xx) xxxxx-xxxx  /  (xx) xxxx-xxxx
+    // ═══════════════════════════════════════════════════════════════════════════
+    function maskTel(){ var v=this.value.replace(/\D/g,'');
+        if(v.length>11) v=v.slice(0,11);
+        var ddd=v.slice(0,2), num=v.slice(2);
+        if(v.length<=2)      this.value=v;
+        else if(num.length<=4) this.value='('+ddd+') '+num;
+        else if(v.length<=10)  this.value='('+ddd+') '+num.slice(0,4)+'-'+num.slice(4);
+        else                   this.value='('+ddd+') '+num.slice(0,5)+'-'+num.slice(5);
+    }
+    porNome(['telefone','investidor_telefone','telefone_pdf',
+             'desc_telefone','desc_telefone_titular','desc_dono_telefone','desc_telefone_pdf'],
+        function(el){ el.setAttribute('inputmode','tel'); el.addEventListener('input',maskTel); });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MÁSCARA CEP  xx.xxx-xxx
+    // ═══════════════════════════════════════════════════════════════════════════
+    function maskCep(){ var v=this.value.replace(/\D/g,'');
+        if(v.length>8) v=v.slice(0,8);
+        if(v.length>5)      this.value=v.slice(0,2)+'.'+v.slice(2,5)+'-'+v.slice(5);
+        else if(v.length>2) this.value=v.slice(0,2)+'.'+v.slice(2);
+        else                this.value=v;
+    }
+    porNome(['cep','cod_cep'],function(el){
+        el.setAttribute('inputmode','numeric'); if(!el.placeholder)el.placeholder='xx.xxx-xxx';
+        el.addEventListener('input',maskCep);
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  MÁSCARA UC NOVA  xxxx.xxx.xxx.xxx-xx  (15 dígitos) — preserva caret
+    // ═══════════════════════════════════════════════════════════════════════════
+    function _fmtUcNova(d){
+        if(d.length<=4)  return d;
+        if(d.length<=7)  return d.slice(0,4)+'.'+d.slice(4);
+        if(d.length<=10) return d.slice(0,4)+'.'+d.slice(4,7)+'.'+d.slice(7);
+        if(d.length<=13) return d.slice(0,4)+'.'+d.slice(4,7)+'.'+d.slice(7,10)+'.'+d.slice(10);
+        return d.slice(0,4)+'.'+d.slice(4,7)+'.'+d.slice(7,10)+'.'+d.slice(10,13)+'-'+d.slice(13,15);
+    }
+    function maskUcNova(){
+        var raw = this.value;
+        var digits = raw.replace(/\D/g,'').slice(0,15);
+        // Auto-formata se já tem pontuação OU se já passou de 8 dígitos (UC antiga é até 11; mas
+        // se chegou aqui via campo nomeado cod_uc/uc_nova/etc, o usuário quer o formato novo)
+        var alvo = _fmtUcNova(digits);
+        if(alvo === raw) return;
+        var oldCaret = (typeof this.selectionStart==='number') ? this.selectionStart : raw.length;
+        var digitsBefore = raw.slice(0,oldCaret).replace(/\D/g,'').length;
+        this.value = alvo;
+        var newCaret = alvo.length, count=0;
+        if(digitsBefore===0){ newCaret = 0; }
+        else for(var i=0;i<alvo.length;i++){
+            if(/\d/.test(alvo[i])) count++;
+            if(count >= digitsBefore){ newCaret = i+1; break; }
+        }
+        try{ this.setSelectionRange(newCaret,newCaret); }catch(e){}
+    }
+    // Variante "inteligente" para campos de BUSCA que aceitam nome/UC antiga/UC nova:
+    // se contém LETRAS, é busca por nome — não mexe.
+    // Se contém só dígitos/pontuação, formata como UC nova já no primeiro separador
+    // (xxxx.xxx.xxx.xxx-xx). O backend normaliza pontuação na busca, então UC antiga
+    // segue funcionando mesmo formatada.
+    function maskUcNovaSmart(){
+        if(/[A-Za-z]/.test(this.value)) return;
+        return maskUcNova.call(this);
+    }
+    // Bind por nome (compat) → SEMPRE formata (campos cadastro)
+    porNome(['cod_uc','uc_nova','cod_uc_geradora','cod_uc_alternativa'],function(el){
+        el.setAttribute('inputmode','numeric'); el.addEventListener('input',maskUcNova);
+    });
+    // Bind por atributo data-format="uc-nova" → versão inteligente
+    document.querySelectorAll('[data-format="uc-nova"]').forEach(function(el){
+        if(el._ucMaskBound) return; el._ucMaskBound = true;
+        el.addEventListener('input', maskUcNovaSmart);
+        el.addEventListener('paste', function(){ var me=this; setTimeout(function(){ maskUcNovaSmart.call(me); },0); });
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  EMAIL → caixa baixa automática
+    // ═══════════════════════════════════════════════════════════════════════════
+    document.querySelectorAll('input[type="email"],input[name*="email"]').forEach(function(el){
+        el.addEventListener('input',function(){ var p=this.selectionStart; this.value=this.value.toLowerCase(); this.setSelectionRange(p,p); });
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  PERSISTÊNCIA DE FORMULÁRIO  (sessionStorage)
+    //   • Salva valor de TODO input/select/textarea ao digitar — esteja ou não
+    //     dentro de <form>
+    //   • Salva posição do cursor (selectionStart/End) e qual campo estava
+    //     focado para restaurar exatamente onde parou
+    //   • Ao submeter um <form>, limpa apenas os campos daquele form
+    //   • Inputs com data-no-persist="true" são ignorados
+    //   • Convenção do projeto: aplica-se globalmente. Veja
+    //     .claude/skills/form-ux/SKILL.md
+    // ═══════════════════════════════════════════════════════════════════════════
+    var STORAGE_KEY = 'solevFormState:'+location.pathname;
+
+    function _key(el){ return el.getAttribute('name') || el.id || ''; }
+    function _persistivel(el){
+        if(!el || !el.tagName) return false;
+        if(['INPUT','TEXTAREA','SELECT'].indexOf(el.tagName)<0) return false;
+        if(!_key(el)) return false;
+        var t=(el.type||'').toLowerCase();
+        if(['file','hidden','password','submit','button','reset','image'].indexOf(t)>=0) return false;
+        if(el.dataset && el.dataset.noPersist==='true') return false;
+        return true;
+    }
+    function _ler(){ try{ return JSON.parse(sessionStorage.getItem(STORAGE_KEY))||{}; }catch(e){ return {}; } }
+    function _grav(s){ try{ sessionStorage.setItem(STORAGE_KEY,JSON.stringify(s)); }catch(e){} }
+
+    function _snapshot(){
+        var s=_ler(); s.fields = s.fields || {};
+        document.querySelectorAll('input,textarea,select').forEach(function(el){
+            if(!_persistivel(el)) return;
+            var k=_key(el);
+            s.fields[k] = (el.type==='checkbox'||el.type==='radio') ? !!el.checked : el.value;
+        });
+        _grav(s);
+    }
+
+    function _restaurar(){
+        var s=_ler(); if(!s||!s.fields) return;
+        var disparouMascara = false;
+        document.querySelectorAll('input,textarea,select').forEach(function(el){
+            if(!_persistivel(el)) return;
+            var k=_key(el);
+            if(!(k in s.fields)) return;
+            var v=s.fields[k];
+            if(el.type==='checkbox'||el.type==='radio'){ el.checked = !!v; }
+            else if(el.value !== v){ el.value = v; disparouMascara = true; }
+        });
+        // Re-aplica máscara UC nova nos campos restaurados
+        if(disparouMascara){
+            document.querySelectorAll('input[name="cod_uc"], input[name="uc_nova"], input[name="cod_uc_geradora"], input[name="cod_uc_alternativa"]').forEach(function(el){
+                try{ maskUcNova.call(el); }catch(e){}
+            });
+            document.querySelectorAll('[data-format="uc-nova"]').forEach(function(el){
+                try{ maskUcNovaSmart.call(el); }catch(e){}
+            });
+        }
+        // Restaura foco e caret
+        if(s.focus && s.focus.k){
+            var sel=null;
+            try{
+                sel = document.querySelector('[name="'+s.focus.k+'"]')
+                   || document.getElementById(s.focus.k);
+            }catch(e){}
+            if(sel){
+                setTimeout(function(){
+                    try{
+                        sel.focus({preventScroll:true});
+                        if(typeof sel.setSelectionRange==='function' && sel.type !== 'checkbox' && sel.type !== 'radio'){
+                            sel.setSelectionRange(s.focus.start||0, s.focus.end||s.focus.start||0);
+                        }
+                    }catch(e){}
+                }, 60);
+            }
+        }
+    }
+
+    // Listeners globais (delegação no document)
+    document.addEventListener('input', function(e){ if(_persistivel(e.target)) _snapshot(); });
+    document.addEventListener('change',function(e){ if(_persistivel(e.target)) _snapshot(); });
+
+    // Caret/foco
+    document.addEventListener('selectionchange', function(){
+        var el = document.activeElement;
+        if(!_persistivel(el)) return;
+        if(typeof el.selectionStart!=='number') return;
+        var s=_ler();
+        s.focus = { k: _key(el), start: el.selectionStart, end: el.selectionEnd };
+        _grav(s);
+    });
+    document.addEventListener('focusin', function(e){
+        var el=e.target; if(!_persistivel(el)) return;
+        var s=_ler();
+        s.focus = { k: _key(el),
+                    start: (typeof el.selectionStart==='number')?el.selectionStart:0,
+                    end:   (typeof el.selectionEnd==='number')?el.selectionEnd:0 };
+        _grav(s);
+    });
+
+    // Limpa só os campos do form que foi submetido — preserva os demais
+    document.addEventListener('submit', function(e){
+        var f=e.target; if(!f||f.tagName!=='FORM') return;
+        var s=_ler(); if(!s||!s.fields) return;
+        f.querySelectorAll('input,textarea,select').forEach(function(el){
+            if(_persistivel(el)){ var k=_key(el); if(k in s.fields) delete s.fields[k]; }
+        });
+        if(s.focus && f.querySelector('[name="'+s.focus.k+'"], #'+s.focus.k)) delete s.focus;
+        if(!Object.keys(s.fields).length && !s.focus) sessionStorage.removeItem(STORAGE_KEY);
+        else _grav(s);
+    });
+
+    // Restauração inicial — após máscaras já estarem ligadas
+    setTimeout(_restaurar, 0);
+
+});
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

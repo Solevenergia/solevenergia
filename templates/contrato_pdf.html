@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contrato — {{ d.locatario_razao_social }} — SOLEV</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #1A2D5A;
+    --navy-mid: #2C4A8A;
+    --navy-light: #EEF2FA;
+    --navy-stripe: #E8EDF7;
+    --accent: #3A6BC8;
+    --text: #1A1C22;
+    --text-muted: #5A6070;
+    --rule: #C8D3EC;
+    --orange: #E8761A;
+    --white: #FAFBFD;
+    --margin: 14mm;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Barlow', sans-serif;
+    font-size: 9pt;
+    color: var(--text);
+    background: #C8CDD8;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .doc {
+    width: 210mm;
+    margin: 8mm auto;
+    background: var(--white);
+    box-shadow: 0 4px 24px rgba(0,0,0,.18);
+  }
+
+  .doc-header {
+    background: var(--navy);
+    padding: 3.5mm var(--margin);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8mm;
+    border-bottom: 3px solid var(--orange);
+  }
+  .logo-img { height: 10mm; width: auto; }
+  .hdr-right { text-align: right; color: white; }
+  .hdr-label { font-size: 6.5pt; text-transform: uppercase; letter-spacing: 1.5px; opacity: .55; }
+  .hdr-title { font-size: 8.5pt; font-weight: 600; opacity: .9; margin-top: .5mm; }
+  .hdr-date  { font-size: 7pt; opacity: .5; margin-top: .3mm; }
+
+  .content { padding: 5mm var(--margin) 10mm; }
+
+  .title-band {
+    border-bottom: 1.5px solid var(--rule);
+    padding: 3mm 0 3mm;
+    margin-bottom: 4mm;
+  }
+  .title-band .doc-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 17pt; font-weight: 700;
+    color: var(--navy);
+    text-transform: uppercase;
+    letter-spacing: 1px; line-height: 1.1;
+  }
+  .title-band .doc-subtitle {
+    font-size: 8pt; color: var(--text-muted);
+    margin-top: 1.5mm; line-height: 1.5;
+    text-wrap: pretty;
+  }
+
+  .sec {
+    display: flex; align-items: center; gap: 3mm;
+    border-bottom: 1.5px solid var(--navy);
+    padding: 1.5mm 0; margin: 4mm 0 0;
+  }
+  .sec-num  { font-family:'Barlow Condensed',sans-serif; font-size:7.5pt; font-weight:700; color:var(--orange); letter-spacing:1.5px; text-transform:uppercase; }
+  .sec-title{ font-family:'Barlow Condensed',sans-serif; font-size:10pt;  font-weight:700; color:var(--navy);   text-transform:uppercase; letter-spacing:1px; }
+
+  .ptable { width:100%; border-collapse:collapse; font-size:8.5pt; }
+  .ptable tr { display:flex; align-items:baseline; border-bottom:1px solid var(--rule); }
+  .ptable tr:nth-child(odd)  td { background: white; }
+  .ptable tr:nth-child(even) td { background: var(--navy-light); }
+  .ptable .lbl {
+    color:var(--navy); font-weight:700; font-size:7.8pt;
+    text-transform:uppercase; letter-spacing:.3px;
+    padding: 1.5mm 0 1.5mm 3mm; flex-shrink:0; white-space:nowrap;
+  }
+  .ptable .lbl::after { content:':'; margin-right:2mm; }
+  .ptable .val { color:var(--text); font-size:8.5pt; padding:1.5mm 3mm 1.5mm 0; flex:1; }
+  .ptable .r4 { display:grid; grid-template-columns: 28mm 1fr 24mm 1fr; }
+  .ptable .r4 .lbl { min-width:unset; }
+
+  .clause { margin-top: 3mm; }
+  .clause-hd { display:flex; align-items:center; gap:3mm; margin-bottom:1.5mm; }
+  .clause-num { color:var(--orange); font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:8pt; letter-spacing:.5px; flex-shrink:0; }
+  .clause-name { font-weight:700; font-size:9.5pt; color:var(--navy); text-transform:uppercase; letter-spacing:.5px; border-bottom:1.5px solid var(--accent); flex:1; padding-bottom:.8mm; }
+
+  .sub { display:flex; gap:3mm; margin: 1mm 0; padding-left:4mm; }
+  .sub-n { color:var(--accent); font-weight:700; font-size:8pt; flex-shrink:0; min-width:9mm; }
+  .sub-t { font-size:8.5pt; line-height:1.55; text-align:justify; text-wrap:pretty; }
+  .sub-t strong { color:var(--navy); }
+
+  .hl {
+    background:var(--navy-light); border-left:3px solid var(--orange);
+    padding:1.5mm 3mm; margin:1.5mm 0 1.5mm 4mm;
+    font-size:8.5pt; line-height:1.5; text-align:justify; text-wrap:pretty;
+  }
+  .hl strong { color:var(--navy); }
+
+  .decl {
+    background:var(--navy-light); border-left:3px solid var(--accent);
+    padding:2mm 3mm; margin:2mm 0 0;
+    font-size:8.5pt; line-height:1.5; text-align:justify; text-wrap:pretty;
+  }
+
+  hr.dv { border:none; border-top:1px solid var(--rule); margin:2.5mm 0; }
+
+  .vtable { width:100%; border-collapse:collapse; margin:2mm 0; font-size:8.5pt; }
+  .vtable th { background:var(--navy-stripe); color:var(--navy); padding:1.5mm 3mm; text-align:left; font-weight:700; font-size:7.8pt; text-transform:uppercase; letter-spacing:.5px; border-bottom:2px solid var(--navy); }
+  .vtable td { padding:1.5mm 3mm; border-bottom:1px solid var(--rule); vertical-align:middle; }
+  .vtable tr:nth-child(odd)  td { background:white; }
+  .vtable tr:nth-child(even) td { background:var(--navy-stripe); }
+  .center { text-align:center; }
+
+  .sig-intro { text-align:center; font-size:8.5pt; color:var(--text-muted); line-height:1.5; margin:3mm 0; text-wrap:pretty; }
+  .sig-date  { text-align:center; font-size:9pt; color:var(--text-muted); margin:2mm 0; }
+  .sig-date strong { color:var(--text); }
+
+  .sig-info {
+    background:var(--navy-light); border-left:3px solid var(--accent);
+    padding:2mm 3.5mm; margin-top:2mm;
+  }
+  .sig-info-label { font-family:'Barlow Condensed',sans-serif; font-size:7.5pt; font-weight:700; color:var(--orange); letter-spacing:1.5px; text-transform:uppercase; margin-bottom:.5mm; }
+  .sig-info-label span { color:var(--navy); }
+  .sig-name { font-weight:700; font-size:8.5pt; color:var(--navy); }
+  .sig-role { font-size:7.5pt; color:var(--text-muted); }
+  .sig-doc  { font-size:7pt;   color:var(--text-muted); font-family:monospace; }
+
+  .wit-grid { display:grid; grid-template-columns:1fr 1fr; gap:5mm 8mm; margin-top:3mm; }
+  .wit-block { display:flex; flex-direction:column; gap:1mm; }
+  .wit-line { border-top:1.5px solid var(--navy); margin-top:16mm; padding-top:2mm; }
+
+  .sec-wit {
+    margin-top:4mm; border-bottom:1.5px solid var(--navy); padding-bottom:1mm; margin-bottom:3mm;
+  }
+  .sec-wit span:first-child { font-family:'Barlow Condensed',sans-serif; font-size:7.5pt; font-weight:700; color:var(--accent); letter-spacing:1.5px; text-transform:uppercase; }
+  .sec-wit span:last-child  { font-family:'Barlow Condensed',sans-serif; font-size:10pt; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:1px; margin-left:3mm; }
+
+  .no-print { position: fixed; top: 8mm; right: 8mm; z-index: 999; }
+  .no-print button { background: var(--navy); color: white; border: none; padding: 8px 18px; border-radius: 8px; font-size: 13px; font-family: sans-serif; cursor: pointer; }
+  .no-print button:hover { background: var(--orange); }
+
+  @media print {
+    body { background:none; }
+    .doc { margin:0; box-shadow:none; width:100%; }
+    .no-print { display:none; }
+    @page { size:A4 portrait; margin:0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="no-print">
+  <button onclick="window.print()">🖨 Imprimir / Salvar PDF</button>
+</div>
+
+<div class="doc">
+
+  <div class="doc-header">
+    <img src="/contrato/assets/LOGO_SOLEV_white.png" class="logo-img" alt="SOLEV" onerror="this.outerHTML='<div style=&quot;color:white;font-size:14pt;font-weight:800;letter-spacing:1px&quot;>SOLE<span style=&quot;color:#E8761A&quot;>V</span></div>'">
+    <div class="hdr-right">
+      <div class="hdr-label">Instrumento Particular de Locação de Sistema Fotovoltaico</div>
+      <div class="hdr-title">SOLEV &nbsp;·&nbsp; {{ d.locatario_razao_social|upper }}</div>
+      <div class="hdr-date">{{ d.cidade_assinatura }} &nbsp;·&nbsp; {{ d.data_assinatura }}</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="title-band">
+      <div class="doc-title">Instrumento Particular de<br>Locação de Sistema Fotovoltaico</div>
+      <div class="doc-subtitle">As partes abaixo identificadas celebram o presente contrato, de forma livre e espontânea, regido pela legislação civil brasileira e pela Resolução Normativa ANEEL n.º 1.000/2021.</div>
+    </div>
+
+    <!-- I.1 LOCADOR -->
+    <div class="sec"><span class="sec-num">I.1</span><span class="sec-title">Locador</span></div>
+    <table class="ptable">
+      <tr><td class="lbl">Razão Social</td><td class="val"><strong>SOLEV ENERGIA</strong></td></tr>
+      <!-- TODO: preencher CNPJ definitivo quando abrir o CNPJ da SoLev -->
+      <tr class="r4"><td class="lbl">CNPJ</td><td class="val">—</td><td class="lbl">E-mail</td><td class="val">solevenergia@gmail.com</td></tr>
+      <tr><td class="lbl">Endereço</td><td class="val">Rua B-04, Quadra 04, Lote 19, Villar Baviera, CEP 75.327-100, Abadia de Goiás/GO</td></tr>
+      <tr class="r4"><td class="lbl">Representante</td><td class="val"><strong>Danilo Evangelista de Sousa Lemes</strong></td><td class="lbl">Cargo</td><td class="val">Sócio-Administrador</td></tr>
+      <tr class="r4"><td class="lbl">CPF</td><td class="val">018.738.531-90</td><td class="lbl">RG</td><td class="val">4.913.861 DGPC/GO</td></tr>
+      <tr class="r4"><td class="lbl">Nacionalidade</td><td class="val">Brasileiro</td><td class="lbl">Estado Civil</td><td class="val">Casado</td></tr>
+      <tr class="r4"><td class="lbl">E-mail Rep.</td><td class="val">daniloevangelista@hotmail.com</td><td class="lbl">Profissão</td><td class="val">Empresário</td></tr>
+      <tr><td class="lbl">End. Rep.</td><td class="val">Av. Circular n.º 751, Cond. Brilhante, Ap. 603, Tr. 03, Residencial Eldorado, Goiânia/GO</td></tr>
+    </table>
+
+    <!-- I.2 LOCATÁRIO -->
+    <div class="sec" style="margin-top:3mm"><span class="sec-num">I.2</span><span class="sec-title">Locatário</span></div>
+    <table class="ptable">
+      <tr><td class="lbl">{% if d.locatario_cnpj %}Razão Social{% else %}Nome{% endif %}</td><td class="val"><strong>{{ d.locatario_razao_social|upper }}</strong></td></tr>
+      {% if d.locatario_cnpj %}
+      <tr class="r4"><td class="lbl">CNPJ</td><td class="val">{{ d.locatario_cnpj }}</td><td class="lbl">E-mail</td><td class="val">{{ d.locatario_email }}</td></tr>
+      {% else %}
+      <tr class="r4"><td class="lbl">CPF</td><td class="val">{{ d.locatario_cpf }}</td><td class="lbl">E-mail</td><td class="val">{{ d.locatario_email }}</td></tr>
+      {% endif %}
+      <tr><td class="lbl">Endereço</td><td class="val">{{ d.locatario_endereco }}</td></tr>
+      <tr class="r4"><td class="lbl">Representante</td><td class="val"><strong>{{ d.locatario_representante }}</strong></td><td class="lbl">Cargo</td><td class="val">{{ d.locatario_cargo }}</td></tr>
+      {% if d.locatario_cnpj %}
+      <tr class="r4"><td class="lbl">CPF</td><td class="val">{{ d.locatario_cpf }}</td><td class="lbl">RG</td><td class="val">{{ d.locatario_rg }}</td></tr>
+      {% else %}
+      <tr class="r4"><td class="lbl">RG</td><td class="val">{{ d.locatario_rg }}</td><td class="lbl">&nbsp;</td><td class="val">&nbsp;</td></tr>
+      {% endif %}
+      <tr class="r4"><td class="lbl">Nacionalidade</td><td class="val">{{ d.locatario_nacionalidade }}</td><td class="lbl">Estado Civil</td><td class="val">{{ d.locatario_estado_civil }}</td></tr>
+      <tr><td class="lbl">Profissão</td><td class="val">{{ d.locatario_profissao }}</td></tr>
+    </table>
+
+    <!-- I.3 DECLARAÇÕES -->
+    <div class="sec" style="margin-top:3mm"><span class="sec-num">I.3</span><span class="sec-title">Declarações Preliminares</span></div>
+    <div class="decl">
+      As partes declaram, sob as penas da lei, que possuem plena capacidade jurídica para a celebração deste instrumento; o representante do LOCATÁRIO detém poderes estatutários ou procuratórios suficientes para obrigar a pessoa jurídica representada; têm ciência das disposições da Resolução Normativa ANEEL n.º 1.000/2021 e legislação correlata aplicável à compensação de energia elétrica.
+    </div>
+
+    <hr class="dv" style="margin-top:5mm;border-top:2px solid var(--navy);">
+
+    <!-- II — CLÁUSULAS -->
+    <div class="title-band" style="padding:2mm 0;margin-bottom:2mm;">
+      <div class="doc-title" style="font-size:12pt">II — Cláusulas Contratuais</div>
+    </div>
+
+    <!-- CL. 1 -->
+    <div class="clause">
+      <div class="clause-hd"><span class="clause-num">CLÁUSULA PRIMEIRA</span><span class="clause-name">Do Objeto</span></div>
+      <div class="sub"><span class="sub-n">1.1.</span><span class="sub-t">O presente contrato tem por objeto a locação, pelo <strong>LOCADOR</strong> ao <strong>LOCATÁRIO</strong>, de Sistema Fotovoltaico (SFV) de propriedade exclusiva do LOCADOR, destinado à geração de energia elétrica e à compensação de créditos energéticos em favor do LOCATÁRIO, na modalidade de autoconsumo remoto, conforme sistema de compensação de energia elétrica regulado pela Resolução Normativa ANEEL n.º 1.000/2021 e legislação aplicável.</span></div>
+      <div class="sub"><span class="sub-n">1.2.</span><span class="sub-t">Toda a manutenção, vistoria, reparo, atualização técnica e substituição de componentes do SFV serão de exclusiva responsabilidade e custo do LOCADOR, sendo expressamente vedada qualquer intervenção do LOCATÁRIO nos equipamentos, instalações, estruturas de suporte, cabeamento ou dispositivos de proteção, sob pena de responsabilização por danos causados.</span></div>
+      <div class="sub"><span class="sub-n">1.3.</span><span class="sub-t">O LOCADOR obriga-se a assegurar o pleno funcionamento, a eficiência energética mínima de <strong>90%</strong> e a segurança elétrica de todo o conjunto fotovoltaico, respondendo por vícios ou defeitos que comprometam a fruição do objeto locado.</span></div>
+    </div>
+
+    <hr class="dv">
+
+    <!-- CL. 2 -->
+    <div class="clause">
+      <div class="clause-hd"><span class="clause-num">CLÁUSULA SEGUNDA</span><span class="clause-name">Do Prazo e Condições de Início</span></div>
+      <div class="sub"><span class="sub-n">2.1.</span><span class="sub-t">O presente contrato vigorará pelo prazo inicial de <strong>{{ d.prazo_meses }} ({{ d.prazo_extenso }}) meses</strong>, contado da data de início efetivo da compensação energética nos termos da Cláusula 2.2, renovando-se automaticamente por iguais períodos, salvo manifestação expressa e formalizada por qualquer das partes com antecedência mínima de <strong>30 (trinta) dias</strong> do término do período vigente.</span></div>
+      <div class="sub"><span class="sub-n">2.2.</span><span class="sub-t">O início efetivo do fornecimento/creditação de energia ocorrerá após a regular transferência de titularidade ou vinculação da <strong>Unidade Consumidora n.º {{ d.uc_numero }}</strong> ao LOCATÁRIO (quando aplicável), a quitação integral de eventuais débitos pendentes vinculados à referida UC e a conclusão dos trâmites administrativos junto à distribuidora de energia elétrica, estimando-se que o primeiro ciclo de faturamento com compensação ocorrerá em até <strong>60 dias</strong> a partir da transferência de titularidade para o Locador.</span></div>
+      <div class="sub"><span class="sub-n">2.3.</span><span class="sub-t">Caso o início efetivo da compensação energética seja retardado por prazo superior a <strong>90 (noventa) dias</strong> além da estimativa da Cláusula 2.2, por motivo não imputável ao LOCATÁRIO, ficará facultado a este rescindir o contrato sem aplicação de multa, mediante notificação formal.</span></div>
+      <div class="sub"><span class="sub-n">2.4.</span><span class="sub-t">O encerramento imotivado por iniciativa de qualquer das partes deverá ser precedido de aviso formal, por escrito, com antecedência mínima de <strong>60 (sessenta) dias</strong> antes do término do período contratual em vigor. A multa por rescisão antecipada sem justa causa aplica-se nos termos da Cláusula Sexta.</span></div>
+    </div>
+
+    <hr class="dv">
+
+    <!-- CL. 3 -->
+    <div class="clause">
+      <div class="clause-hd"><span class="clause-num">CLÁUSULA TERCEIRA</span><span class="clause-name">Dos Valores, Reajuste e Pagamento</span></div>
+      <div class="sub"><span class="sub-n">3.1.</span><span class="sub-t">O valor mensal do aluguel será calculado com base na energia efetivamente injetada e compensada em favor do LOCATÁRIO na Unidade Consumidora n.º {{ d.uc_numero }}, aplicando-se <strong>desconto de {{ d.desconto_percent }}% ({{ d.desconto_extenso }} por cento)</strong> sobre o valor da energia compensada, deduzidas eventuais taxas obrigatórias de terceiros (ex: Contribuição de Iluminação Pública — CIP/COSIP), quando legalmente aplicáveis.</span></div>
+      <div class="sub"><span class="sub-n">3.2.</span><span class="sub-t">Para fins de transparência e controle, o LOCADOR enviará mensalmente ao LOCATÁRIO, até o <strong>5.º (quinto) dia útil</strong> subsequente ao ciclo de faturamento da distribuidora, relatório contendo: kWh injetados, kWh compensados, valor bruto da energia compensada conforme tarifa da distribuidora, cálculo do desconto de {{ d.desconto_percent }}%, e valor líquido devido a título de aluguel.</span></div>
+      <div class="sub"><span class="sub-n">3.3.</span><span class="sub-t">O LOCATÁRIO compromete-se a efetuar o pagamento do aluguel ao LOCADOR com antecedência mínima de <strong>3 (três) dias úteis</strong> em relação à data de vencimento da fatura da distribuidora de energia elétrica, por meio de PIX/boleto/transferência bancária, para a conta de titularidade do LOCADOR, permanecendo a fatura da distribuidora sob responsabilidade direta de pagamento do LOCATÁRIO.</span></div>
+      <div class="sub"><span class="sub-n">3.4.</span><span class="sub-t">Os valores do aluguel serão reajustados com base na variação de reajuste aplicado pela distribuidora local à tarifa de energia elétrica.</span></div>
+      <div class="sub"><span class="sub-n">3.5.</span><span class="sub-t">Em caso de atraso no pagamento, incidirá sobre o valor devido: <strong>multa moratória de 2% (dois por cento)</strong> e <strong>juros de mora de 1% (um por cento) ao mês</strong>, até a data do efetivo pagamento, sem prejuízo das demais medidas legais cabíveis.</span></div>
+    </div>
+
+    <hr class="dv">
+
+    <!-- CL. 4 -->
+    <div class="clause">
+      <div class="clause-hd"><span class="clause-num">CLÁUSULA QUARTA</span><span class="clause-name">Das Responsabilidades do Locador</span></div>
+      <div class="sub"><span class="sub-n">4.1.</span><span class="sub-t">O LOCADOR deverá manter o SFV em operação contínua e segura, garantindo eficiência energética compatível com as especificações técnicas do Anexo I, bem como responder civil e criminalmente por acidentes, danos ou incidentes decorrentes de sua culpa, dolo ou vício do equipamento.</span></div>
+      <div class="sub"><span class="sub-n">4.2.</span><span class="sub-t">Compete exclusivamente ao LOCADOR: realizar manutenções preventivas e corretivas com registro técnico; substituir componentes defeituosos ou obsoletos sem ônus ao LOCATÁRIO; comunicar ao LOCATÁRIO com antecedência mínima de <strong>48 (quarenta e oito) horas</strong> paradas programadas para manutenção, exceto em casos de emergência; arcar com todos os custos operacionais, tributários e securitários relacionados ao SFV, salvo disposição expressa em contrário neste contrato.</span></div>
+      <div class="sub"><span class="sub-n">4.3.</span><span class="sub-t">O LOCADOR declara manter, ou se obriga a contratar, seguro de riscos de engenharia e/ou responsabilidade civil para o SFV, com cobertura para danos materiais, perda de receita e responsabilidade perante terceiros, devendo apresentar comprovante de vigência ao LOCATÁRIO quando solicitado.</span></div>
+    </div>
+
+    <hr class="dv">
+
+    <!-- CL. 5 -->
+    <div class="clause">
+      <div class="clause-hd"><span class="clause-num">CLÁUSULA QUINTA</span><span class="clause-name">Das Responsabilidades do Locatário</span></div>
+      <div class="sub"><span class="sub-n">5.1.</span><span class="sub-t">O LOCATÁRIO deverá realizar os pagamentos nas datas e condições estipuladas; abster-se de qualquer manipulação, intervenção ou modificação no SFV, incluindo equipamentos, instalações, estruturas de suporte, cabeamento ou dispositivos de proteção; comunicar imediatamente ao LOCADOR qualquer anomalia, dano aparente ou situação de risco relacionada ao sistema.</span></div>
+      <div class="sub"><span class="sub-n">5.2.</span><span class="sub-t">O LOCATÁRIO compromete-se a cooperar de boa-fé com os procedimentos administrativos necessários junto à distribuidora de energia elétrica que dependam de sua atuação (cadastros, titularidade, assinaturas, providências correlatas), observado o disposto na Cláusula 2.2.</span></div>
+      <div class="sub"><span class="sub-n">5.3.</span><span class="sub-t">O LOCATÁRIO responde objetivamente por danos causados ao SFV decorrentes de sua ação, omissão, negligência ou de terceiros por ele autorizados a acessar o local de instalação, ressalvados os casos de força maior ou fato exclusivo do LOCADOR.</span></div>
+    </div>
+
+    <hr class="dv">
+
+    <!-- CL. 6 -->
+    <div class="clause">
+      <div class="clause-hd"><span class="clause-num">CLÁUSULA SEXTA</span><span class="clause-name">Da Rescisão Contratual</span></div>
+      <div class="sub"><span class="sub-n">6.1.</span><span class="sub-t">A rescisão deste contrato poderá ocorrer por: mútuo acordo escrito; inadimplência superior a <strong>60 (sessenta) dias</strong> de qualquer das obrigações principais, após notificação e prazo de 15 (quinze) dias para regularização; impossibilidade técnica ou comercial definitiva devidamente comprovada; alteração legislativa ou regulatória que inviabilize economicamente a operação do SFV na modalidade contratada.</span></div>
+      <div class="sub"><span class="sub-n">6.2.</span><span class="sub-t">Em caso de rescisão antecipada sem justa causa por iniciativa de qualquer das partes, incidirá multa compensatória equivalente a <strong>10% (dez por cento)</strong> do valor do período remanescente do contrato, sendo a base de cálculo apurada pela média aritmética simples dos últimos <strong>3 (três) meses</strong> faturados e efetivamente pagos. Caso não existam 3 (três) mensalidades consolidadas, a base de cálculo será o valor estimado conforme projeção da Cláusula 3.1.</span></div>
+      <div class="hl"><strong>§ Único —</strong> A multa da Cláusula 6.2 não se aplica nas hipóteses de rescisão por: inadimplemento da outra parte; força maior ou caso fortuito; alteração regulatória superveniente; ou descumprimento de obrigações essenciais previstas neste instrumento.</div>
+    </div>
+
+    <hr class="dv">
+
+    <!-- CL. 7 -->
+    <div class="clause">
+      <div class="clause-hd"><span class="clause-num">CLÁUSULA SÉTIMA</span><span class="clause-name">Das Disposições Gerais e Especiais</span></div>
+      <div class="sub"><span class="sub-n">7.1.</span><span class="sub-t"><strong>Das Alterações:</strong> Qualquer modificação, aditamento ou renúncia a direitos previstos neste contrato somente produzirá efeitos se formalizada por escrito, assinada por ambas as partes e por duas testemunhas.</span></div>
+      <div class="sub"><span class="sub-n">7.2.</span><span class="sub-t"><strong>Das Comunicações e Notificações:</strong> Todas as notificações, comunicações e avisos serão considerados válidos quando realizados por e-mail com confirmação de leitura, por carta com AR para os endereços das sedes ou por meio eletrônico certificado. As partes obrigam-se a comunicar previamente qualquer alteração de dados de contato.</span></div>
+      <div class="sub"><span class="sub-n">7.3.</span><span class="sub-t"><strong>Da Proteção de Dados Pessoais (LGPD):</strong> As partes comprometem-se a tratar eventuais dados pessoais compartilhados em estrita conformidade com a Lei n.º 13.709/2018, adotando medidas técnicas e administrativas aptas a proteger tais informações de acessos não autorizados e de situações acidentais ou ilícitas de destruição, perda, alteração ou comunicação.</span></div>
+      <div class="sub"><span class="sub-n">7.4.</span><span class="sub-t"><strong>Da Cessão e Transferência:</strong> É vedada a cessão, transferência ou sublocação, total ou parcial, dos direitos e obrigações decorrentes deste contrato, sem a prévia e expressa anuência por escrito da outra parte, ressalvada a hipótese de reestruturação societária, fusão, cisão ou incorporação.</span></div>
+      <div class="sub"><span class="sub-n">7.5.</span><span class="sub-t"><strong>Dos Encargos Tributários:</strong> Cada parte responderá exclusivamente pelos tributos incidentes sobre sua própria receita, lucro ou atividade econômica. Eventuais discussões sobre a incidência de ISS, ICMS, PIS/COFINS ou outros tributos serão resolvidas conforme legislação vigente à época dos fatos.</span></div>
+      <div class="sub"><span class="sub-n">7.6.</span><span class="sub-t"><strong>Da Força Maior e Caso Fortuito:</strong> Não haverá inadimplemento ou responsabilidade por atraso ou não cumprimento das obrigações quando decorrente de força maior ou caso fortuito. A parte atingida deverá comunicar a outra no prazo de <strong>5 (cinco) dias úteis</strong>, apresentando evidências do evento.</span></div>
+      <div class="sub"><span class="sub-n">7.7.</span><span class="sub-t"><strong>Da Garantia de Performance:</strong> O LOCADOR garante que o SFV operará com eficiência mínima de 90% em relação à potência nominal instalada. Caso a geração efetiva fique sistematicamente abaixo de 80% da projeção técnica por 3 (três) ciclos consecutivos, o LOCATÁRIO terá direito ao desconto proporcional no aluguel ou rescisão sem multa, à sua escolha.</span></div>
+      <div class="sub"><span class="sub-n">7.8.</span><span class="sub-t"><strong>Do Título Executivo:</strong> As partes reconhecem o presente contrato como título executivo extrajudicial, nos termos do art. 784, III, do Código de Processo Civil, por estar assinado pelas partes e por 2 (duas) testemunhas instrumentárias, maiores, capazes e identificadas.</span></div>
+      <div class="sub"><span class="sub-n">7.9.</span><span class="sub-t"><strong>Da Solução de Controvérsias:</strong> Eventuais controvérsias serão submetidas, primeiramente, a tentativa obrigatória de composição amigável por mediação ou conciliação em Goiânia/GO, no prazo de 30 (trinta) dias. Persistindo o litígio, as partes elegem o <strong>Foro da Comarca de Goiânia/GO</strong>, com renúncia expressa a qualquer outro, por mais privilegiado que seja.</span></div>
+    </div>
+
+    <hr class="dv" style="margin-top:5mm;border-top:2px solid var(--navy);">
+
+    <!-- III — FECHO -->
+    <div class="title-band" style="padding:2mm 0;margin-bottom:3mm;">
+      <div class="doc-title" style="font-size:12pt">III — Do Fecho</div>
+    </div>
+
+    <p class="sig-intro">E, por estarem assim justas e contratadas, as partes assinam o presente Instrumento Particular de Locação de Sistema Fotovoltaico, em <strong>03 (três) vias</strong> de igual teor e forma, na presença das 2 (duas) testemunhas abaixo qualificadas.</p>
+
+    <p class="sig-date"><strong>{{ d.cidade_assinatura }}</strong>, {{ d.data_assinatura }}</p>
+
+    <div class="sig-info" style="margin-top:3mm">
+      <div class="sig-info-label">LOCADOR &nbsp;— &nbsp;<span>SOLEV ENERGIA</span></div>
+      <div class="sig-name">Danilo Evangelista de Sousa Lemes</div>
+      <div class="sig-role">Sócio-Administrador</div>
+      <div class="sig-doc">CPF: 018.738.531-90 &nbsp;|&nbsp; RG: 4.913.861 DGPC/GO</div>
+    </div>
+
+    <div class="sig-info" style="margin-top:3mm">
+      <div class="sig-info-label">LOCATÁRIO &nbsp;— &nbsp;<span>{{ d.locatario_razao_social|upper }}</span></div>
+      <div class="sig-name">{{ d.locatario_representante }}</div>
+      <div class="sig-role">{{ d.locatario_cargo }}</div>
+      <div class="sig-doc">CPF: {{ d.locatario_cpf }}{% if d.locatario_rg %} &nbsp;|&nbsp; RG: {{ d.locatario_rg }}{% endif %}</div>
+    </div>
+
+    <div class="sec-wit" style="margin-top:5mm">
+      <span>TESTEMUNHAS &nbsp;— &nbsp;</span><span>Testemunhas Instrumentárias</span>
+    </div>
+    <div class="wit-grid">
+      <div class="wit-block">
+        <div class="wit-line"></div>
+        <div class="sig-name">{{ d.testemunha1_nome }}</div>
+        <div class="sig-role">Testemunha 1</div>
+        <div class="sig-doc">CPF: {{ d.testemunha1_cpf }}{% if d.testemunha1_rg %} &nbsp;|&nbsp; RG: {{ d.testemunha1_rg }}{% endif %}</div>
+      </div>
+      <div class="wit-block">
+        <div class="wit-line"></div>
+        <div class="sig-name">{{ d.testemunha2_nome }}</div>
+        <div class="sig-role">Testemunha 2</div>
+        <div class="sig-doc">CPF: {{ d.testemunha2_cpf }}{% if d.testemunha2_rg %} &nbsp;|&nbsp; RG: {{ d.testemunha2_rg }}{% endif %}</div>
+      </div>
+    </div>
+
+    <hr class="dv" style="margin-top:5mm;border-top:2px solid var(--navy);">
+
+    <!-- ANEXO I -->
+    <div class="title-band" style="padding:2mm 0;margin-bottom:3mm;">
+      <div class="doc-title" style="font-size:12pt">Anexo I — Especificações Técnicas do Sistema Fotovoltaico</div>
+      <div class="doc-subtitle">Integra o presente contrato para todos os fins legais.</div>
+    </div>
+
+    <table class="vtable">
+      <thead>
+        <tr>
+          <th class="center" style="width:10mm">Item</th>
+          <th>Descrição</th>
+          <th>Especificação</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="center">1</td><td>Potência Instalada</td><td><strong>{{ d.anexo_potencia_kwp }} kWp</strong></td></tr>
+        <tr><td class="center">2</td><td>Módulos Fotovoltaicos</td><td>{{ d.anexo_modulos }}{% if d.anexo_qtd_modulos %} — {{ d.anexo_qtd_modulos }} unidades{% endif %}</td></tr>
+        <tr><td class="center">3</td><td>Inversor(es)</td><td>{{ d.anexo_inversor }}</td></tr>
+        <tr><td class="center">4</td><td>Estrutura de Fixação</td><td>{{ d.anexo_estrutura }}</td></tr>
+        <tr><td class="center">5</td><td>Local de Instalação</td><td>{{ d.anexo_local }}</td></tr>
+        <tr><td class="center">6</td><td>Unidade Consumidora Beneficiada</td><td><strong>UC: {{ d.uc_numero }}</strong></td></tr>
+        <tr><td class="center">7</td><td>Previsão de Geração Mensal Média</td><td><strong>{{ d.anexo_geracao_media }} kWh/mês</strong></td></tr>
+        <tr><td class="center">8</td><td>Data de Comissionamento</td><td>{{ d.anexo_comissionamento }}</td></tr>
+        <tr><td class="center">9</td><td>Garantia dos Equipamentos</td><td><strong>{{ d.anexo_garantia }}</strong></td></tr>
+        <tr><td class="center">10</td><td>Observações Técnicas</td><td>{{ d.anexo_observacoes or 'Sem observações' }}</td></tr>
+      </tbody>
+    </table>
+
+    <div class="wit-grid" style="margin-top:10mm">
+      <div class="wit-block">
+        <div class="wit-line"></div>
+        <div class="sig-name">LOCADOR — SOLEV ENERGIA</div>
+        <div class="sig-doc">CNPJ: 39.955.084/0001-52</div>
+      </div>
+      <div class="wit-block">
+        <div class="wit-line"></div>
+        <div class="sig-name">LOCATÁRIO — {{ d.locatario_razao_social|upper }}</div>
+        {% if d.locatario_cnpj %}<div class="sig-doc">CNPJ: {{ d.locatario_cnpj }}</div>{% else %}<div class="sig-doc">CPF: {{ d.locatario_cpf }}</div>{% endif %}
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /doc -->
+
+</body>
+</html>

@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block title %}{{ "Editar" if cliente else "Novo" }} Cliente — SOLEV{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex align-items-center mb-4">
+        <a href="{{ url_for('clientes_lista') }}" class="btn btn-outline-secondary me-3">
+            <i class="bi bi-arrow-left"></i>
+        </a>
+        <h3 class="fw-bold mb-0">
+            <i class="bi bi-person-{{ 'gear' if cliente else 'plus' }}-fill me-2" style="color:var(--orange)"></i>
+            {{ "Editar" if cliente else "Cadastrar" }} Cliente
+        </h3>
+    </div>
+
+    {% set dados = cliente or prefill %}
+
+    {% if prefill and not cliente %}
+    <div class="alert alert-info d-flex align-items-center mb-4 py-2" role="alert">
+        <i class="bi bi-person-lines-fill me-2 fs-5"></i>
+        <div>
+            Dados pré-preenchidos de <strong>{{ prefill.desc_nome }}</strong> —
+            altere UC, tipo de fornecimento, bandeira tarifária, titular e usinas conforme necessário.
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="POST" autocomplete="off" id="formCliente"
+          action="{{ url_for('cliente_editar', uc=cliente.cod_uc) if cliente else url_for('cliente_novo') }}">
+    <div class="row">
+
+        <!-- Coluna 1: Dados Pessoais -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3 d-flex align-items-center justify-content-between">
+                        <span>
+                            <i class="bi bi-person-fill me-2" style="color:var(--orange)"></i>Dados do Cliente
+                        </span>
+                        {% if cliente and cliente.id_cliente %}
+                        <span class="badge bg-light text-muted border" style="font-weight:500;font-size:11px"
+                              title="ID interno do cliente (somente leitura)">
+                            <i class="bi bi-hash"></i>ID {{ cliente.id_cliente }}
+                        </span>
+                        {% endif %}
+                    </h5>
+
+                    <div class="row">
+                        <div class="col-7 mb-3">
+                            <label class="form-label">
+                                UC <span class="text-danger">*</span>
+                                <small class="text-muted">(formato xxxx.xxx.xxx.xxx-xx)</small>
+                            </label>
+                            <input type="text" name="cod_uc_alternativa" id="campo_uc" class="form-control"
+                                value="{{ dados.cod_uc_alternativa if dados else '' }}"
+                                placeholder="Ex: 2026.034.798.403-00">
+                        </div>
+                        <div class="col-5 mb-3">
+                            <label class="form-label">UC Antiga</label>
+                            <input type="text" name="uc" id="campo_uc_antiga" class="form-control"
+                                value="{{ dados.cod_uc if dados and cliente else '' }}"
+                                placeholder="Ex: 14811832">
+                        </div>
+                    </div>
+                    <div id="erro_uc" class="text-danger mb-2" style="display:none;font-size:13px">
+                        <i class="bi bi-exclamation-triangle me-1"></i>Informe a UC ou a UC Antiga.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-7 mb-3">
+                            <label class="form-label">CPF / CNPJ</label>
+                            <input type="text" name="desc_cpf" class="form-control"
+                                value="{{ dados.desc_cpf if dados else '' }}"
+                                placeholder="Somente numeros">
+                        </div>
+                        <div class="col-5 mb-3">
+                            <label class="form-label">Apelido</label>
+                            <input type="text" name="desc_apelido" class="form-control"
+                                value="{{ dados.desc_apelido if dados else '' }}"
+                                placeholder="Ex: Maria">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Nome Completo <span class="text-danger">*</span></label>
+                        <input type="text" name="desc_nome" class="form-control"
+                            value="{{ dados.desc_nome if dados else '' }}"
+                            required placeholder="Ex: MARIA SILVA">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Telefone</label>
+                            <input type="text" name="desc_telefone" class="form-control"
+                                value="{{ dados.desc_telefone if dados else '' }}"
+                                placeholder="(62) 99999-0000">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">E-mail</label>
+                            <input type="email" name="desc_email" class="form-control"
+                                value="{{ (dados.desc_email or '')|lower if dados else '' }}"
+                                placeholder="email@exemplo.com"
+                                oninput="this.value=this.value.toLowerCase()"
+                                style="text-transform:lowercase">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Titular da Fatura
+                            <small class="text-muted">(se diferente do cliente)</small>
+                        </label>
+                        <input type="text" name="desc_titular_fatura" class="form-control"
+                            value="{{ dados.desc_titular_fatura if dados else '' }}"
+                            placeholder="Nome do titular da conta de energia">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Fornecimento</label>
+                        <select name="tp_fornecimento" class="form-select">
+                            <option value="">— Selecione —</option>
+                            {% set tp_atual = dados.tp_fornecimento if dados else '' %}
+                            <option value="MONOFASICO" {{ 'selected' if tp_atual == 'MONOFASICO' else '' }}>MONOFASICO</option>
+                            <option value="BIFASICO"   {{ 'selected' if tp_atual == 'BIFASICO'   else '' }}>BIFASICO</option>
+                            <option value="TRIFASICO"  {{ 'selected' if tp_atual == 'TRIFASICO'  else '' }}>TRIFASICO</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Endereço -->
+            <div class="card mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">
+                        <i class="bi bi-geo-alt-fill me-2" style="color:var(--orange)"></i>Endereço
+                    </h5>
+
+                    <div class="row">
+                        <div class="col-8 mb-3">
+                            <label class="form-label">Logradouro</label>
+                            <input type="text" name="desc_logradouro" class="form-control"
+                                value="{{ endereco.desc_logradouro if endereco else '' }}"
+                                placeholder="Rua, Avenida, etc.">
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="form-label">Número</label>
+                            <input type="text" name="desc_numero" class="form-control"
+                                value="{{ endereco.desc_numero if endereco else '' }}"
+                                placeholder="Ex: 123">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Complemento</label>
+                        <input type="text" name="desc_complemento" class="form-control"
+                            value="{{ endereco.desc_complemento if endereco else '' }}"
+                            placeholder="Apto, Sala, etc.">
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Setor / Bairro</label>
+                            <input type="text" name="desc_setor" class="form-control"
+                                value="{{ endereco.desc_setor if endereco else '' }}"
+                                placeholder="Ex: Setor Bueno">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">CEP</label>
+                            <input type="text" name="cod_cep" class="form-control"
+                                value="{{ endereco.cod_cep if endereco else '' }}"
+                                placeholder="00000-000">
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-8 mb-3">
+                            <label class="form-label">Cidade</label>
+                            <input type="text" name="desc_cidade" class="form-control"
+                                value="{{ endereco.desc_cidade if endereco else '' }}"
+                                placeholder="Ex: Goiania">
+                        </div>
+                        <div class="col-4 mb-3">
+                            <label class="form-label">Estado</label>
+                            <input type="text" name="desc_estado" class="form-control"
+                                value="{{ endereco.desc_estado if endereco else '' }}"
+                                placeholder="GO" maxlength="2">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Coluna 2: Contrato + Usinas -->
+        <div class="col-md-6">
+            <div class="card mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">
+                        <i class="bi bi-file-earmark-text-fill me-2" style="color:var(--orange)"></i>Contrato SOLEV
+                    </h5>
+
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Desconto (%) <span class="text-danger">*</span></label>
+                            <input type="text" name="pct_desconto" class="form-control"
+                                value="{{ ((cliente.pct_desconto or 0.2) * 100)|round(1) if cliente else '20' }}"
+                                required placeholder="20">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">Data de Adesão</label>
+                            {% set _dt = (dados.dt_adesao if dados and dados.dt_adesao else '')|string %}
+                            {% if _dt and _dt[:4].isdigit() and _dt|length >= 10 and _dt[4] == '-' %}
+                                {% set _dt_br = _dt[8:10] ~ '/' ~ _dt[5:7] ~ '/' ~ _dt[0:4] %}
+                            {% else %}
+                                {% set _dt_br = _dt %}
+                            {% endif %}
+                            <input type="text" name="dt_adesao" class="form-control"
+                                value="{{ _dt_br if cliente else '' }}"
+                                placeholder="dd/mm/aaaa">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <div class="d-flex align-items-center gap-3">
+                            {% set ativo = dados.STATUS if dados and dados.STATUS is not none else true %}
+                            <div class="form-check form-switch mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                    id="switchStatusAtivo" name="status_ativo_check"
+                                    onchange="document.getElementById('hiddenStatusAtivo').value = this.checked ? '1' : '0'"
+                                    {{ 'checked' if ativo else '' }}>
+                                <label class="form-check-label fw-semibold" for="switchStatusAtivo"
+                                    id="labelStatusAtivo">
+                                    {{ 'Ativo' if ativo else 'Inativo' }}
+                                </label>
+                            </div>
+                            <input type="hidden" name="status_ativo" id="hiddenStatusAtivo"
+                                value="{{ '1' if ativo else '0' }}">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Bandeira Tarifária</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tp_bandeira"
+                                    id="mbCom" value="com_bandeira"
+                                    {{ 'checked' if not dados or (dados.tp_bandeira or 'com_bandeira') == 'com_bandeira' else '' }}>
+                                <label class="form-check-label" for="mbCom">
+                                    <i class="bi bi-check-circle text-success me-1"></i>Compensar bandeira
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tp_bandeira"
+                                    id="mbSem" value="sem_bandeira"
+                                    {{ 'checked' if dados and dados.tp_bandeira == 'sem_bandeira' else '' }}>
+                                <label class="form-check-label" for="mbSem">
+                                    <i class="bi bi-x-circle text-warning me-1"></i>Nao compensar
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Usinas -->
+            <div class="card mb-4">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">
+                        <i class="bi bi-sun-fill me-2" style="color:var(--orange)"></i>Usinas Vinculadas
+                    </h5>
+
+                    {% if usinas %}
+                        {% for u in usinas %}
+                        <div class="form-check mb-2">
+                            <input class="form-check-input usina-check" type="checkbox"
+                                name="id_usinas" value="{{ u.id_usina }}"
+                                id="usina_{{ u.id_usina }}"
+                                data-titular="{{ u.desc_titular_uc or '' }}"
+                                {{ 'checked' if u.id_usina in usinas_cliente else '' }}>
+                            <label class="form-check-label" for="usina_{{ u.id_usina }}">
+                                <i class="bi bi-sun me-1" style="color:var(--orange)"></i>
+                                {{ u.desc_nome }}
+                                {% if u.desc_titular_uc %}
+                                <small class="text-muted ms-1">· {{ u.desc_titular_uc }}</small>
+                                {% endif %}
+                                <code class="text-muted ms-1" style="font-size:11px">ID: {{ u.id_usina }}</code>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted mb-0">Nenhuma usina cadastrada.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex gap-2 justify-content-end mb-4">
+        <a href="{{ url_for('clientes_lista') }}" class="btn btn-outline-secondary px-4">Cancelar</a>
+        <button type="submit" class="btn btn-cta px-4">
+            <i class="bi bi-check-lg me-1"></i>{{ "Salvar Alteracoes" if cliente else "Cadastrar Cliente" }}
+        </button>
+    </div>
+    </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function() {
+    const onlyDigits = s => (s || '').replace(/\D/g, '');
+
+    function maskCpfCnpj(v) {
+        const d = onlyDigits(v).slice(0, 14);
+        if (d.length <= 11) {
+            return d
+                .replace(/^(\d{3})(\d)/, '$1.$2')
+                .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+                .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4');
+        }
+        return d
+            .replace(/^(\d{2})(\d)/, '$1.$2')
+            .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+            .replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3/$4')
+            .replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, '$1.$2.$3/$4-$5');
+    }
+
+    function maskUC15(v) {
+        // xxxx.xxx.xxx.xxx-xx  (15 dígitos)
+        const d = onlyDigits(v).slice(0, 15);
+        let out = d;
+        if (d.length > 4)  out = d.slice(0, 4) + '.' + d.slice(4);
+        if (d.length > 7)  out = d.slice(0, 4) + '.' + d.slice(4, 7) + '.' + d.slice(7);
+        if (d.length > 10) out = d.slice(0, 4) + '.' + d.slice(4, 7) + '.' + d.slice(7, 10) + '.' + d.slice(10);
+        if (d.length > 13) out = d.slice(0, 4) + '.' + d.slice(4, 7) + '.' + d.slice(7, 10) + '.' + d.slice(10, 13) + '-' + d.slice(13);
+        return out;
+    }
+
+    function maskData(v) {
+        const iso = (v || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) v = iso[3] + iso[2] + iso[1];
+        const d = onlyDigits(v).slice(0, 8);
+        let out = d;
+        if (d.length > 2) out = d.slice(0, 2) + '/' + d.slice(2);
+        if (d.length > 4) out = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+        return out;
+    }
+
+    function maskCep(v) {
+        const d = onlyDigits(v).slice(0, 8);
+        let out = d;
+        if (d.length > 2) out = d.slice(0, 2) + '.' + d.slice(2);
+        if (d.length > 5) out = d.slice(0, 2) + '.' + d.slice(2, 5) + '-' + d.slice(5);
+        return out;
+    }
+
+    function maskTelefone(v) {
+        const d = onlyDigits(v).slice(0, 11);
+        if (d.length === 0) return '';
+        if (d.length <= 2)  return '(' + d;
+        if (d.length <= 6)  return '(' + d.slice(0, 2) + ') ' + d.slice(2);
+        if (d.length <= 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+        return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+    }
+
+    function attachMask(selector, fn) {
+        document.querySelectorAll(selector).forEach(el => {
+            el.value = fn(el.value);
+            el.addEventListener('input', function() {
+                const masked = fn(this.value);
+                this.value = masked;
+                try { this.setSelectionRange(masked.length, masked.length); } catch (e) {}
+            });
+            el.addEventListener('blur', function() { this.value = fn(this.value); });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        attachMask('input[name="cod_uc_alternativa"]', maskUC15);
+        attachMask('input[name="desc_cpf"]',           maskCpfCnpj);
+        attachMask('input[name="dt_adesao"]',          maskData);
+        attachMask('input[name="cod_cep"]',            maskCep);
+        attachMask('input[name="desc_telefone"]',      maskTelefone);
+
+        // Ao marcar usina: preenche Titular da Fatura se estiver vazio
+        document.querySelectorAll('.usina-check').forEach(function(cb) {
+            cb.addEventListener('change', function() {
+                if (!this.checked) return;
+                var titular = this.dataset.titular || '';
+                if (!titular) return;
+                var campo = document.querySelector('input[name="desc_titular_fatura"]');
+                if (campo && !campo.value.trim()) campo.value = titular;
+            });
+        });
+
+        // Toggle STATUS: atualiza label ao mudar
+        const switchStatus = document.getElementById('switchStatusAtivo');
+        const labelStatus  = document.getElementById('labelStatusAtivo');
+        if (switchStatus) {
+            switchStatus.addEventListener('change', function() {
+                labelStatus.textContent = this.checked ? 'Ativo' : 'Inativo';
+            });
+        }
+
+        // Validação: pelo menos uma das duas UCs deve estar preenchida
+        document.getElementById('formCliente').addEventListener('submit', function(e) {
+            var uc     = (document.getElementById('campo_uc').value || '').trim();
+            var antiga = (document.getElementById('campo_uc_antiga').value || '').trim();
+            var erro   = document.getElementById('erro_uc');
+            if (!uc && !antiga) {
+                e.preventDefault();
+                erro.style.display = '';
+                document.getElementById('campo_uc').focus();
+            } else {
+                erro.style.display = 'none';
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

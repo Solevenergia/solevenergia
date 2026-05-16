@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-bar-chart-line-fill me-2" style="color:var(--or)"></i>Relatório Mensal</h1>
+    <span class="text-muted" style="font-size:12px">
+        {{ total_clientes }} clientes cadastrados
+    </span>
+</div>
+
+{% if meses %}
+{% for mes, dados in meses.items() %}
+<div class="card mb-3"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="fw-bold mb-0">
+            <i class="bi bi-calendar3 me-2" style="color:var(--or)"></i>{{ mes }}
+            <small class="text-muted ms-2" style="font-size:13px;font-weight:500">
+                {{ dados.qtd_total }} fatura(s)
+            </small>
+        </h5>
+        <div class="d-flex gap-2 flex-wrap">
+            {% if dados.qtd_pago > 0 %}
+            <span class="badge bg-success" style="font-size:12px;padding:6px 10px">
+                <i class="bi bi-check-circle me-1"></i>{{ dados.qtd_pago }} pago(s)
+            </span>
+            {% endif %}
+            {% if dados.qtd_pendente > 0 %}
+            <span class="badge" style="background:var(--or);color:var(--db);font-size:12px;padding:6px 10px">
+                <i class="bi bi-clock me-1"></i>{{ dados.qtd_pendente }} pendente(s)
+            </span>
+            {% endif %}
+            {% if dados.qtd_cancelado > 0 %}
+            <span class="badge bg-secondary" style="font-size:12px;padding:6px 10px">
+                {{ dados.qtd_cancelado }} cancelada(s)
+            </span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row g-2 mb-3">
+        <div class="col-md-3"><div class="p-2 rounded" style="background:#f8f9fa">
+            <small class="text-muted">Total SEM SOLEV</small><br>
+            <strong>{{ fmt(dados.total_sem) }}</strong>
+        </div></div>
+        <div class="col-md-3"><div class="p-2 rounded" style="background:#f8f9fa">
+            <small class="text-muted">Total COM SOLEV</small><br>
+            <strong style="color:var(--db)">{{ fmt(dados.total_com) }}</strong>
+        </div></div>
+        <div class="col-md-3"><div class="p-2 rounded" style="background:#f0fdf4">
+            <small class="text-muted">Economia Gerada</small><br>
+            <strong style="color:var(--green,#28a745)">{{ fmt(dados.economia) }}</strong>
+        </div></div>
+        <div class="col-md-3"><div class="p-2 rounded" style="background:#eff6ff">
+            <small class="text-muted">Recebido (pagos)</small><br>
+            <strong style="color:#1d4ed8">{{ fmt(dados.vlr_pago) }}</strong>
+            {% if dados.vlr_multa_juros > 0 %}
+            <small class="text-muted d-block" style="font-size:10px">
+                inclui {{ fmt(dados.vlr_multa_juros) }} de multa+juros
+            </small>
+            {% endif %}
+        </div></div>
+    </div>
+
+    {% if dados.compensacao_dic != 0 %}
+    <div class="alert alert-info py-2 mb-3" style="font-size:12px">
+        <i class="bi bi-info-circle me-1"></i>
+        Compensação DIC no mês:
+        <strong>{{ fmt(dados.compensacao_dic) }}</strong>
+        {% if dados.compensacao_dic < 0 %}<small class="text-muted">(crédito da distribuidora)</small>{% endif %}
+    </div>
+    {% endif %}
+
+    <table class="table table-sm mb-0" style="font-size:12px">
+        <thead><tr>
+            <th>#</th>
+            <th>Cliente</th>
+            <th>SEM</th>
+            <th>COM</th>
+            <th>Economia</th>
+            <th>Saldo kWh</th>
+            <th>Status</th>
+        </tr></thead>
+        <tbody>
+        {% for item in dados.registros %}
+        <tr>
+            <td>
+                <span class="badge bg-light text-muted border" style="font-size:10px">
+                    #{{ item.id_fatura }}
+                </span>
+            </td>
+            <td><strong>{{ item._nome[:30] }}</strong></td>
+            <td class="text-muted">{{ fmt(item.vlr_total_sem) }}</td>
+            <td>{{ fmt(item.vlr_total_com) }}</td>
+            <td style="color:var(--green,#28a745);font-weight:600">{{ fmt(item.vlr_economia_mes) }}</td>
+            <td class="text-muted">
+                {% if item.qtd_saldo_kwh %}{{ "%.1f"|format(item.qtd_saldo_kwh) }}{% else %}—{% endif %}
+            </td>
+            <td>
+                {% if item.status == 'pago' %}
+                    <span class="badge badge-pago" style="font-size:10px">
+                        Pago{% if item._pgto_br %} em {{ item._pgto_br }}{% endif %}
+                    </span>
+                {% elif item.status == 'cancelado' %}
+                    <span class="badge bg-secondary" style="font-size:10px">Cancelada</span>
+                {% elif item._vencido %}
+                    <span class="badge" style="background:#dc3545;color:white;font-size:10px">Vencido</span>
+                {% else %}
+                    <span class="badge badge-pendente" style="font-size:10px">Aguardando</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div></div>
+{% endfor %}
+{% else %}
+<div class="card"><div class="card-body text-center py-5">
+    <i class="bi bi-bar-chart" style="font-size:44px;color:#ccc"></i>
+    <p class="text-muted mt-3">Nenhum dado para relatório ainda.</p>
+</div></div>
+{% endif %}
+{% endblock %}

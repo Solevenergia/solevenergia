@@ -1,0 +1,474 @@
+{% extends "base.html" %}
+{% block title %}Gerar Automático{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1><i class="bi bi-lightning-charge-fill me-2" style="color:var(--or)"></i>Gerar Automático</h1>
+  <a href="/gerar/manual" class="btn btn-db"><i class="bi bi-pencil-square me-1"></i> Modo Manual</a>
+</div>
+
+{# ─── FILTROS ─────────────────────────────────────────────────────────────── #}
+<div class="card mb-3">
+  <div class="card-body p-3">
+    <div class="row g-2 align-items-end">
+
+      {# Mês #}
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-bold" style="font-size:12px">MÊS</label>
+        <input type="text" id="f_mes" class="form-control form-control-sm"
+               value="{{ mes_ref }}" style="width:110px" placeholder="mm/aaaa">
+      </div>
+
+      {# Busca nome/UC #}
+      <div class="col">
+        <label class="form-label mb-1 fw-bold" style="font-size:12px">NOME OU UC</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input type="text" id="f_busca" class="form-control" placeholder="Digite nome ou UC...">
+        </div>
+      </div>
+
+      {# Usina #}
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-bold" style="font-size:12px">USINA</label>
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside" style="min-width:150px;text-align:left">
+            <span id="lblUsina">Todas</span>
+          </button>
+          <ul class="dropdown-menu p-2" style="min-width:220px;max-height:280px;overflow-y:auto">
+            <li><label class="d-flex align-items-center gap-2 px-1 py-1" style="cursor:pointer">
+              <input type="checkbox" id="chkUsinaAll" checked> Todas
+            </label></li>
+            <li><hr class="dropdown-divider my-1"></li>
+            {% for u in usinas_opts %}
+            <li><label class="d-flex align-items-center gap-2 px-1 py-1" style="cursor:pointer;font-size:13px">
+              <input type="checkbox" class="chk-usina" value="{{ u }}" checked> {{ u }}
+            </label></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      {# Titular #}
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-bold" style="font-size:12px">TITULAR</label>
+        <div class="dropdown">
+          <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button"
+                  data-bs-toggle="dropdown" data-bs-auto-close="outside" style="min-width:150px;text-align:left">
+            <span id="lblTitular">Todos</span>
+          </button>
+          <ul class="dropdown-menu p-2" style="min-width:240px;max-height:280px;overflow-y:auto">
+            <li><label class="d-flex align-items-center gap-2 px-1 py-1" style="cursor:pointer">
+              <input type="checkbox" id="chkTitAll" checked> Todos
+            </label></li>
+            <li><hr class="dropdown-divider my-1"></li>
+            {% for t in titulares_opts %}
+            <li><label class="d-flex align-items-center gap-2 px-1 py-1" style="cursor:pointer;font-size:12px">
+              <input type="checkbox" class="chk-tit" value="{{ t }}" checked>
+              {{ t }}
+            </label></li>
+            {% endfor %}
+          </ul>
+        </div>
+      </div>
+
+      {# Status #}
+      <div class="col-auto">
+        <label class="form-label mb-1 fw-bold" style="font-size:12px">STATUS</label>
+        <select id="f_status" class="form-select form-select-sm" style="min-width:170px">
+          <option value="">Todos</option>
+          <option value="sem_eq">Sem fatura Equatorial</option>
+          <option value="pendente">Com Equatorial, sem cobrança</option>
+          <option value="gerado">Cobrança já gerada</option>
+        </select>
+      </div>
+
+      {# Aplicar mês #}
+      <div class="col-auto">
+        <label class="form-label mb-1 d-block" style="font-size:12px">&nbsp;</label>
+        <button id="btnAplicarMes" class="btn btn-db btn-sm">
+          <i class="bi bi-arrow-clockwise me-1"></i> Aplicar mês
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# ─── STATS ───────────────────────────────────────────────────────────────── #}
+<div class="row g-2 mb-3">
+  <div class="col-auto"><div class="card px-3 py-2 d-flex flex-row align-items-center gap-2">
+    <i class="bi bi-people-fill" style="color:var(--or);font-size:18px"></i>
+    <div><div class="fw-bold" id="statVis">{{ total }}</div><div style="font-size:11px;color:#888">visíveis</div></div>
+  </div></div>
+  <div class="col-auto"><div class="card px-3 py-2 d-flex flex-row align-items-center gap-2">
+    <i class="bi bi-file-earmark-pdf-fill" style="color:#28a745;font-size:18px"></i>
+    <div><div class="fw-bold" id="statEq">{{ com_equatorial }}</div><div style="font-size:11px;color:#888">com Equatorial</div></div>
+  </div></div>
+  <div class="col-auto"><div class="card px-3 py-2 d-flex flex-row align-items-center gap-2">
+    <i class="bi bi-lightning-charge-fill" style="color:var(--or);font-size:18px"></i>
+    <div><div class="fw-bold" id="statCo">{{ com_contalev }}</div><div style="font-size:11px;color:#888">geradas</div></div>
+  </div></div>
+  <div class="col-auto"><div class="card px-3 py-2 d-flex flex-row align-items-center gap-2">
+    <i class="bi bi-check-square-fill" style="color:var(--db);font-size:18px"></i>
+    <div><div class="fw-bold" id="statSel">0</div><div style="font-size:11px;color:#888">selecionados</div></div>
+  </div></div>
+</div>
+
+{# ─── TABELA ──────────────────────────────────────────────────────────────── #}
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle" style="font-size:13px">
+        <thead style="background:var(--db);color:white;position:sticky;top:0;z-index:2">
+          <tr>
+            <th style="width:36px;padding:10px 12px">
+              <input type="checkbox" id="chkAll" title="Selecionar todos visíveis">
+            </th>
+            <th>Cliente</th>
+            <th>Usina</th>
+            <th>Titular</th>
+            <th style="text-align:center">Equatorial</th>
+            <th style="text-align:center">SOLEV</th>
+            <th style="width:80px"></th>
+          </tr>
+        </thead>
+        <tbody id="tbodyAuto">
+          {% for r in rows %}
+          <tr class="row-cliente"
+              data-uc="{{ r.uc }}"
+              data-nome="{{ r.nome|lower }}"
+              data-ucval="{{ r.uc|lower }} {{ r.uc_nova|lower }}"
+              data-usina="{{ r.usina }}"
+              data-titular="{{ r.titular }}"
+              data-eq="{{ 'sim' if r.eq_ok else 'nao' }}"
+              data-co="{{ 'sim' if r.co_ok else 'nao' }}">
+            <td style="padding:8px 12px">
+              <input type="checkbox" class="chk-row" value="{{ r.uc }}">
+            </td>
+            <td>
+              <div class="fw-semibold">{{ r.nome }}</div>
+              <code style="font-size:10px;color:#888">{{ r.uc_nova or r.uc }}</code>
+            </td>
+            <td>
+              {% if r.usina %}<span class="badge" style="background:var(--orl);color:var(--db);font-size:11px">{{ r.usina }}</span>
+              {% else %}<span class="text-muted" style="font-size:11px">—</span>{% endif %}
+            </td>
+            <td style="font-size:12px;color:#555;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {{ r.titular or '—' }}
+            </td>
+            <td style="text-align:center">
+              {% if r.eq_ok %}
+                <span class="badge bg-success"><i class="bi bi-check-lg"></i> OK</span>
+              {% else %}
+                <span class="badge bg-secondary" style="font-size:11px"><i class="bi bi-x-lg"></i> Não encontrada</span>
+              {% endif %}
+            </td>
+            <td style="text-align:center">
+              {% if r.co_ok %}
+                <span class="badge" style="background:var(--or);color:var(--db)"><i class="bi bi-check-lg"></i> Gerada</span>
+              {% elif r.eq_ok %}
+                <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split"></i> Pendente</span>
+              {% else %}
+                <span class="badge bg-light text-muted border" style="font-size:11px">—</span>
+              {% endif %}
+            </td>
+            <td style="text-align:right;padding-right:10px">
+              {% if r.co_ok %}
+              <a href="/gerar/auto/download?path={{ r.pdf_co|urlencode }}"
+                 class="btn btn-sm btn-outline-success py-0 px-2" title="Baixar PDF SOLEV">
+                <i class="bi bi-download"></i>
+              </a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# ─── Barra de ações ─── #}
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 px-3 py-2"
+         style="border-top:1px solid #eee;background:#f9f9f9">
+      <span class="text-muted" style="font-size:12px" id="lblSel">Nenhum selecionado</span>
+      <div class="d-flex gap-2">
+        <button id="btnBaixar" class="btn btn-sm btn-outline-primary" disabled
+                title="Baixa as faturas Equatorial para os clientes selecionados">
+          <i class="bi bi-cloud-download-fill me-1"></i>
+          <span id="txtBaixar">Buscar faturas</span>
+        </button>
+        <button id="btnGerar" class="btn btn-cta btn-sm" disabled
+                title="Gera as cobranças SOLEV para os selecionados que já têm fatura Equatorial">
+          <i class="bi bi-lightning-charge-fill me-1"></i>
+          <span id="txtGerar">Gerar cobranças</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{# ─── MODAL DE PROGRESSO ──────────────────────────────────────────────────── #}
+<div class="modal fade" id="modalProgresso" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:var(--db);color:white">
+        <h5 class="modal-title" id="modalTitulo"><i class="bi bi-gear-fill me-2"></i>Processando…</h5>
+      </div>
+      <div class="modal-body">
+        {# Progresso #}
+        <div class="d-flex justify-content-between mb-1" style="font-size:13px">
+          <span id="progLabel">Aguardando…</span>
+          <span id="progNums" class="fw-bold text-muted"></span>
+        </div>
+        <div class="progress mb-3" style="height:10px">
+          <div id="progBar" class="progress-bar" style="width:0%;background:var(--or);transition:width 0.4s"></div>
+        </div>
+        {# Log #}
+        <div id="progLog"
+             style="background:#1a1a2e;color:#e0e0e0;font-family:monospace;font-size:12px;
+                    border-radius:8px;padding:12px;height:260px;overflow-y:auto;white-space:pre-wrap"></div>
+      </div>
+      <div class="modal-footer" id="modalFooter" style="display:none!important">
+        <div id="resumoFinal" style="font-size:13px"></div>
+        <button class="btn btn-cta" onclick="location.reload()">
+          <i class="bi bi-arrow-clockwise me-1"></i> Atualizar página
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  var MES_REF = {{ mes_ref|tojson }};
+
+  // ── Refs ─────────────────────────────────────────────────────────────────
+  var fBusca   = document.getElementById('f_busca');
+  var fStatus  = document.getElementById('f_status');
+  var fMes     = document.getElementById('f_mes');
+  var btnMes   = document.getElementById('btnAplicarMes');
+  var chkAll   = document.getElementById('chkAll');
+  var chkUAll  = document.getElementById('chkUsinaAll');
+  var chkTAll  = document.getElementById('chkTitAll');
+  var rows     = Array.from(document.querySelectorAll('.row-cliente'));
+  var btnBaixar= document.getElementById('btnBaixar');
+  var btnGerar = document.getElementById('btnGerar');
+  var txtBaixar= document.getElementById('txtBaixar');
+  var txtGerar = document.getElementById('txtGerar');
+  var lblSel   = document.getElementById('lblSel');
+  var statVis  = document.getElementById('statVis');
+  var statEq   = document.getElementById('statEq');
+  var statCo   = document.getElementById('statCo');
+  var statSel  = document.getElementById('statSel');
+
+  // ── Aplicar mês ─────────────────────────────────────────────────────────
+  btnMes.addEventListener('click', function(){
+    var mes = fMes.value.trim();
+    if(/^\d{2}\/\d{4}$/.test(mes)) location.href = '/gerar/auto?mes=' + encodeURIComponent(mes);
+  });
+  fMes.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); btnMes.click(); }});
+
+  // ── Filtragem ────────────────────────────────────────────────────────────
+  function usinaSel(){ return Array.from(document.querySelectorAll('.chk-usina:checked')).map(c=>c.value); }
+  function titSel(){   return Array.from(document.querySelectorAll('.chk-tit:checked')).map(c=>c.value); }
+
+  function filtrar(){
+    var busca  = fBusca.value.trim().toLowerCase();
+    var status = fStatus.value;
+    var usinas = usinaSel();
+    var tits   = titSel();
+    var vis=0, eq=0, co=0;
+
+    rows.forEach(function(tr){
+      var nome  = tr.dataset.nome;
+      var uc    = tr.dataset.ucval;
+      var usina = tr.dataset.usina;
+      var tit   = tr.dataset.titular;
+      var eqOk  = tr.dataset.eq === 'sim';
+      var coOk  = tr.dataset.co === 'sim';
+
+      var ok = true;
+      if(busca && nome.indexOf(busca)<0 && uc.indexOf(busca)<0) ok=false;
+      if(ok && usinas.length && usinas.indexOf(usina)<0) ok=false;
+      if(ok && tits.length && tits.indexOf(tit)<0) ok=false;
+      if(ok && status==='sem_eq'   && eqOk)           ok=false;
+      if(ok && status==='pendente' && (!eqOk || coOk)) ok=false;
+      if(ok && status==='gerado'   && !coOk)           ok=false;
+
+      tr.style.display = ok ? '' : 'none';
+      if(ok){ vis++; if(eqOk) eq++; if(coOk) co++; }
+    });
+
+    statVis.textContent = vis;
+    statEq.textContent  = eq;
+    statCo.textContent  = co;
+    atualizarSel();
+  }
+
+  function atualizarSel(){
+    var visiveis = rows.filter(function(tr){ return tr.style.display!=='none'; });
+    var sel = visiveis.filter(function(tr){ return tr.querySelector('.chk-row').checked; });
+    var semEq  = sel.filter(function(tr){ return tr.dataset.eq!=='sim'; }).length;
+    var comEq  = sel.filter(function(tr){ return tr.dataset.eq==='sim' && tr.dataset.co!=='sim'; }).length;
+    var n = sel.length;
+
+    statSel.textContent = n;
+    lblSel.textContent  = n>0 ? n + ' selecionado' + (n>1?'s':'') : 'Nenhum selecionado';
+
+    btnBaixar.disabled = n===0;
+    txtBaixar.textContent = semEq>0 ? 'Buscar faturas (' + semEq + ')' : 'Buscar faturas';
+
+    btnGerar.disabled = comEq===0;
+    txtGerar.textContent = comEq>0 ? 'Gerar cobranças (' + comEq + ')' : 'Gerar cobranças';
+  }
+
+  // Selecionar todos visíveis
+  chkAll.addEventListener('change', function(){
+    rows.forEach(function(tr){
+      if(tr.style.display==='none') return;
+      tr.querySelector('.chk-row').checked = chkAll.checked;
+    });
+    atualizarSel();
+  });
+  rows.forEach(function(tr){
+    tr.querySelector('.chk-row').addEventListener('change', atualizarSel);
+  });
+
+  // Usina "todas"
+  function bindChkGrupo(chkAll, selector, lblId, textoTodos){
+    chkAll.addEventListener('change', function(){
+      document.querySelectorAll(selector).forEach(c=>{ c.checked=chkAll.checked; });
+      atualizarLabel(lblId, selector, textoTodos); filtrar();
+    });
+    document.querySelectorAll(selector).forEach(function(c){
+      c.addEventListener('change', function(){
+        var tot=document.querySelectorAll(selector).length;
+        var chk=document.querySelectorAll(selector+':checked').length;
+        chkAll.checked=chk===tot;
+        atualizarLabel(lblId, selector, textoTodos); filtrar();
+      });
+    });
+  }
+  function atualizarLabel(lblId, sel, textoTodos){
+    var tot=document.querySelectorAll(sel).length;
+    var chk=document.querySelectorAll(sel+':checked').length;
+    var lbl=document.getElementById(lblId);
+    if(!lbl) return;
+    lbl.textContent = chk===0?'Nenhuma':chk===tot?textoTodos:chk+' selecionada'+(chk>1?'s':'');
+  }
+  bindChkGrupo(chkUAll, '.chk-usina', 'lblUsina', 'Todas');
+  bindChkGrupo(chkTAll, '.chk-tit',   'lblTitular','Todos');
+
+  fBusca.addEventListener('input', filtrar);
+  fStatus.addEventListener('change', filtrar);
+  filtrar();
+
+  // ── Job / Modal ──────────────────────────────────────────────────────────
+  var modal = new bootstrap.Modal(document.getElementById('modalProgresso'));
+  var progBar   = document.getElementById('progBar');
+  var progLabel = document.getElementById('progLabel');
+  var progNums  = document.getElementById('progNums');
+  var progLog   = document.getElementById('progLog');
+  var modalTit  = document.getElementById('modalTitulo');
+  var modalFooter = document.getElementById('modalFooter');
+  var resumoFinal = document.getElementById('resumoFinal');
+  var _pollTimer = null;
+  var _logLen = 0;
+
+  function ucsSelecionadas(){
+    return rows
+      .filter(function(tr){ return tr.style.display!=='none' && tr.querySelector('.chk-row').checked; })
+      .map(function(tr){ return tr.dataset.uc; });
+  }
+
+  function iniciarJob(url, titulo, ucsFiltro){
+    var ucs = ucsFiltro || ucsSelecionadas();
+    if(!ucs.length) return;
+
+    // Reset modal
+    modalTit.innerHTML = '<i class="bi bi-gear-fill me-2"></i>' + titulo;
+    progBar.style.width = '0%'; progBar.className = 'progress-bar';
+    progLabel.textContent = 'Iniciando…';
+    progNums.textContent = '';
+    progLog.textContent = '';
+    modalFooter.style.display = 'none';
+    _logLen = 0;
+    modal.show();
+
+    // Monta FormData
+    var fd = new FormData();
+    ucs.forEach(function(uc){ fd.append('uc_sel', uc); });
+    fd.append('mes', MES_REF);
+
+    fetch(url, {method:'POST', body:fd})
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(data.erro){ progLog.textContent += '\nERRO: '+data.erro; return; }
+        pollJob(data.job_id);
+      })
+      .catch(function(e){ progLog.textContent += '\nERRO: '+e; });
+  }
+
+  function pollJob(jid){
+    _pollTimer = setInterval(function(){
+      fetch('/gerar/auto/progresso/'+jid)
+        .then(function(r){ return r.json(); })
+        .then(function(job){
+          // Log incremental
+          var novoLog = (job.log || []).slice(_logLen);
+          if(novoLog.length){ progLog.textContent += novoLog.join('\n')+'\n'; _logLen += novoLog.length; progLog.scrollTop=progLog.scrollHeight; }
+
+          // Progresso
+          var pct = job.total>0 ? Math.round(job.done/job.total*100) : 0;
+          progBar.style.width = pct+'%';
+          progNums.textContent = job.done+'/'+job.total;
+          progLabel.textContent = job.running ? 'Processando…' : 'Concluído!';
+
+          if(!job.running){
+            clearInterval(_pollTimer);
+            progBar.classList.add(job.erros && job.erros.length ? 'bg-warning' : 'bg-success');
+            progBar.style.background = '';
+            // Resumo
+            var resumo = '✅ ' + job.ok + ' de ' + job.total + ' concluídos';
+            if(job.erros && job.erros.length) resumo += ' &nbsp;|&nbsp; ⚠️ ' + job.erros.length + ' com falha';
+            if(job.avisos && job.avisos.length) resumo += ' &nbsp;|&nbsp; ⚡ ' + job.avisos.length + ' sem QR PIX';
+            // Lista detalhada de avisos PIX (UCs que vão sair sem QR Code)
+            if(job.avisos && job.avisos.length){
+              var avList = '<details class="mt-2"><summary style="cursor:pointer;color:#b45309;font-weight:600">' +
+                           '⚡ ' + job.avisos.length + ' UC(s) sem PIX configurado — clique para ver</summary>' +
+                           '<ul class="mb-0 mt-2 ps-3" style="font-size:12px;color:#666">' +
+                           job.avisos.map(function(a){
+                             return '<li>' + a.replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</li>';
+                           }).join('') + '</ul></details>';
+              resumo += avList;
+            }
+            resumoFinal.innerHTML = resumo;
+            modalFooter.style.removeProperty('display');
+          }
+        })
+        .catch(function(){ clearInterval(_pollTimer); });
+    }, 1500);
+  }
+
+  btnBaixar.addEventListener('click', function(){
+    // Só UCs sem Equatorial
+    var ucs = rows
+      .filter(function(tr){ return tr.style.display!=='none' && tr.querySelector('.chk-row').checked && tr.dataset.eq!=='sim'; })
+      .map(function(tr){ return tr.dataset.uc; });
+    iniciarJob('/gerar/auto/baixar', 'Buscando faturas Equatorial…', ucs);
+  });
+
+  btnGerar.addEventListener('click', function(){
+    // Só UCs com Equatorial mas sem cobrança
+    var ucs = rows
+      .filter(function(tr){ return tr.style.display!=='none' && tr.querySelector('.chk-row').checked && tr.dataset.eq==='sim' && tr.dataset.co!=='sim'; })
+      .map(function(tr){ return tr.dataset.uc; });
+    iniciarJob('/gerar/auto/gerar-job', 'Gerando cobranças SOLEV…', ucs);
+  });
+
+})();
+</script>
+{% endblock %}

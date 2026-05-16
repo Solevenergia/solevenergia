@@ -1,0 +1,33 @@
+[
+  {
+    "_comentario": "COMO USAR: execute 'python testar_extracao.py --capturar' após baixar as faturas do mês para popular este arquivo com os valores corretos. Em seguida, faça commit. Nas próximas alterações em extrair_equatorial.py, execute 'python testar_extracao.py' para garantir que nada quebrou.",
+    "_instrucoes": {
+      "capturar_tudo": "python testar_extracao.py --capturar",
+      "capturar_um": "python testar_extracao.py --capturar --pdf faturas/UC_MMAAAA.pdf",
+      "testar_tudo": "python testar_extracao.py",
+      "testar_um": "python testar_extracao.py --pdf faturas/UC_MMAAAA.pdf",
+      "inspecionar": "python testar_extracao.py --inspecionar faturas/UC_MMAAAA.pdf"
+    },
+    "_casos_referencia": {
+      "descricao": "Exemplos dos tipos de layout que já foram validados",
+      "tipos": {
+        "SCEE_100pct_GD": {
+          "descricao": "Cliente com GD 100% — compensado_kwh = consumo_kwh, nao_comp_kwh = 0",
+          "campos_esperados": {"compensado_kwh": ">0", "nao_comp_kwh": 0, "tarifa_scee": ">0"}
+        },
+        "SCEE_parcial": {
+          "descricao": "Cliente com GD parcial — compensado + nao_comp_kwh = consumo_kwh",
+          "campos_esperados": {"compensado_kwh": ">0", "nao_comp_kwh": ">0", "tarifa_scee": ">0"}
+        },
+        "convencional": {
+          "descricao": "Cliente sem GD — compensado_kwh = 0, tarifa_scee = 0, tarifa_convencional > 0",
+          "campos_esperados": {"compensado_kwh": 0, "tarifa_scee": 0, "tarifa_convencional": ">0"}
+        },
+        "convencional_duplo_kWh": {
+          "descricao": "Layout novo Equatorial: 'CONSUMO kWh kWh 369,00' — dois tokens kWh",
+          "campos_esperados": {"consumo_kwh": ">0", "tarifa_convencional": ">0"}
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+{% block title %}Simulador{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-calculator-fill me-2" style="color:var(--or)"></i>Simulador de Economia</h1></div>
+
+{% if resultado %}
+<!-- ═══ RESULTADO ═══ -->
+<div class="row g-3 mb-4">
+    <div class="col-md-5">
+        <div class="card mb-3" style="background:linear-gradient(135deg, var(--db) 0%, #0f1d35 100%);color:white">
+            <div class="card-body p-4 text-center">
+                <p class="mb-0" style="color:rgba(255,255,255,0.5);font-size:12px">Simulacao para <strong style="color:var(--or)">{{ resultado.nome }}</strong></p>
+                {% if resultado.uc %}<p class="mb-0" style="color:rgba(255,255,255,0.3);font-size:11px">UC: {{ resultado.uc }} | {{ resultado.tipo_fornecimento }}</p>{% endif %}
+                <h6 class="mb-1 mt-2" style="color:rgba(255,255,255,0.6)">Economia mensal estimada</h6>
+                <h1 class="fw-bold mb-1" style="color:var(--or);font-size:42px">{{ fmt(resultado.economia_mes) }}</h1>
+                <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0">{{ fmt(resultado.economia_anual) }} por ano — desconto de <strong style="color:var(--or)">{{ resultado.desconto_mostrado }}%</strong> na conta</p>
+            </div>
+        </div>
+        <div class="row g-3 mb-3">
+            <div class="col-6"><div class="card"><div class="card-body p-3 text-center">
+                <small class="text-muted">SEM SOLEV</small>
+                <h4 class="fw-bold mb-0" style="color:var(--sl)">{{ fmt(resultado.total_sem) }}</h4>
+            </div></div></div>
+            <div class="col-6"><div class="card"><div class="card-body p-3 text-center">
+                <small class="text-muted">COM SOLEV</small>
+                <h4 class="fw-bold mb-0" style="color:var(--or)">{{ fmt(resultado.total_com) }}</h4>
+            </div></div></div>
+        </div>
+        <div class="card mb-3"><div class="card-body p-3"><canvas id="chartSim" height="160"></canvas></div></div>
+        {% if pdf_name %}
+        <div class="card" style="border:2px solid var(--or)"><div class="card-body p-3 text-center">
+            <i class="bi bi-check-circle-fill me-2" style="color:var(--green);font-size:20px"></i><strong>PDF gerado!</strong>
+            <div class="d-flex gap-2 mt-2 justify-content-center">
+                <a href="/download/{{ pdf_name }}" class="btn btn-cta btn-sm"><i class="bi bi-download me-1"></i>Baixar</a>
+                <a href="/whatsapp/{{ pdf_name }}" target="_blank" class="btn btn-sm" style="background:#25D366;color:white"><i class="bi bi-whatsapp me-1"></i>Mensagem</a>
+            </div>
+        </div></div>
+        {% else %}
+        <form method="POST">
+            <input type="hidden" name="gerar_pdf" value="1">
+            <input type="hidden" name="modo" value="manual">
+            <input type="hidden" name="nome" value="{{ resultado.nome }}">
+            <input type="hidden" name="consumo" value="{{ resultado.consumo }}">
+            <input type="hidden" name="tarifa" value="{{ resultado.tarifa }}">
+            <input type="hidden" name="desconto" value="{{ resultado.desconto }}">
+            <input type="hidden" name="iluminacao" value="{{ resultado.ilum }}">
+            <input type="hidden" name="compensado" value="{{ resultado.compensado }}">
+            <input type="hidden" name="bandeira_amarela" value="{{ resultado.band_am }}">
+            <input type="hidden" name="bandeira_vermelha" value="{{ resultado.band_vm }}">
+            <input type="hidden" name="multa" value="{{ resultado.multa }}">
+            <input type="hidden" name="juros" value="{{ resultado.juros }}">
+            <input type="hidden" name="mes_referencia" value="{{ resultado.mes_referencia }}">
+            <input type="hidden" name="telefone" value="{{ resultado.telefone }}">
+            <input type="hidden" name="email" value="{{ resultado.email }}">
+            <input type="hidden" name="endereco" value="{{ resultado.endereco }}">
+            <input type="hidden" name="uc_sim" value="{{ resultado.uc }}">
+            <input type="hidden" name="cpf_sim" value="{{ resultado.cpf }}">
+            <input type="hidden" name="tipo_forn" value="{{ resultado.tipo_fornecimento }}">
+            <input type="hidden" name="anterior_leitura" value="{{ resultado.anterior_leitura }}">
+            <input type="hidden" name="data_leitura" value="{{ resultado.data_leitura }}">
+            <input type="hidden" name="proxima_leitura" value="{{ resultado.proxima_leitura }}">
+            <input type="hidden" name="n_dias" value="{{ resultado.n_dias }}">
+            <input type="hidden" name="modo_bandeira" value="{{ resultado.modo_bandeira }}">
+            <button type="submit" class="btn btn-db w-100"><i class="bi bi-file-earmark-pdf me-1"></i> Gerar PDF da Simulacao</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="col-md-7">
+        {% if resultado.nome or resultado.uc or resultado.anterior_leitura %}
+        <div class="card mb-3"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-person-fill me-1" style="color:var(--or)"></i>Dados do Cliente</h6>
+            {% if resultado.nome %}
+            <div class="mb-2" style="font-size:13px"><strong style="color:var(--db)">{{ resultado.nome }}</strong></div>{% endif %}
+            {% if resultado.endereco %}
+            <div class="mb-2" style="font-size:11px;color:#666"><i class="bi bi-geo-alt me-1"></i>{{ resultado.endereco }}</div>{% endif %}
+            <div class="row" style="font-size:12px">
+                <div class="col-4 mb-1"><span class="text-muted">UC:</span> <strong>{{ resultado.uc or '-' }}</strong></div>
+                <div class="col-4 mb-1"><span class="text-muted">CPF:</span> {{ resultado.cpf or '-' }}</div>
+                <div class="col-4 mb-1"><span class="text-muted">Tipo:</span> {{ resultado.tipo_fornecimento or '-' }}</div>
+            </div>
+            {% if resultado.anterior_leitura %}
+            <div class="row" style="font-size:12px">
+                <div class="col-4 mb-1"><span class="text-muted">Leit.Ant.:</span> {{ resultado.anterior_leitura }}</div>
+                <div class="col-4 mb-1"><span class="text-muted">Leit.Atual:</span> {{ resultado.data_leitura }}</div>
+                <div class="col-4 mb-1"><span class="text-muted">Prox.Leit.:</span> {{ resultado.proxima_leitura }}</div>
+            </div>{% endif %}
+            <div class="row" style="font-size:12px">
+                <div class="col-4"><span class="text-muted">Compensado:</span> {{ "{:,.0f}".format(resultado.compensado).replace(",", ".") }} kWh</div>
+                <div class="col-4"><span class="text-muted">N.Dias:</span> {{ resultado.n_dias or '-' }}</div>
+                <div class="col-4"><span class="text-muted">Ref.:</span> {{ resultado.mes_referencia }}</div>
+            </div>
+        </div></div>
+        {% endif %}
+        <div class="card"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2"><i class="bi bi-calculator me-1" style="color:var(--or)"></i>Detalhamento</h6>
+            <div class="row">
+                <div class="col-6">
+                    <table class="table table-sm mb-0" style="font-size:12px">
+                        <thead><tr><th colspan="2" style="color:var(--sl)">SEM SOLEV</th></tr></thead>
+                        <tr><td>Tarifa (R$/kWh)</td><td class="text-end">{{ "%.6f"|format(resultado.tarifa) }}</td></tr>
+                        {% if resultado.band_am > 0 %}<tr><td>Band. Amarela (R$/kWh)</td><td class="text-end">{{ "%.6f"|format(resultado.band_am / resultado.consumo) }}</td></tr>{% endif %}
+                        {% if resultado.band_vm > 0 %}<tr><td>Band. Vermelha (R$/kWh)</td><td class="text-end">{{ "%.6f"|format(resultado.band_vm / resultado.consumo) }}</td></tr>{% endif %}
+                        <tr style="font-weight:600"><td>Subtotal Energia</td><td class="text-end">{{ fmt(resultado.consumo * resultado.tarifa + resultado.band_am + resultado.band_vm) }}</td></tr>
+                        <tr><td colspan="2" style="border-bottom:1px solid #ddd;padding:2px 0;color:#999;font-size:10px">Itens financeiros</td></tr>
+                        <tr><td>Iluminação Pública</td><td class="text-end">{{ fmt(resultado.ilum) }}</td></tr>
+                        <tr><td>Multa</td><td class="text-end">{{ fmt(resultado.multa) }}</td></tr>
+                        <tr><td>Juros</td><td class="text-end">{{ fmt(resultado.juros) }}</td></tr>
+                        <tr style="font-weight:700"><td>TOTAL</td><td class="text-end">{{ fmt(resultado.total_sem) }}</td></tr>
+                    </table>
+                </div>
+                <div class="col-6">
+                    <table class="table table-sm mb-0" style="font-size:12px">
+                        <thead><tr><th colspan="2" style="color:var(--or)">COM SOLEV ({{ resultado.desconto_mostrado }}%)</th></tr></thead>
+                        <tr><td>Tarifa c/ Desc. (R$/kWh)</td><td class="text-end">{{ "%.6f"|format(resultado.tarifa_com) }}</td></tr>
+                        <tr style="font-weight:600"><td>Subtotal Energia</td><td class="text-end">{{ fmt(resultado.total_com - resultado.ilum - resultado.multa - resultado.juros) }}</td></tr>
+                        <tr><td colspan="2" style="border-bottom:1px solid #ddd;padding:2px 0;color:#999;font-size:10px">Itens financeiros</td></tr>
+                        <tr><td>Iluminação Pública</td><td class="text-end">{{ fmt(resultado.ilum) }}</td></tr>
+                        <tr><td>Multa</td><td class="text-end">{{ fmt(resultado.multa) }}</td></tr>
+                        <tr><td>Juros</td><td class="text-end">{{ fmt(resultado.juros) }}</td></tr>
+                        <tr style="font-weight:700;color:var(--or)"><td>TOTAL</td><td class="text-end">{{ fmt(resultado.total_com) }}</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div></div>
+        <a href="/simulador" class="btn btn-outline-secondary mt-3"><i class="bi bi-arrow-left me-1"></i>Nova Simulacao</a>
+    </div>
+</div>
+
+{% else %}
+<!-- ═══ FORMULARIOS ═══ -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tabManual"><i class="bi bi-pencil-square me-1"></i>Preencher Manualmente</a></li>
+    <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tabPDF"><i class="bi bi-file-earmark-pdf me-1"></i>A partir da Fatura Equatorial</a></li>
+</ul>
+
+<div class="tab-content">
+<!-- ABA 1: MANUAL -->
+<div class="tab-pane fade show active" id="tabManual">
+<div class="card"><div class="card-body p-4">
+    <h6 class="fw-bold mb-3">Dados da Simulacao</h6>
+    <form method="POST" id="formManual">
+        <input type="hidden" name="gerar_pdf" value="0">
+        <input type="hidden" name="modo" value="manual">
+        <div class="row">
+            <div class="col-md-4 mb-2"><label class="form-label">Nome do Cliente</label>
+                <input type="text" name="nome" class="form-control" required placeholder="Ex: JOAO DA SILVA"></div>
+            <div class="col-md-3 mb-2"><label class="form-label">Telefone</label>
+                <input type="text" name="telefone" class="form-control form-control-sm" placeholder="(62) 99999-9999"></div>
+            <div class="col-md-3 mb-2"><label class="form-label">E-mail</label>
+                <input type="text" name="email" class="form-control form-control-sm" placeholder="email@exemplo.com"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">CPF/CNPJ</label>
+                <input type="text" name="cpf_sim" class="form-control form-control-sm"></div>
+        </div>
+        <div class="row">
+            <div class="col-md-5 mb-2"><label class="form-label">Endereco</label>
+                <input type="text" name="endereco" class="form-control form-control-sm" placeholder="Rua, n, bairro"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">UC</label>
+                <input type="text" name="uc_sim" class="form-control form-control-sm" placeholder="N da UC"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Tipo Forn.</label>
+                <select name="tipo_forn" class="form-select form-select-sm">
+                    <option value="">-</option><option value="Monofasico">Mono</option>
+                    <option value="Bifasico">Bi</option><option value="Trifasico">Tri</option>
+                </select></div>
+            <div class="col-md-3 mb-2"><label class="form-label">Mes Ref.</label>
+                <input type="text" name="mes_referencia" class="form-control form-control-sm" value="03/2026"></div>
+        </div>
+        <div class="row">
+            <div class="col-3 mb-2"><label class="form-label">Leit. Anterior</label>
+                <input type="text" name="anterior_leitura" class="form-control form-control-sm"></div>
+            <div class="col-3 mb-2"><label class="form-label">Leit. Atual</label>
+                <input type="text" name="data_leitura" class="form-control form-control-sm"></div>
+            <div class="col-3 mb-2"><label class="form-label">Prox. Leitura</label>
+                <input type="text" name="proxima_leitura" class="form-control form-control-sm"></div>
+            <div class="col-3 mb-2"><label class="form-label">N Dias</label>
+                <input type="text" name="n_dias" class="form-control form-control-sm"></div>
+        </div>
+        <hr class="my-2">
+        <div class="row">
+            <div class="col-md-2 mb-2"><label class="form-label">Consumo (kWh)</label>
+                <input type="text" name="consumo" class="form-control" value="600" required></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Tarifa (R$/kWh)</label>
+                <input type="text" name="tarifa" class="form-control" value="1,135823"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Desconto (%)</label>
+                <input type="text" name="desconto" class="form-control" value="20"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Iluminação (R$)</label>
+                <input type="text" name="iluminacao" class="form-control" value="30"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Compensado (kWh)</label>
+                <input type="text" name="compensado" class="form-control" value="600"></div>
+        </div>
+        <div class="row">
+            <div class="col-md-2 mb-2"><label class="form-label">Band. Amarela (R$/kWh)</label>
+                <input type="text" name="bandeira_amarela" class="form-control form-control-sm" value="0"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Band. Vermelha (R$/kWh)</label>
+                <input type="text" name="bandeira_vermelha" class="form-control form-control-sm" value="0"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Multa (R$)</label>
+                <input type="text" name="multa" class="form-control form-control-sm" value="0"></div>
+            <div class="col-md-2 mb-2"><label class="form-label">Juros (R$)</label>
+                <input type="text" name="juros" class="form-control form-control-sm" value="0"></div>
+            <div class="col-md-4 mb-2"><label class="form-label">Calculo do desconto</label>
+                <div class="d-flex gap-2">
+                    <div class="form-check p-2 rounded flex-fill text-center" style="background:var(--orl);border:2px solid var(--or)">
+                        <input class="form-check-input" type="radio" name="modo_bandeira" value="com_bandeira" id="mbCom" checked>
+                        <label class="form-check-label" for="mbCom" style="font-size:11px"><strong>Compensar Bandeira</strong></label>
+                    </div>
+                    <div class="form-check p-2 rounded flex-fill text-center" style="background:#f8f9fa;border:2px solid #e0e0e0">
+                        <input class="form-check-input" type="radio" name="modo_bandeira" value="sem_bandeira" id="mbSem">
+                        <label class="form-check-label" for="mbSem" style="font-size:11px"><strong>Nao Compensar Bandeira</strong></label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex gap-2 mt-2">
+            <button type="submit" class="btn btn-cta flex-fill"><i class="bi bi-calculator me-1"></i> Simular</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="limparFormulario()" title="Limpar todos os campos salvos">
+                <i class="bi bi-eraser me-1"></i> Limpar
+            </button>
+        </div>
+    </form>
+</div></div>
+</div>
+
+<!-- ABA 2: A PARTIR DO PDF -->
+<div class="tab-pane fade" id="tabPDF">
+<div class="row g-3">
+    <div class="col-md-6">
+        <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="modo" value="pdf">
+        <input type="hidden" name="gerar_pdf" value="0">
+        <div class="card"><div class="card-body p-4">
+            <h6 class="fw-bold mb-3">Simular a partir da Fatura Equatorial</h6>
+            <p class="text-muted mb-3" style="font-size:13px">O sistema extrai <strong>todos os dados</strong> automaticamente: nome, UC, CPF, consumo, tarifa, iluminacao, multa, juros, leituras.</p>
+            <div class="row">
+                <div class="col-6 mb-3"><label class="form-label">Desconto (%)</label>
+                    <input type="text" name="desconto_pdf" class="form-control form-control-sm" value="20"></div>
+                <div class="col-6 mb-3"><label class="form-label">Telefone (opcional)</label>
+                    <input type="text" name="telefone_pdf" class="form-control form-control-sm" placeholder="(62) 99999-9999"></div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Calculo do desconto</label>
+                <div class="d-flex gap-2">
+                    <div class="form-check p-2 rounded flex-fill text-center" style="background:var(--orl);border:2px solid var(--or)">
+                        <input class="form-check-input" type="radio" name="modo_bandeira_pdf" value="com_bandeira" id="mbComPdf" checked>
+                        <label class="form-check-label" for="mbComPdf" style="font-size:11px"><strong>Compensar Bandeira</strong></label>
+                    </div>
+                    <div class="form-check p-2 rounded flex-fill text-center" style="background:#f8f9fa;border:2px solid #e0e0e0">
+                        <input class="form-check-input" type="radio" name="modo_bandeira_pdf" value="sem_bandeira" id="mbSemPdf">
+                        <label class="form-check-label" for="mbSemPdf" style="font-size:11px"><strong>Nao Compensar Bandeira</strong></label>
+                    </div>
+                </div>
+            </div>
+            <div class="upload-area" id="uploadAreaSim" onclick="document.getElementById('pdfInputSim').click()">
+                <i class="bi bi-cloud-arrow-up mb-2 d-block" style="font-size:40px;color:var(--or)"></i>
+                <h6 class="fw-bold" id="uploadTextSim">Arraste o PDF da Equatorial aqui</h6>
+                <p class="text-muted mb-0 small">Extrai tudo automaticamente</p>
+            </div>
+            <input type="file" name="pdf_equatorial" id="pdfInputSim" accept=".pdf" class="d-none">
+            <button type="submit" class="btn btn-cta w-100 mt-3" id="btnSimPdf" disabled>
+                <i class="bi bi-calculator me-1"></i> Extrair e Simular</button>
+        </div></div>
+        </form>
+    </div>
+    <div class="col-md-6"><div class="card"><div class="card-body p-3">
+        <h6 class="fw-bold mb-2"><i class="bi bi-lightbulb-fill me-1" style="color:var(--or)"></i>O que e extraido do PDF</h6>
+        <div style="font-size:12px" class="text-muted">
+            <span class="badge" style="background:var(--db);margin:2px">Nome</span>
+            <span class="badge" style="background:var(--db);margin:2px">CPF</span>
+            <span class="badge" style="background:var(--db);margin:2px">UC</span>
+            <span class="badge" style="background:var(--db);margin:2px">Tipo Forn.</span>
+            <span class="badge" style="background:var(--db);margin:2px">Mes Ref.</span>
+            <span class="badge" style="background:var(--db);margin:2px">Endereco</span>
+            <span class="badge" style="background:var(--or);margin:2px">Consumo</span>
+            <span class="badge" style="background:var(--or);margin:2px">Compensado</span>
+            <span class="badge" style="background:var(--or);margin:2px">Iluminação</span>
+            <span class="badge" style="background:var(--or);margin:2px">Multa</span>
+            <span class="badge" style="background:var(--or);margin:2px">Juros</span>
+            <span class="badge" style="background:var(--sl);margin:2px">Leit. Anterior</span>
+            <span class="badge" style="background:var(--sl);margin:2px">Leit. Atual</span>
+            <span class="badge" style="background:var(--sl);margin:2px">Prox. Leitura</span>
+            <span class="badge" style="background:var(--sl);margin:2px">N. Dias</span>
+        </div>
+        <p class="text-muted mt-3 mb-0" style="font-size:12px">Voce so precisa informar o <strong>desconto %</strong>. Todo o resto vem da fatura.</p>
+    </div></div></div>
+</div>
+</div>
+</div>
+{% endif %}
+
+<!-- Historico de simulacoes -->
+{% if simulacoes %}
+<div class="card mt-4"><div class="card-body">
+    <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-1" style="color:var(--or)"></i>Simulacoes Salvas</h6>
+    <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0" style="font-size:12px">
+        <thead><tr><th>Data</th><th>Cliente</th><th>UC</th><th>Consumo</th><th>SEM</th><th>COM</th><th>Economia</th><th>Status</th><th></th></tr></thead>
+        <tbody>{% for s in simulacoes %}<tr>
+            <td style="font-size:11px">{{ s.data }}</td>
+            <td><strong>{{ s.nome[:25] }}</strong>{% if s.telefone %}<br><small class="text-muted">{{ s.telefone }}</small>{% endif %}</td>
+            <td><code style="font-size:10px">{{ s.uc or '—' }}</code></td>
+            <td>{{ "{:,.0f}".format(s.consumo).replace(",", ".") }} kWh</td>
+            <td class="text-muted">{{ fmt(s.total_sem) }}</td>
+            <td><strong>{{ fmt(s.total_com) }}</strong></td>
+            <td style="color:var(--green);font-weight:600">{{ fmt(s.economia_mes) }}</td>
+            <td>{% if s.status == 'Convertido' %}<span class="badge badge-pago"><i class="bi bi-check-lg"></i> Convertido</span>
+                {% else %}<span class="badge badge-pendente">Pendente</span>{% endif %}</td>
+            <td class="text-end" style="white-space:nowrap">
+                {% if s.pdf %}<a href="/download/{{ s.pdf }}" class="btn btn-sm btn-db" title="PDF"><i class="bi bi-download"></i></a>{% endif %}
+                {% if s.status != 'Convertido' %}
+                <a href="/simulador/importar/{{ s.id }}" class="btn btn-sm btn-cta" title="Cadastrar como cliente"><i class="bi bi-person-plus"></i></a>
+                {% endif %}
+                <a href="/simulador/excluir/{{ s.id }}" class="btn btn-sm btn-outline-danger" title="Excluir" onclick="return confirm('Excluir esta simulação?')"><i class="bi bi-trash"></i></a>
+            </td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+</div></div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if resultado %}
+<script>
+new Chart(document.getElementById('chartSim'), {
+    type: 'bar', data: { labels: ['SEM SOLEV', 'COM SOLEV'],
+    datasets: [{ data: [{{ resultado.total_sem|round(2) }}, {{ resultado.total_com|round(2) }}],
+        backgroundColor: ['#64748b', '#f5a623'], borderRadius: 8, borderSkipped: false }] },
+    options: { responsive: true, plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { callback: v => 'R$ '+v.toFixed(0) } } } }
+});
+</script>
+{% endif %}
+<script>
+var a2=document.getElementById('uploadAreaSim'),i2=document.getElementById('pdfInputSim'),b2=document.getElementById('btnSimPdf'),t2=document.getElementById('uploadTextSim');
+if(a2){['dragenter','dragover'].forEach(function(e){a2.addEventListener(e,function(ev){ev.preventDefault();a2.classList.add('drag-over')})});
+['dragleave','drop'].forEach(function(e){a2.addEventListener(e,function(ev){ev.preventDefault();a2.classList.remove('drag-over')})});
+a2.addEventListener('drop',function(ev){i2.files=ev.dataTransfer.files;u2()});i2.addEventListener('change',u2)}
+function u2(){if(i2.files.length>0){t2.innerHTML='<i class="bi bi-file-earmark-pdf-fill me-2" style="color:var(--or)"></i>'+i2.files[0].name;a2.style.borderColor='var(--or)';a2.style.background='var(--orl)';b2.disabled=false}}
+</script>
+<script>
+// Auto-preenche tarifa/bandeiras quando muda o mês de referência
+var _tarifas = {{ tarifas_json|safe }};
+var mesRefInput = document.querySelector('input[name="mes_referencia"]');
+if(mesRefInput && !mesRefInput.closest('#resultado')){
+    mesRefInput.addEventListener('change', function(){
+        var mr = this.value.trim();
+        if(_tarifas[mr]){
+            var t = _tarifas[mr];
+            var ti = document.querySelector('input[name="tarifa"]');
+            var ba = document.querySelector('input[name="bandeira_amarela"]');
+            var bv = document.querySelector('input[name="bandeira_vermelha"]');
+            if(ti) ti.value = t.tarifa_sem.toFixed(6).replace('.',',');
+            if(ba) ba.value = t.bandeira_amarela ? t.bandeira_amarela.toFixed(6).replace('.',',') : '0';
+            if(bv) bv.value = t.bandeira_vermelha ? t.bandeira_vermelha.toFixed(6).replace('.',',') : '0';
+            ti.style.background='#e8f5e9'; ba.style.background='#e8f5e9'; bv.style.background='#e8f5e9';
+            setTimeout(function(){ti.style.background='';ba.style.background='';bv.style.background=''},1500);
+        }
+    });
+    // Dispara ao carregar se já tem valor
+    if(mesRefInput.value && _tarifas[mesRefInput.value.trim()]){
+        mesRefInput.dispatchEvent(new Event('change'));
+    }
+}
+</script>
+
+<script>
+// ── Persistência automática do formulário manual no localStorage ──
+(function() {
+    const STORAGE_KEY = 'solev_simulador_manual';
+    const form = document.getElementById('formManual');
+    if (!form) return;
+
+    // Restaura valores salvos ao carregar a página
+    try {
+        const salvo = localStorage.getItem(STORAGE_KEY);
+        if (salvo) {
+            const dados = JSON.parse(salvo);
+            Object.keys(dados).forEach(function(name) {
+                const campos = form.querySelectorAll('[name="' + name + '"]');
+                campos.forEach(function(el) {
+                    if (el.type === 'radio' || el.type === 'checkbox') {
+                        if (el.value === dados[name]) el.checked = true;
+                    } else if (el.type !== 'hidden') {
+                        el.value = dados[name];
+                    }
+                });
+            });
+        }
+    } catch (e) { console.warn('Erro ao restaurar:', e); }
+
+    // Salva qualquer mudança automaticamente
+    function salvar() {
+        const dados = {};
+        const campos = form.querySelectorAll('input, select, textarea');
+        campos.forEach(function(el) {
+            if (!el.name || el.type === 'hidden') return;
+            if (el.type === 'radio') {
+                if (el.checked) dados[el.name] = el.value;
+            } else if (el.type === 'checkbox') {
+                dados[el.name] = el.checked ? el.value : '';
+            } else {
+                dados[el.name] = el.value;
+            }
+        });
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dados)); }
+        catch (e) { console.warn('Erro ao salvar:', e); }
+    }
+
+    form.addEventListener('input', salvar);
+    form.addEventListener('change', salvar);
+})();
+
+// Limpa o formulário e remove dados salvos
+function limparFormulario() {
+    if (!confirm('Limpar todos os campos preenchidos?')) return;
+    localStorage.removeItem('solev_simulador_manual');
+    const form = document.getElementById('formManual');
+    if (form) {
+        form.reset();
+        // Garante que radios voltem ao default
+        const mbCom = document.getElementById('mbCom');
+        if (mbCom) mbCom.checked = true;
+    }
+}
+</script>
+{% endblock %}

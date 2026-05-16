@@ -1,0 +1,38 @@
+{# ─────────────────────────────────────────────────────────────────────────────
+   Modal reutilizável: validação de PIX antes de gerar cobrança.
+   Use junto com /static/js/pix-validacao.js
+   Inclua via {% include '_modal_pix_validacao.html' %} em qualquer template
+   que tenha botão "Gerar cobrança".
+   ───────────────────────────────────────────────────────────────────────────── #}
+<div class="modal fade" id="modalPixValidacao" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header" style="background:#fff3cd;border-bottom:1px solid #ffc107">
+        <h5 class="modal-title fw-bold" id="modalPixTitulo">
+          <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+          PIX não configurado
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <p id="modalPixMensagem" class="mb-3" style="font-size:14px;line-height:1.5"></p>
+        <div class="alert alert-info mb-0 py-2" style="font-size:13px">
+          <i class="bi bi-info-circle me-1"></i>
+          A cobrança pode ser emitida normalmente, mas <strong>não terá o QR Code PIX</strong>
+          impresso no PDF — o cliente só poderá pagar via boleto / linha digitável.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="bi bi-x-lg me-1"></i>Cancelar
+        </button>
+        <button type="button" class="btn btn-warning" id="btnPixEmitirSemQR">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Emitir sem QR Code
+        </button>
+        <a href="#" class="btn btn-primary" id="btnPixCadastrar" target="_blank">
+          <i class="bi bi-plus-circle me-1"></i><span id="btnPixCadastrarLabel">Cadastrar</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,42 @@
+# Segredos — NUNCA subir para o GitHub
+supabase_config.json
+email_config.json
+whatsapp_config.json
+
+# Dados legados (ja migrados para o Supabase)
+clientes.json
+usinas.json
+historico.json
+tarifas.json
+geracao.json
+geracao_mensal.json
+investidor_historico.json
+rateios_mensais.json
+simulacoes.json
+
+# Backups locais
+_backup_*/
+
+# Dados locais do launcher
+.chrome_app_profile/
+.webview_storage/
+
+# Logs e temporarios
+erro_flask.log
+uploads/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.claude/settings.local.json
+.env
+
+# Planilhas privadas (dados de clientes)
+ClientesSolevenergia.xlsx
+Clientes_*.xlsx
+*_clientes.xlsx
+*_clientes_*.xlsx
+
+# Logos e marca (adicionar quando tiver)
+LOGO_SOLEV*.png
+LOGO_SOLEV*.jpeg

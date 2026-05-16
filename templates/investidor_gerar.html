@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Demonstrativo — {{ usina.investidor_nome }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-briefcase-fill me-2" style="color:var(--or)"></i>Gerar Demonstrativo</h1>
+    <a href="/investidor" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left me-1"></i>Voltar</a>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-4"><div class="card stat-card">
+        <div class="stat-label">Investidor</div>
+        <div class="stat-value" style="font-size:18px">{{ usina.investidor_nome }}</div>
+        <div class="stat-label mt-1">{{ usina.investidor_cpf_cnpj }}</div>
+    </div></div>
+    <div class="col-md-4"><div class="card stat-card">
+        <div class="stat-label">Usina</div>
+        <div class="stat-value" style="font-size:18px">{{ usina.nome or uid }}</div>
+        <div class="stat-label mt-1">UC: {{ usina.uc_geradora }}</div>
+    </div></div>
+    <div class="col-md-4"><div class="card stat-card">
+        <div class="stat-label">Deságio</div>
+        <div class="stat-value" style="font-size:28px;color:var(--or)">{{ usina.get('investidor_deságio_pct', 0) }}%</div>
+        <div class="stat-label mt-1">Pgto: {{ usina.investidor_dia_pagamento or 'Não definido' }}</div>
+    </div></div>
+</div>
+
+<form method="POST" enctype="multipart/form-data">
+<div class="row g-3">
+    <div class="col-md-7"><div class="card"><div class="card-body p-4">
+        <h6 class="fw-bold mb-3">Fatura da UC Geradora (Equatorial)</h6>
+        <p class="text-muted mb-3" style="font-size:13px">Envie o PDF da fatura da <strong>UC geradora</strong> ({{ usina.uc_geradora }})</p>
+        <div class="upload-area" id="uploadArea" onclick="document.getElementById('pdfInput').click()">
+            <i class="bi bi-cloud-arrow-up mb-2 d-block" style="font-size:40px;color:var(--or)"></i>
+            <h6 class="fw-bold" id="uploadText">Arraste o PDF aqui ou clique</h6>
+            <p class="text-muted mb-0 small">O sistema extrai kWh e dados automaticamente</p>
+        </div>
+        <input type="file" name="pdf" id="pdfInput" accept=".pdf" class="d-none">
+    </div></div></div>
+    <div class="col-md-5"><div class="card"><div class="card-body p-4">
+        <h6 class="fw-bold mb-3">Dados do Cálculo <small class="text-muted fw-normal">(ajuste se necessário)</small></h6>
+        <div class="mb-3">
+            <label class="form-label">Mês Referência</label>
+            <input type="text" name="mes_referencia" class="form-control form-control-sm" placeholder="Ex: 03/2026">
+            <small class="text-muted">Extraído automaticamente do PDF</small>
+        </div>
+        <div class="row">
+            <div class="col-6 mb-3">
+                <label class="form-label">kWh Gerado</label>
+                <input type="text" name="kwh_gerado" class="form-control form-control-sm" placeholder="Extraído do PDF">
+                <small class="text-muted">0 = extrair do PDF</small>
+            </div>
+            <div class="col-6 mb-3">
+                <label class="form-label">Tarifa Equatorial (R$/kWh)</label>
+                <input type="text" name="tarifa_equatorial" class="form-control form-control-sm" placeholder="Ex: 0,780764">
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-6 mb-3">
+                <label class="form-label">Fio B — Transmissão (R$)</label>
+                <input type="text" name="fio_b" class="form-control form-control-sm" placeholder="Ex: 150,00">
+            </div>
+            <div class="col-6 mb-3">
+                <label class="form-label">Valor Mínimo Fatura (R$)</label>
+                <input type="text" name="valor_minimo" class="form-control form-control-sm" value="{{ usina.get('investidor_valor_minimo', 0) }}" placeholder="0,00">
+            </div>
+        </div>
+        <button type="submit" class="btn btn-cta w-100 mt-2" id="btnGerar" disabled>
+            <i class="bi bi-calculator me-1"></i> Calcular e Gerar PDF</button>
+    </div></div></div>
+</div></form>
+{% endblock %}
+{% block scripts %}
+<script>
+const a=document.getElementById('uploadArea'),i=document.getElementById('pdfInput'),b=document.getElementById('btnGerar'),t=document.getElementById('uploadText');
+if(a){['dragenter','dragover'].forEach(e=>a.addEventListener(e,ev=>{ev.preventDefault();a.classList.add('drag-over')}));
+['dragleave','drop'].forEach(e=>a.addEventListener(e,ev=>{ev.preventDefault();a.classList.remove('drag-over')}));
+a.addEventListener('drop',ev=>{i.files=ev.dataTransfer.files;u()});i.addEventListener('change',u)}
+function u(){if(i.files.length>0){t.innerHTML='<i class="bi bi-file-earmark-pdf-fill me-2" style="color:var(--or)"></i>'+i.files[0].name;a.style.borderColor='var(--or)';a.style.background='var(--orl)';b.disabled=false}}
+</script>
+{% endblock %}

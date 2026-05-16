@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+{% block title %}Rateio Consolidado{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-pie-chart-fill me-2" style="color:var(--or)"></i>Rateio — Visão Consolidada</h1>
+    <div>
+        <a href="/usinas" class="btn btn-outline-secondary btn-sm"><i class="bi bi-sun-fill me-1"></i>Usinas</a>
+    </div>
+</div>
+
+{# ══════ SELETOR DE MÊS ══════ #}
+{% if meses_disponiveis %}
+<div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+    <span class="fw-bold" style="font-size:13px;color:var(--db)">
+        <i class="bi bi-calendar3 me-1"></i>Mês de referência:</span>
+    {% for m in meses_disponiveis %}
+    <a href="/rateio?mes={{ m }}"
+       class="btn btn-sm {% if m == mes_sel %}btn-cta{% else %}btn-outline-secondary{% endif %}"
+       style="font-size:12px;border-radius:8px">{{ m }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ══════ 4 CARDS DE TOTAIS ══════ #}
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(245,166,35,0.1);color:var(--or)"><i class="bi bi-sun-fill"></i></div>
+        <div class="stat-value">{{ "{:,.0f}".format(totais.geracao).replace(",", ".") }}</div>
+        <div class="stat-label">Geração total (kWh)</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:rgba(34,197,94,0.1);color:var(--green)"><i class="bi bi-check-circle-fill"></i></div>
+        <div class="stat-value">{{ "{:,.0f}".format(totais.compensado).replace(",", ".") }}</div>
+        <div class="stat-label">Compensado pelos clientes (kWh)</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        <div class="stat-icon" style="background:{% if totais.saldo_mes >= 0 %}rgba(59,130,246,0.1);color:#3b82f6{% else %}rgba(239,68,68,0.1);color:#ef4444{% endif %}">
+            <i class="bi bi-{% if totais.saldo_mes >= 0 %}arrow-up-circle-fill{% else %}arrow-down-circle-fill{% endif %}"></i>
+        </div>
+        <div class="stat-value" style="color:{% if totais.saldo_mes >= 0 %}#3b82f6{% else %}#ef4444{% endif %}">
+            {{ "{:,.0f}".format(totais.saldo_mes).replace(",", ".") }}
+        </div>
+        <div class="stat-label">Saldo do mês (kWh)</div>
+    </div></div>
+    <div class="col-md-3"><div class="card stat-card">
+        {% set tot_alerta = totais.n_alerta_falta + totais.n_alerta_sobra %}
+        <div class="stat-icon" style="background:{% if tot_alerta == 0 %}rgba(34,197,94,0.1);color:var(--green){% else %}rgba(239,68,68,0.1);color:#ef4444{% endif %}">
+            <i class="bi bi-{% if tot_alerta == 0 %}shield-check{% else %}exclamation-triangle-fill{% endif %}"></i>
+        </div>
+        <div class="stat-value" style="color:{% if tot_alerta == 0 %}var(--green){% else %}#ef4444{% endif %}">{{ tot_alerta }}</div>
+        <div class="stat-label">
+            {% if tot_alerta == 0 %}Tudo balanceado{% else %}
+            {% if totais.n_alerta_falta %}{{ totais.n_alerta_falta }} falta{% endif %}
+            {% if totais.n_alerta_falta and totais.n_alerta_sobra %} · {% endif %}
+            {% if totais.n_alerta_sobra %}{{ totais.n_alerta_sobra }} sobra{% endif %}
+            {% endif %}
+        </div>
+    </div></div>
+</div>
+
+{# ══════ FAIXA DE RESUMO ══════ #}
+<div class="card mb-4 p-3">
+    <div class="d-flex flex-wrap align-items-center gap-3" style="font-size:12px">
+        <span><i class="bi bi-sun-fill me-1" style="color:var(--or)"></i><strong>{{ totais.n_usinas }}</strong> usinas</span>
+        <span class="text-muted">·</span>
+        <span><i class="bi bi-people-fill me-1" style="color:var(--db)"></i><strong>{{ totais.n_clientes }}</strong> clientes</span>
+        <span class="text-muted">·</span>
+        <span><i class="bi bi-check-circle-fill me-1" style="color:var(--green)"></i><strong style="color:var(--green)">{{ totais.n_balanceado }}</strong> balanceadas</span>
+        <span class="text-muted">·</span>
+        <span><i class="bi bi-arrow-down-circle-fill me-1" style="color:#ef4444"></i><strong style="color:#ef4444">{{ totais.n_alerta_falta }}</strong> com falta</span>
+        <span class="text-muted">·</span>
+        <span><i class="bi bi-arrow-up-circle-fill me-1" style="color:#eab308"></i><strong style="color:#eab308">{{ totais.n_alerta_sobra }}</strong> com sobra</span>
+        <span class="text-muted">·</span>
+        <span><i class="bi bi-hourglass-split me-1" style="color:#9ca3af"></i><strong style="color:#9ca3af">{{ totais.n_estimativa }}</strong> em estimativa</span>
+        <span class="text-muted">·</span>
+        <span><i class="bi bi-patch-check-fill me-1" style="color:#3b82f6"></i><strong style="color:#3b82f6">{{ totais.n_protocolo_ok }}</strong>/{{ totais.n_usinas }} com protocolo</span>
+    </div>
+</div>
+
+<div class="row g-3">
+    {# ══════ TABELA PRINCIPAL ══════ #}
+    <div class="col-md-{% if excecoes %}8{% else %}12{% endif %}">
+        <div class="card"><div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-table me-1" style="color:var(--or)"></i>Usinas — {{ mes_sel }}</h6>
+                <small class="text-muted" style="font-size:11px">Clique em uma usina para abrir o rateio detalhado</small>
+            </div>
+            <div class="table-responsive">
+            <table class="table table-sm mb-0" style="font-size:12px">
+                <thead><tr>
+                    <th>Usina</th>
+                    <th class="text-end">Geração</th>
+                    <th class="text-end">Compensado</th>
+                    <th class="text-end">Saldo mês</th>
+                    <th class="text-end">Banco</th>
+                    <th class="text-center">Clientes</th>
+                    <th class="text-center">Rateio</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Protocolo</th>
+                </tr></thead>
+                <tbody>
+                {% for r in linhas %}
+                {% set bg = '' %}
+                {% if r.risco == 'falta' %}{% set bg = 'background:rgba(239,68,68,0.04)' %}{% endif %}
+                {% if r.risco == 'sobra' %}{% set bg = 'background:rgba(234,179,8,0.05)' %}{% endif %}
+                {% if r.risco == 'rateio_invalido' %}{% set bg = 'background:rgba(239,68,68,0.08)' %}{% endif %}
+                <tr style="{{ bg }}">
+                    <td>
+                        <a href="/usinas/rateio/{{ r.uid }}?mes={{ mes_sel }}" class="text-decoration-none">
+                            <strong style="color:var(--db)">{{ r.nome }}</strong>
+                        </a>
+                        {% if r.uc_geradora %}<div class="text-muted" style="font-size:10px"><code>{{ r.uc_geradora }}</code></div>{% endif %}
+                    </td>
+                    <td class="text-end">
+                        <strong style="color:var(--or)">{{ "{:,.0f}".format(r.base_kwh).replace(",", ".") }}</strong>
+                        {% if not r.tem_geracao_real %}<div style="font-size:10px;color:#eab308"><i class="bi bi-hourglass-split"></i> previsão</div>{% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if r.n_com_fatura > 0 %}
+                            {{ "{:,.0f}".format(r.compensado_total).replace(",", ".") }}
+                            <div style="font-size:10px;color:#999">{{ r.n_com_fatura }}/{{ r.n_clientes }} faturas</div>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if r.n_com_fatura > 0 %}
+                            {% if r.saldo_mes < -50 %}
+                                <strong style="color:#ef4444">{{ "{:,.0f}".format(r.saldo_mes).replace(",", ".") }}</strong>
+                            {% elif r.saldo_mes > 50 %}
+                                <strong style="color:#eab308">+{{ "{:,.0f}".format(r.saldo_mes).replace(",", ".") }}</strong>
+                            {% else %}
+                                <strong style="color:var(--green)">{{ "{:,.0f}".format(r.saldo_mes).replace(",", ".") }}</strong>
+                            {% endif %}
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="text-end">
+                        {% if r.saldo_acumulado != 0 %}
+                            <span style="color:#3b82f6">{{ "{:,.0f}".format(r.saldo_acumulado).replace(",", ".") }}</span>
+                        {% else %}<span class="text-muted">0</span>{% endif %}
+                    </td>
+                    <td class="text-center">{{ r.n_clientes }}</td>
+                    <td class="text-center">
+                        {% if r.risco == 'rateio_invalido' %}
+                            <span style="color:#ef4444;font-weight:700">{{ "%.2f"|format(r.rateio_total_pct) }}%</span>
+                            <i class="bi bi-exclamation-triangle-fill ms-1" style="color:#ef4444" title="Rateio diferente de 100%"></i>
+                        {% else %}
+                            <span style="color:var(--green)">{{ "%.0f"|format(r.rateio_total_pct) }}%</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if r.risco == 'falta' %}
+                            <span class="badge" style="background:#fee2e2;color:#991b1b;font-size:10px">Falta kWh</span>
+                        {% elif r.risco == 'sobra' %}
+                            <span class="badge" style="background:#fef9c3;color:#854d0e;font-size:10px">Sobra</span>
+                        {% elif r.risco == 'rateio_invalido' %}
+                            <span class="badge" style="background:#fee2e2;color:#991b1b;font-size:10px">Cadastro</span>
+                        {% elif r.ciclo_status == 'estimativa' %}
+                            <span class="badge badge-pendente" style="font-size:10px">Estimativa</span>
+                        {% elif r.ciclo_status == 'aguardando' %}
+                            <span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;font-size:10px">Aguardando</span>
+                        {% elif r.ciclo_status == 'parcial' %}
+                            <span class="badge" style="background:rgba(245,166,35,0.15);color:#b45309;font-size:10px">Parcial</span>
+                        {% else %}
+                            <span class="badge badge-pago" style="font-size:10px">OK</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-center">
+                        {% if r.tem_protocolo %}
+                            <i class="bi bi-patch-check-fill" style="color:var(--green);font-size:14px" title="Protocolo {{ r.protocolo }}"></i>
+                        {% else %}
+                            <i class="bi bi-circle text-muted" title="Sem protocolo"></i>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if linhas|length == 0 %}
+                <tr><td colspan="9" class="text-center text-muted py-4">Nenhuma usina cadastrada.</td></tr>
+                {% endif %}
+                </tbody>
+                <tfoot>
+                    <tr style="background:var(--db);color:white">
+                        <td><strong>TOTAL</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.0f}".format(totais.geracao).replace(",", ".") }}</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.0f}".format(totais.compensado).replace(",", ".") }}</strong></td>
+                        <td class="text-end"><strong>{{ "{:,.0f}".format(totais.saldo_mes).replace(",", ".") }}</strong></td>
+                        <td></td>
+                        <td class="text-center"><strong>{{ totais.n_clientes }}</strong></td>
+                        <td colspan="3"></td>
+                    </tr>
+                </tfoot>
+            </table>
+            </div>
+        </div></div>
+
+        {# ══════ LEGENDA ══════ #}
+        <div class="card mt-3"><div class="card-body p-3" style="font-size:11px">
+            <h6 class="fw-bold mb-2" style="font-size:12px"><i class="bi bi-info-circle me-1" style="color:var(--or)"></i>Como ler</h6>
+            <div class="row g-2">
+                <div class="col-md-6">
+                    <strong>Saldo do mês</strong> = geração da usina − soma compensada pelos clientes.<br>
+                    <span style="color:#ef4444">Negativo (vermelho)</span>: clientes consumiram mais do que a usina entregou — falta kWh.<br>
+                    <span style="color:#eab308">Positivo grande (amarelo)</span>: clientes consumiram pouco — sobra crônica vira banco/desperdício.<br>
+                    <span style="color:var(--green)">Próximo de zero (verde)</span>: rateio está balanceado.
+                </div>
+                <div class="col-md-6">
+                    <strong>Banco</strong> = saldo acumulado de créditos da usina (vem da fatura da Equatorial).<br>
+                    <strong>Status do ciclo</strong>: Estimativa (sem fatura ainda) → Aguardando/Parcial (chegando) → OK / Falta / Sobra (já dá pra avaliar) → Protocolo registrado.<br>
+                    <strong>Cadastro</strong>: rateio total ≠ 100% — corrigir antes de enviar.
+                </div>
+            </div>
+        </div></div>
+    </div>
+
+    {# ══════ TOP EXCEÇÕES ══════ #}
+    {% if excecoes %}
+    <div class="col-md-4">
+        <div class="card" style="border-left:4px solid var(--or)">
+            <div class="card-body p-3">
+                <h6 class="fw-bold mb-2"><i class="bi bi-lightning-fill me-1" style="color:var(--or)"></i>Top exceções</h6>
+                <p class="text-muted mb-2" style="font-size:11px">Clientes com diferença ≥ 20% entre o que o rateio entregou e o que a fatura compensou. Candidatos a ajuste de %.</p>
+                {% for e in excecoes %}
+                <div class="d-flex justify-content-between align-items-start py-2" style="border-top:1px solid #f0f0f0;font-size:12px">
+                    <div style="flex:1;min-width:0">
+                        <div><a href="/usinas/rateio/{{ e.usina_uid }}?mes={{ mes_sel }}" class="text-decoration-none"><strong style="color:var(--db)">{{ e.nome[:24] }}</strong></a></div>
+                        <div class="text-muted" style="font-size:10px">{{ e.usina_nome[:22] }} · {{ "%.2f"|format(e.rateio_pct) }}%</div>
+                        <div style="font-size:11px">esperado <strong>{{ "{:,.0f}".format(e.kwh_esperado).replace(",", ".") }}</strong> · recebeu <strong>{{ "{:,.0f}".format(e.kwh_compensado).replace(",", ".") }}</strong></div>
+                    </div>
+                    <div class="text-end ms-2">
+                        {% if e.tipo == 'excedente' %}
+                            <span class="badge" style="background:#dcfce7;color:#166534;font-size:10px;white-space:nowrap">+{{ "%.0f"|format(e.pct_dif) }}%</span>
+                        {% else %}
+                            <span class="badge" style="background:#fee2e2;color:#991b1b;font-size:10px;white-space:nowrap">−{{ "%.0f"|format(e.pct_dif) }}%</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

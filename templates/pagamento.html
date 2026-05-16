@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Pagamentos{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-cash-coin me-2" style="color:var(--or)"></i> Registrar Pagamento</h1>
+</div>
+
+<div class="row g-4">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-4">Registrar Pagamento</h5>
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">Cliente</label>
+                        <select name="uc" class="form-select" required>
+                            <option value="">Selecione o cliente...</option>
+                            {% for uc, c in clientes.items() %}
+                            <option value="{{ uc }}">{{ c.nome }} (UC: {{ uc }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Data do Pagamento</label>
+                        <input type="text" name="data_pagamento" class="form-control" placeholder="dd/mm/aaaa" required>
+                    </div>
+                    <button type="submit" class="btn btn-cta w-100">
+                        <i class="bi bi-check-circle-fill me-1"></i> Registrar
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">
+                    <i class="bi bi-exclamation-circle-fill me-2" style="color:var(--or)"></i>
+                    Pagamentos Pendentes
+                </h5>
+                {% if faturas_pendentes %}
+                <div class="text-muted mb-2" style="font-size:12px">
+                    {{ faturas_pendentes|length }} fatura(s) pendente(s)
+                    {% set vencidas = faturas_pendentes | selectattr('_vencido') | list | length %}
+                    {% if vencidas > 0 %}
+                    &nbsp;·&nbsp;<span class="text-danger fw-semibold">
+                        <i class="bi bi-exclamation-triangle-fill"></i> {{ vencidas }} vencida(s)
+                    </span>
+                    {% endif %}
+                </div>
+                <table class="table mb-0">
+                    <thead><tr>
+                        <th>Fatura</th><th>Cliente</th><th>Valor</th><th>Vencimento</th>
+                    </tr></thead>
+                    <tbody>
+                    {% for f in faturas_pendentes %}
+                    <tr {% if f._vencido %}style="background:rgba(220,53,69,0.05)"{% endif %}>
+                        <td>
+                            <span class="badge bg-light text-muted border" style="font-weight:500;font-size:11px">
+                                #{{ f.id_fatura }}
+                            </span>
+                            <small class="text-muted d-block" style="font-size:10px">
+                                {{ f._mes_ref_br }}
+                            </small>
+                        </td>
+                        <td>
+                            <strong>{{ f._nome }}</strong>
+                            {% if f._cod_uc %}
+                            <br><code style="font-size:11px">UC: {{ f._cod_uc }}</code>
+                            {% endif %}
+                            {% if f._uc_alternativa_fmt %}
+                            <br><code style="font-size:11px;color:var(--or)">UC nova: {{ f._uc_alternativa_fmt }}</code>
+                            {% endif %}
+                        </td>
+                        <td><strong style="color:var(--db)">{{ fmt(f.vlr_total_com) }}</strong></td>
+                        <td>
+                            {{ f._venc_br or '—' }}
+                            {% if f._vencido %}
+                            <br><span class="badge bg-danger" style="font-size:10px">Vencido</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-check-circle" style="font-size:36px;color:#28a745"></i>
+                    <p class="text-muted mt-2">Nenhum pagamento pendente!</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

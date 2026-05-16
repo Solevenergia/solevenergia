@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-people-fill me-2" style="color:var(--or)"></i> Clientes</h1>
+    <div class="d-flex align-items-center gap-2">
+        {% if total_pages > 1 %}
+        <div class="d-flex align-items-center gap-1">
+            {% if page > 1 %}
+            <a href="/clientes?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+            {% endif %}
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="btn btn-sm btn-cta" style="min-width:34px">{{ p }}</span>
+                {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                <a href="/clientes?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+                   class="btn btn-sm btn-outline-secondary" style="min-width:34px">{{ p }}</a>
+                {% elif p == page - 3 or p == page + 3 %}
+                <span class="text-muted px-1">…</span>
+                {% endif %}
+            {% endfor %}
+            {% if page < total_pages %}
+            <a href="/clientes?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+            {% endif %}
+        </div>
+        {% endif %}
+        <a href="/clientes/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Cliente</a>
+    </div>
+</div>
+
+<div class="card mb-3"><div class="card-body py-2 px-3">
+    <form method="GET" action="/clientes" id="formBusca">
+    <div class="row align-items-center g-2">
+        <div class="col-md-4">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" name="q" id="campoBusca" class="form-control"
+                       value="{{ busca }}" placeholder="Buscar por nome ou UC..."
+                       autocomplete="off">
+                {% if busca %}
+                <a href="/clientes" class="btn btn-outline-secondary btn-sm" title="Limpar busca">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-2">
+            <select id="filtroStatus" class="form-select form-select-sm">
+                <option value="">Todos os status</option>
+                <option value="ativo">Ativos</option>
+                <option value="inativo">Inativos</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select id="filtroUsina" class="form-select form-select-sm">
+                <option value="">Todas as usinas</option>
+                <option value="__sem__">Sem usina vinculada</option>
+                {% for uid, u in usinas.items() %}
+                <option value="{{ uid }}">{{ u.desc_nome or uid }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="per_page" id="perPage" class="form-select form-select-sm"
+                    onchange="document.getElementById('formBusca').submit()">
+                <option value="20" {% if per_page==20 %}selected{% endif %}>20 por página</option>
+                <option value="50" {% if per_page==50 %}selected{% endif %}>50 por página</option>
+                <option value="100" {% if per_page==100 %}selected{% endif %}>100 por página</option>
+            </select>
+        </div>
+        <div class="col-md-3 text-end">
+            <span class="text-muted" style="font-size:12px">
+                {% if busca %}
+                    Exibindo <strong>{{ clientes|length }}</strong> de <strong>{{ total }}</strong> clientes
+                    para "<em>{{ busca }}</em>"
+                {% else %}
+                    <span id="contagem">{{ clientes|length }}</span> de {{ total }} clientes
+                    &nbsp;·&nbsp; página {{ page }} de {{ total_pages }}
+                {% endif %}
+            </span>
+        </div>
+    </div>
+    </form>
+</div></div>
+
+<div class="card">
+    <div class="card-body">
+    {% if clientes %}
+    <table class="table table-hover mb-0" id="tabelaClientes">
+        <thead><tr>
+            <th>UC</th>
+            <th>Nome</th>
+            <th>Endereço</th>
+            <th>Desconto</th>
+            <th>Tarifa</th>
+            <th>Usina(s)</th>
+            <th>Status</th>
+            <th></th>
+        </tr></thead>
+        <tbody>
+        {% for c in clientes %}
+        <tr data-usinas="{{ c._usinas | map(attribute='id_usina') | list | join(',') }}"
+            data-nome="{{ c.desc_nome }}"
+            data-uc="{{ (c.cod_uc_alternativa | fmt_uc15) or c.cod_uc }} {{ c.cod_uc }}"
+            data-status="{{ 'ativo' if c.status else 'inativo' }}">
+            <td>
+                <code style="font-size:13px">{{ (c.cod_uc_alternativa | fmt_uc15) or c.cod_uc }}</code>
+                {% if c.cod_uc_alternativa %}
+                <small class="text-muted d-block" style="font-size:10px">antiga: {{ c.cod_uc }}</small>
+                {% endif %}
+            </td>
+            <td>
+                <strong>{{ c.desc_nome }}</strong>
+                {% if c.desc_apelido %}
+                <small class="text-muted d-block" style="font-size:11px">{{ c.desc_apelido }}</small>
+                {% endif %}
+            </td>
+            <td class="text-muted" style="font-size:12px">{{ c._endereco }}</td>
+            <td>
+                <span class="badge" style="background:var(--or);color:var(--db);font-size:13px">
+                    {{ ((c.pct_desconto or 0) * 100)|int }}%
+                </span>
+            </td>
+            <td style="font-size:13px">R$ {{ "%.4f"|format(c.vlr_tarifa_sem or 0) }}</td>
+            <td>
+                {% if c._usinas %}
+                    {% for u in c._usinas %}
+                    <a href="/usinas/ver/{{ u.id_usina }}"
+                       class="badge me-1"
+                       style="background:rgba(245,166,35,0.1);color:var(--or);text-decoration:none">
+                        <i class="bi bi-sun-fill me-1"></i>{{ u.desc_nome }}
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <span class="text-muted" style="font-size:11px">—</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if c.status %}
+                <span class="badge rounded-pill" style="background:rgba(25,135,84,0.12);color:#198754;font-size:12px">
+                    <i class="bi bi-check-circle-fill me-1"></i>Ativo
+                </span>
+                {% else %}
+                <span class="badge rounded-pill" style="background:rgba(108,117,125,0.12);color:#6c757d;font-size:12px">
+                    <i class="bi bi-dash-circle me-1"></i>Inativo
+                </span>
+                {% endif %}
+            </td>
+            <td class="text-end">
+                <a href="/clientes/nova_uc/{{ c.cod_uc }}"
+                   class="btn btn-sm btn-outline-success" title="Cadastrar nova UC para este cliente">
+                    <i class="bi bi-plus-circle"></i>
+                </a>
+                <a href="/clientes/editar/{{ c.cod_uc }}"
+                   class="btn btn-sm btn-outline-primary" title="Editar">
+                    <i class="bi bi-pencil"></i>
+                </a>
+                <button type="button" class="btn btn-sm btn-outline-danger" title="Remover"
+                        onclick="abrirModalExcluir('{{ c.cod_uc }}', '{{ c.desc_nome|replace("'", "\\'") }}')">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if total_pages > 1 %}
+    <div class="d-flex align-items-center justify-content-between mt-3 pt-2 border-top">
+        <span class="text-muted" style="font-size:12px">
+            Página {{ page }} de {{ total_pages }} &nbsp;·&nbsp; {{ total }} clientes no total
+        </span>
+        <div class="d-flex align-items-center gap-1">
+            {% if page > 1 %}
+            <a href="/clientes?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+            {% endif %}
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="btn btn-sm btn-cta" style="min-width:34px">{{ p }}</span>
+                {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                <a href="/clientes?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+                   class="btn btn-sm btn-outline-secondary" style="min-width:34px">{{ p }}</a>
+                {% elif p == page - 3 or p == page + 3 %}
+                <span class="text-muted px-1">…</span>
+                {% endif %}
+            {% endfor %}
+            {% if page < total_pages %}
+            <a href="/clientes?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5">
+        <i class="bi bi-people" style="font-size:48px;color:#ccc"></i>
+        {% if busca %}
+        <p class="text-muted mt-3">Nenhum cliente encontrado para "<strong>{{ busca }}</strong>".</p>
+        <a href="/clientes" class="btn btn-outline-secondary mt-2">Ver todos os clientes</a>
+        {% else %}
+        <p class="text-muted mt-3">Nenhum cliente cadastrado.</p>
+        <a href="/clientes/novo" class="btn btn-cta mt-2">
+            <i class="bi bi-plus-lg me-1"></i> Cadastrar Primeiro Cliente
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+    </div>
+</div>
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal fade" id="modalExcluirCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Confirmar exclusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                Tem certeza que deseja remover o cliente<br>
+                <strong id="nomeClienteExcluir" class="fs-6"></strong>?
+                <p class="text-muted mt-2 mb-0" style="font-size:13px">Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <form method="POST" action="/clientes/remover_post" id="formExcluirCliente" style="display:inline">
+                    <input type="hidden" name="uc" id="ucExcluirCliente">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i>Confirmar exclusão
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// Busca por Enter no campo
+document.getElementById('campoBusca').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('formBusca').submit();
+});
+// Busca com debounce ao digitar
+var _t;
+document.getElementById('campoBusca').addEventListener('input', function() {
+    clearTimeout(_t);
+    _t = setTimeout(function() { document.getElementById('formBusca').submit(); }, 600);
+});
+
+// Filtros client-side (usina + status)
+var filtroUsina  = document.getElementById('filtroUsina');
+var filtroStatus = document.getElementById('filtroStatus');
+var contagem     = document.getElementById('contagem');
+
+function aplicarFiltros() {
+    var usina  = filtroUsina.value;
+    var status = filtroStatus.value;
+    var rows   = document.querySelectorAll('#tabelaClientes tbody tr');
+    var vis    = 0;
+    rows.forEach(function(tr) {
+        var matchUsina = true;
+        if (usina === '__sem__') {
+            matchUsina = !tr.dataset.usinas;
+        } else if (usina) {
+            matchUsina = tr.dataset.usinas.split(',').indexOf(String(usina)) >= 0;
+        }
+        var matchStatus = true;
+        if (status) {
+            matchStatus = tr.dataset.status === status;
+        }
+        var show = matchUsina && matchStatus;
+        tr.style.display = show ? '' : 'none';
+        if (show) vis++;
+    });
+    if (contagem) contagem.textContent = vis;
+}
+
+filtroUsina.addEventListener('change', aplicarFiltros);
+filtroStatus.addEventListener('change', aplicarFiltros);
+
+function abrirModalExcluir(uc, nome) {
+    document.getElementById('ucExcluirCliente').value = uc;
+    document.getElementById('nomeClienteExcluir').textContent = nome;
+    new bootstrap.Modal(document.getElementById('modalExcluirCliente')).show();
+}
+</script>
+{% endblock %}

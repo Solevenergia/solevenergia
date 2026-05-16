@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Pagar com PIX{% endblock %}
+{% block content %}
+<div class="container py-4" style="max-width: 500px">
+    <div class="card">
+        <div class="card-body text-center">
+            <h5 class="mb-3">💳 Pagar com PIX</h5>
+
+            <div class="mb-4">
+                <p class="text-muted mb-1">{{ nome }}</p>
+                <p class="mb-2" style="font-size: 12px; color: #666">Fatura {{ mes }}</p>
+                <h3 style="color: var(--or); margin: 0">{{ "%0.2f"|format(valor)|replace('.', ',') }}</h3>
+            </div>
+
+            {% if qr_base64 %}
+            <!-- QR CODE -->
+            <div class="mb-4 p-3" style="background: #f8f9fa; border-radius: 8px">
+                <img src="{{ qr_base64 }}" alt="QR Code PIX" style="max-width: 100%; height: auto; border-radius: 4px">
+            </div>
+
+            <!-- COPIAR CODIGO -->
+            {% if pix_payload %}
+            <button type="button" class="btn btn-success btn-lg w-100 mb-3" id="btnCopiar"
+                    onclick="copiarPix()" title="Clique para copiar o codigo PIX">
+                <i class="bi bi-clipboard me-2"></i>Copiar Codigo PIX
+            </button>
+            <p class="text-muted mb-3" style="font-size: 11px">
+                <small id="textoCopiado" style="display: none; color: green">✓ Copiado! Cole no seu banco.</small>
+            </p>
+            {% endif %}
+
+            <!-- OU ABRIR BANCO -->
+            <p class="text-muted mb-3" style="font-size: 12px">Ou abra seu banco:</p>
+            <div class="d-grid gap-2">
+                <a href="https://www.pagbank.com.br/" target="_blank" class="btn btn-outline-primary btn-sm">
+                    <i class="bi bi-bank me-1"></i>PagBank
+                </a>
+                <a href="https://www.nubank.com.br/" target="_blank" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-bank me-1"></i>Nubank
+                </a>
+                <a href="https://www.itau.com.br/" target="_blank" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-bank me-1"></i>Itau
+                </a>
+                <a href="https://www.bradesco.com.br/" target="_blank" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-bank me-1"></i>Bradesco
+                </a>
+                <a href="https://www.caixa.gov.br/" target="_blank" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-bank me-1"></i>Caixa
+                </a>
+                <a href="https://www.santander.com.br/" target="_blank" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-bank me-1"></i>Santander
+                </a>
+            </div>
+
+            <hr>
+
+            <p class="text-muted mb-0" style="font-size: 11px">
+                <i class="bi bi-info-circle me-1"></i>
+                Pagamento em nome de: <strong>{{ nome_recebedor }}</strong>
+            </p>
+
+            {% else %}
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>PIX nao disponivel</strong><br>
+                <small>A usina nao tem chave PIX vinculada. Entre em contato para mais informacoes.</small>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <a href="javascript:history.back()" class="btn btn-outline-secondary btn-sm mt-3 w-100">
+        <i class="bi bi-chevron-left me-1"></i>Voltar
+    </a>
+</div>
+
+<script>
+function copiarPix() {
+    var texto = `{{ pix_payload }}`;
+
+    if (!texto) {
+        alert("Codigo PIX nao disponivel");
+        return;
+    }
+
+    // Copia para clipboard
+    navigator.clipboard.writeText(texto).then(function() {
+        // Mostra feedback visual
+        var btn = document.getElementById('btnCopiar');
+        var msg = document.getElementById('textoCopiado');
+        var textoOriginal = btn.innerHTML;
+
+        btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Copiado!';
+        btn.disabled = true;
+        msg.style.display = 'inline';
+
+        // Volta ao normal apos 3 segundos
+        setTimeout(function() {
+            btn.innerHTML = textoOriginal;
+            btn.disabled = false;
+            msg.style.display = 'none';
+        }, 3000);
+    }).catch(function(err) {
+        console.error("Erro ao copiar:", err);
+        alert("Nao foi possivel copiar. Tente novamente.");
+    });
+}
+</script>
+{% endblock %}

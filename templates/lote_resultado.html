@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Resultado em Lote{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="bi bi-files me-2" style="color:var(--or)"></i>Resultado em Lote</h1></div>
+<div class="card"><div class="card-body">
+<table class="table mb-0">
+    <thead><tr><th>Arquivo</th><th>Status</th><th>Detalhes</th></tr></thead>
+    <tbody>{% for r in resultados %}<tr>
+        <td><i class="bi bi-file-earmark-pdf me-1"></i>{{ r.arquivo }}</td>
+        <td>{% if r.ok %}<span class="badge badge-pago"><i class="bi bi-check-lg"></i> Sucesso</span>
+        {% else %}<span class="badge" style="background:#fee2e2;color:#991b1b"><i class="bi bi-x-lg"></i> Erro</span>{% endif %}</td>
+        <td style="font-size:13px">{{ r.msg }}</td>
+    </tr>{% endfor %}</tbody>
+</table>
+</div></div>
+<div class="mt-3">
+    <a href="/faturas" class="btn btn-cta"><i class="bi bi-receipt me-1"></i> Ver Faturas</a>
+    <a href="/lote" class="btn btn-outline-secondary ms-2">Gerar mais</a>
+</div>
+{% endblock %}

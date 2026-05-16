@@ -1,0 +1,305 @@
+{% extends "base.html" %}
+{% block title %}Faturas{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-receipt me-2" style="color:var(--or)"></i> Faturas</h1>
+    <div class="d-flex align-items-center gap-2">
+        {% if total_pages > 1 %}
+        <div class="d-flex align-items-center gap-1">
+            {% if page > 1 %}
+            <a href="/faturas?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+            {% endif %}
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="btn btn-sm btn-cta" style="min-width:34px">{{ p }}</span>
+                {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                <a href="/faturas?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+                   class="btn btn-sm btn-outline-secondary" style="min-width:34px">{{ p }}</a>
+                {% elif p == page - 3 or p == page + 3 %}
+                <span class="text-muted px-1">…</span>
+                {% endif %}
+            {% endfor %}
+            {% if page < total_pages %}
+            <a href="/faturas?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- FILTROS -->
+<div class="card mb-3"><div class="card-body py-2 px-3">
+    <form method="GET" action="/faturas" id="formFiltro">
+    <input type="hidden" name="status" id="statusHidden" value="{{ status }}">
+    <div class="row align-items-center g-2">
+        <div class="col-md-3">
+            <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" name="q" id="campoBusca" class="form-control"
+                       value="{{ busca }}" placeholder="Buscar por nome ou UC..."
+                       autocomplete="off">
+                {% if busca %}
+                <a href="/faturas?per_page={{ per_page }}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+                   class="btn btn-outline-secondary btn-sm" title="Limpar busca">
+                    <i class="bi bi-x-lg"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-2">
+            <input type="text" name="mes" id="filtroMes" class="form-control form-control-sm"
+                   value="{{ mes }}" placeholder="MM/AAAA" inputmode="numeric">
+        </div>
+        <div class="col-md-2">
+            <select name="per_page" id="perPage" class="form-select form-select-sm"
+                    onchange="document.getElementById('formFiltro').submit()">
+                <option value="20" {% if per_page==20 %}selected{% endif %}>20 por página</option>
+                <option value="50" {% if per_page==50 %}selected{% endif %}>50 por página</option>
+                <option value="100" {% if per_page==100 %}selected{% endif %}>100 por página</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <div class="btn-group btn-group-sm w-100" role="group">
+                <button type="button" class="btn {% if status=='todos' %}btn-cta{% else %}btn-outline-secondary{% endif %}"
+                        onclick="setStatus('todos')">Todos</button>
+                <button type="button" class="btn {% if status=='nao_pago' %}btn-cta{% else %}btn-outline-secondary{% endif %}"
+                        onclick="setStatus('nao_pago')">Pendentes</button>
+                <button type="button" class="btn {% if status=='vencidos' %}btn-cta{% else %}btn-outline-secondary{% endif %}"
+                        onclick="setStatus('vencidos')" style="background:{% if status=='vencidos' %}var(--db){% endif %}">Vencidos</button>
+                <button type="button" class="btn {% if status=='pago' %}btn-cta{% else %}btn-outline-secondary{% endif %}"
+                        onclick="setStatus('pago')">Pagos</button>
+            </div>
+        </div>
+        <div class="col-md-2 text-end">
+            <span class="text-muted" style="font-size:12px">
+                <span id="contagem">{{ faturas|length }}</span> de {{ total }} registros
+                &nbsp;·&nbsp; pág. {{ page }} de {{ total_pages }}
+            </span>
+        </div>
+    </div>
+    </form>
+</div></div>
+
+<div class="card">
+    <div class="card-body p-0">
+    {% if faturas %}
+    <div class="table-responsive">
+        <table class="table table-hover mb-0" id="tabelaFaturas">
+            <thead><tr>
+                <th>#</th>
+                <th>Data</th>
+                <th>Cliente</th>
+                <th>Mês</th>
+                <th>SEM</th>
+                <th>COM</th>
+                <th>Economia</th>
+                <th>Venc. SOLEV</th>
+                <th>Venc. Equatorial</th>
+                <th>Status</th>
+                <th>Usina</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            {% for item in faturas %}
+            <tr>
+                <td>
+                    <span class="badge bg-light text-muted border" style="font-weight:500;font-size:11px">
+                        #{{ item.id_fatura }}
+                    </span>
+                </td>
+                <td style="font-size:11px;white-space:nowrap">{{ item._data_br }}</td>
+                <td>
+                    <strong style="font-size:12px">{{ item._nome[:28] }}</strong><br>
+                    <code style="font-size:14px !important;font-weight:600;display:block;margin-top:2px">{{ (item._cod_uc_alternativa or item._cod_uc)|fmt_uc15 }}</code>
+                </td>
+                <td>{{ item._mes_ref_br }}</td>
+                <td class="text-muted">{{ fmt(item.vlr_total_sem) }}</td>
+                <td><strong>{{ fmt(item.vlr_total_com) }}</strong></td>
+                <td style="color:var(--green,#2e7d32);font-weight:700">{{ fmt(item.vlr_economia_mes) }}</td>
+                <td style="font-size:12px;white-space:nowrap">{{ item._venc_br or '-' }}</td>
+                <td style="font-size:12px;white-space:nowrap;color:#666">{{ item._venc_eq_br or '-' }}</td>
+                <td>
+                    {% if item._status_classe == 'pago' %}
+                        <span class="badge badge-pago" title="Pago em {{ item._pgto_br }}">
+                            Pago{% if item._pgto_br %} em {{ item._pgto_br }}{% endif %}
+                        </span>
+                    {% elif item._status_classe == 'vencido' %}
+                        <span class="badge" style="background:#dc3545;color:white;cursor:pointer"
+                              onclick="abrirBaixa({{ item.id_fatura }}, '{{ item._nome[:30]|e }}', '{{ item._cod_uc }}', '{{ item._venc_br }}')"
+                              title="Vencido — clique para dar baixa">
+                            <i class="bi bi-exclamation-triangle me-1"></i>Vencido
+                        </span>
+                    {% elif item._status_classe == 'cancelado' %}
+                        <span class="badge bg-secondary">Cancelada</span>
+                    {% else %}
+                        <span class="badge badge-pendente" style="cursor:pointer"
+                              onclick="abrirBaixa({{ item.id_fatura }}, '{{ item._nome[:30]|e }}', '{{ item._cod_uc }}', '{{ item._venc_br }}')"
+                              title="Clique para dar baixa">
+                            <i class="bi bi-clock me-1"></i>Aguardando
+                        </span>
+                    {% endif %}
+                </td>
+                <td style="font-size:11px;white-space:nowrap;color:#555">
+                    {% if item._usina %}
+                        <i class="bi bi-lightning-fill me-1" style="color:var(--or)"></i>{{ item._usina }}
+                    {% endif %}
+                </td>
+                <td class="text-end" style="white-space:nowrap">
+                    {% if item._status_classe != 'pago' and item._status_classe != 'cancelado' %}
+                        <button class="btn btn-sm btn-success" title="Dar baixa"
+                                onclick="abrirBaixa({{ item.id_fatura }}, '{{ item._nome[:30]|e }}', '{{ item._cod_uc }}', '{{ item._venc_br }}')">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </button>
+                    {% endif %}
+                    {% if item._pdf_legado %}
+                        <a href="/ver/{{ item._pdf_legado }}" target="_blank"
+                           class="btn btn-sm btn-outline-primary" title="Ver cobrança SOLEV">
+                            <i class="bi bi-file-earmark-pdf-fill"></i>
+                        </a>
+                        <a href="/download/{{ item._pdf_legado }}" class="btn btn-sm btn-db" title="Baixar PDF SOLEV">
+                            <i class="bi bi-download"></i>
+                        </a>
+                        <a href="/whatsapp/{{ item._pdf_legado }}?id={{ item.id_fatura }}" target="_blank"
+                           class="btn btn-sm" style="background:#25D366;color:white" title="WhatsApp">
+                            <i class="bi bi-whatsapp"></i>
+                        </a>
+                    {% endif %}
+                    <a href="/fatura/excluir/{{ item.id_fatura }}" class="btn btn-sm btn-outline-danger" title="Excluir"
+                       onclick="return confirm('Excluir cobrança de {{ item._nome[:20]|e }}?')">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if total_pages > 1 %}
+    <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top">
+        <span class="text-muted" style="font-size:12px">
+            Página {{ page }} de {{ total_pages }} &nbsp;·&nbsp; {{ total }} cobranças no total
+        </span>
+        <div class="d-flex align-items-center gap-1">
+            {% if page > 1 %}
+            <a href="/faturas?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
+            {% endif %}
+            {% for p in range(1, total_pages + 1) %}
+                {% if p == page %}
+                <span class="btn btn-sm btn-cta" style="min-width:34px">{{ p }}</span>
+                {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
+                <a href="/faturas?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+                   class="btn btn-sm btn-outline-secondary" style="min-width:34px">{{ p }}</a>
+                {% elif p == page - 3 or p == page + 3 %}
+                <span class="text-muted px-1">…</span>
+                {% endif %}
+            {% endfor %}
+            {% if page < total_pages %}
+            <a href="/faturas?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+               class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <p class="text-muted text-center py-5">
+        <i class="bi bi-inbox me-2 fs-3"></i><br>
+        {% if busca or mes or status != 'todos' %}
+        Nenhuma cobrança encontrada com os filtros aplicados.
+        <a href="/faturas" class="d-block mt-2 btn btn-sm btn-outline-secondary">Limpar filtros</a>
+        {% else %}
+        Nenhuma cobrança gerada ainda.
+        {% endif %}
+    </p>
+    {% endif %}
+    </div>
+</div>
+
+<!-- MODAL DAR BAIXA -->
+<div class="modal fade" id="modalBaixa" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background:var(--db)">
+                <h6 class="modal-title text-white"><i class="bi bi-check-circle me-2"></i>Dar Baixa</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formBaixa" method="POST">
+                <div class="modal-body">
+                    <p class="mb-2"><strong id="baixa_nome"></strong></p>
+                    <p class="text-muted mb-3" style="font-size:12px" id="baixa_info"></p>
+                    <label class="form-label">Data do pagamento</label>
+                    <input type="text" name="data_pagamento" id="baixa_data" class="form-control"
+                           placeholder="dd/mm/aaaa" required>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="bi bi-check-lg me-1"></i>Confirmar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// Campo de busca: submit com debounce
+var _t;
+document.getElementById('campoBusca').addEventListener('input', function() {
+    clearTimeout(_t);
+    _t = setTimeout(function() { document.getElementById('formFiltro').submit(); }, 600);
+});
+document.getElementById('campoBusca').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { clearTimeout(_t); document.getElementById('formFiltro').submit(); }
+});
+
+// Máscara MM/AAAA no campo de mês
+(function() {
+    var el = document.getElementById('filtroMes');
+    if (!el) return;
+    el.addEventListener('input', function() {
+        var v = this.value.replace(/\D/g, '');
+        if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2);
+        if (v.length > 7) v = v.slice(0, 7);
+        this.value = v;
+    });
+    el.addEventListener('change', function() {
+        document.getElementById('formFiltro').submit();
+    });
+    el.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('formFiltro').submit();
+    });
+})();
+
+// Botões de status (Todos / Pendentes / Pagos)
+function setStatus(val) {
+    document.getElementById('statusHidden').value = val;
+    // reset para pag 1
+    var form = document.getElementById('formFiltro');
+    var inp = form.querySelector('input[name="page"]');
+    if (!inp) { inp = document.createElement('input'); inp.type='hidden'; inp.name='page'; form.appendChild(inp); }
+    inp.value = '1';
+    form.submit();
+}
+
+// Dar baixa (id_fatura inteiro de tb_faturas)
+function abrirBaixa(idFatura, nome, uc, venc) {
+    document.getElementById('formBaixa').action = '/fatura/baixa/' + idFatura;
+    document.getElementById('baixa_nome').textContent = nome;
+    document.getElementById('baixa_info').innerHTML =
+        'UC: ' + uc + (venc ? '<br><i class="bi bi-calendar3 me-1"></i>Vencimento: ' + venc : '');
+    var d = new Date();
+    document.getElementById('baixa_data').value =
+        String(d.getDate()).padStart(2,'0') + '/' +
+        String(d.getMonth()+1).padStart(2,'0') + '/' +
+        d.getFullYear();
+    new bootstrap.Modal(document.getElementById('modalBaixa')).show();
+}
+</script>
+{% endblock %}
