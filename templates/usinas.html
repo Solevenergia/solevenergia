@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Usinas{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Usinas</span>{% endblock %}
+{% block topbar_actions %}
+<a href="/usinas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Nova Usina</a>
+{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1><i class="bi bi-sun-fill me-2" style="color:var(--or)"></i>Usinas Solares</h1>
-    <a href="/usinas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Nova Usina</a>
+    <h1><i class="bi bi-sun-fill me-2" style="color:var(--accent)"></i>Usinas Solares</h1>
 </div>
 <div class="row g-3">
 {% for u in usinas %}

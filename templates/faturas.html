@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Faturas{% endblock %}
+{% block topbar_breadcrumb %}<span>Analise</span><span class="sep">›</span><span class="here">Faturas</span>{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1><i class="bi bi-receipt me-2" style="color:var(--or)"></i> Faturas</h1>
+    <h1><i class="bi bi-receipt me-2" style="color:var(--accent)"></i> Faturas</h1>
     <div class="d-flex align-items-center gap-2">
         {% if total_pages > 1 %}
         <div class="d-flex align-items-center gap-1">
@@ -112,7 +113,7 @@
                 <td style="font-size:11px;white-space:nowrap">{{ item._data_br }}</td>
                 <td>
                     <strong style="font-size:12px">{{ item._nome[:28] }}</strong><br>
-                    <code style="font-size:14px !important;font-weight:600;display:block;margin-top:2px">{{ (item._cod_uc_alternativa or item._cod_uc)|fmt_uc15 }}</code>
+                    <code style="font-size:14px !important;font-weight:600;display:block;margin-top:2px">{{ (item._cod_uc or item._cod_uc)|fmt_uc15 }}</code>
                 </td>
                 <td>{{ item._mes_ref_br }}</td>
                 <td class="text-muted">{{ fmt(item.vlr_total_sem) }}</td>
