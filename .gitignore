@@ -2,6 +2,8 @@
 supabase_config.json
 email_config.json
 whatsapp_config.json
+token.txt
+token
 
 # Dados legados (ja migrados para o Supabase)
 clientes.json
