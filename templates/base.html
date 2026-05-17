@@ -8,85 +8,333 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/static/icon-192.png">
     <link rel="apple-touch-icon" sizes="192x192" href="/static/icon-192.png">
     <link rel="manifest" href="/static/site.webmanifest">
-    <meta name="theme-color" content="#0d1b2a">
+    <meta name="theme-color" content="#0E1B2E">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SoLev Energia">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        :root { --db: #1a2a4a; --or: #f5a623; --or2: #e09500; --orl: #fff8ee; --sl: #455a64; --bg: #f4f6f9; --green: #22c55e; }
-        * { font-family: 'Plus Jakarta Sans', sans-serif; }
-        body { background: var(--bg); margin: 0; }
-        .sidebar { width: 250px; min-height: 100vh; background: linear-gradient(180deg, #0f1d35 0%, var(--db) 100%); position: fixed; left: 0; top: 0; z-index: 100; display: flex; flex-direction: column; }
-        .sidebar-logo { padding: 24px 20px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.06); }
-        .sidebar-logo img { height: 38px; width: auto; filter: brightness(1.1); }
-        .sidebar-logo .slogan { color: rgba(255,255,255,0.35); font-size: 10px; margin-top: 6px; letter-spacing: 0.5px; }
-        .sidebar-nav { padding: 14px 10px; flex: 1; }
-        .sidebar-nav a { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 10px; color: rgba(255,255,255,0.5); text-decoration: none; font-weight: 500; font-size: 13px; margin-bottom: 2px; transition: all 0.2s; }
-        .sidebar-nav a:hover { background: rgba(255,255,255,0.07); color: white; }
-        .sidebar-nav a.active { background: var(--or); color: var(--db); font-weight: 700; box-shadow: 0 2px 8px rgba(245,166,35,0.3); }
-        .sidebar-nav a i { font-size: 17px; width: 20px; text-align: center; }
-        .sidebar-nav .nav-divider { border-top: 1px solid rgba(255,255,255,0.06); margin: 10px 14px; }
-        /* Grupo expansivel (dropdown na sidebar) */
-        .sidebar-nav .nav-group { margin-bottom: 2px; }
-        .sidebar-nav .nav-group-toggle {
-            display: flex; align-items: center; gap: 10px; width: 100%;
-            padding: 11px 14px; border-radius: 10px; border: 0;
-            background: transparent; color: rgba(255,255,255,0.5);
-            font-weight: 500; font-size: 13px; cursor: pointer;
-            transition: all 0.2s; text-align: left;
+        /* ── Tokens ──────────────────────────────────────────────── */
+        :root {
+            --ink:           #0E1B2E;
+            --ink-soft:      #2A3D5A;
+            --accent:        #E8732A;
+            --accent-soft:   #F5A867;
+            --accent-deep:   #C25C1C;
+            --paper:         #F2E8D4;
+            --paper-soft:    #F7F1E4;
+            --paper-card:    #FDFAF1;
+            --muted:         #9A8E7A;
+            --text-muted:    rgba(14,27,46,0.62);
+            --text-faint:    rgba(14,27,46,0.40);
+            --hairline:      rgba(14,27,46,0.10);
+            --hairline-strong: rgba(14,27,46,0.18);
+            --bg-app:  var(--paper);
+            --bg-card: #FFFFFF;
+            --bg-soft: var(--paper-soft);
+            /* aliases legados */
+            --db: #0E1B2E; --or: #E8732A; --or2: #C25C1C;
+            --orl: #F2E8D4; --sl: #2A3D5A; --bg: #F2E8D4;
+            --green: #22c55e;
+            --r-sm:4px; --r-md:10px; --r-lg:14px; --r-xl:20px;
+            --shadow-card: 0 1px 0 rgba(14,27,46,0.04), 0 4px 16px -8px rgba(14,27,46,0.12);
+            --sidebar-w: 248px;
         }
-        .sidebar-nav .nav-group-toggle:hover { background: rgba(255,255,255,0.07); color: white; }
+
+        /* ── Reset / base ─────────────────────────────────────────── */
+        *, *::before, *::after { box-sizing: border-box; }
+        * { font-family: 'Manrope', sans-serif; }
+        h1,h2,h3,h4,h5,h6,.display,.page-header h1,.stat-card .stat-value,
+        .btn,.form-label,.table th { font-family: 'Sora', sans-serif; }
+        body {
+            background: var(--bg-app);
+            color: var(--ink);
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ── Shell: sidebar + main-col ───────────────────────────── */
+        .app-shell {
+            display: grid;
+            grid-template-columns: var(--sidebar-w) 1fr;
+            min-height: 100vh;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────────── */
+        .sidebar {
+            background: #0E1B2E;
+            color: #F2E8D4;
+            display: flex;
+            flex-direction: column;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            padding: 20px 14px 16px;
+            gap: 4px;
+            scrollbar-width: none;
+        }
+        .sidebar::-webkit-scrollbar { display: none; }
+
+        /* Wordmark */
+        .sidebar-brand {
+            padding: 4px 10px 16px;
+            border-bottom: 1px solid rgba(242,232,212,0.10);
+            margin-bottom: 8px;
+        }
+        .wm {
+            font-family: 'Sora', sans-serif;
+            letter-spacing: -0.045em;
+            line-height: 1;
+            display: inline-flex;
+            align-items: baseline;
+            white-space: nowrap;
+            color: #F2E8D4;
+            font-size: 34px;
+        }
+        .wm .b { font-weight: 800; }
+        .wm .l { font-weight: 300; }
+        .wm .o {
+            display: inline-block;
+            width: 0.66em; height: 0.66em;
+            transform: translateY(0.05em);
+            margin: 0 -0.07em 0 -0.02em;
+        }
+        .wm .o svg { display: block; width: 100%; height: 100%; }
+
+        /* Section labels */
+        .side-section {
+            font-family: 'Manrope', sans-serif;
+            font-weight: 600;
+            font-size: 10px;
+            letter-spacing: 0.22em;
+            text-transform: uppercase;
+            color: rgba(242,232,212,0.38);
+            padding: 14px 12px 5px;
+        }
+
+        /* Nav links */
+        .sidebar-nav a,
+        .sidebar-nav .nav-group-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 12px;
+            border-radius: var(--r-md);
+            color: rgba(242,232,212,0.72);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 13.5px;
+            margin-bottom: 1px;
+            transition: background 0.15s, color 0.15s;
+            position: relative;
+        }
+        .sidebar-nav a:hover,
+        .sidebar-nav .nav-group-toggle:hover {
+            background: rgba(242,232,212,0.07);
+            color: #F2E8D4;
+        }
+        .sidebar-nav a.active {
+            background: rgba(232,115,42,0.16);
+            color: #F2E8D4;
+            font-weight: 600;
+        }
+        .sidebar-nav a.active::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 20%; bottom: 20%;
+            width: 3px;
+            border-radius: 0 3px 3px 0;
+            background: var(--accent);
+        }
+        .sidebar-nav a i { font-size: 16px; width: 18px; text-align: center; opacity: 0.8; }
+        .sidebar-nav a.active i { opacity: 1; }
+        .sidebar-nav .badge-count {
+            margin-left: auto;
+            font-size: 11px; font-weight: 600;
+            background: rgba(242,232,212,0.10);
+            padding: 1px 7px; border-radius: 100px;
+            color: #F2E8D4;
+        }
+        .sidebar-nav a.active .badge-count {
+            background: var(--accent);
+            color: #0E1B2E;
+        }
+
+        /* Expandable groups */
+        .sidebar-nav .nav-group { margin-bottom: 1px; }
+        .sidebar-nav .nav-group-toggle {
+            width: 100%; border: 0; background: transparent;
+            cursor: pointer; text-align: left;
+        }
         .sidebar-nav .nav-group-toggle .chevron {
-            margin-left: auto; font-size: 12px; transition: transform 0.2s;
+            margin-left: auto; font-size: 11px; transition: transform 0.2s;
         }
         .sidebar-nav .nav-group.open .nav-group-toggle .chevron { transform: rotate(180deg); }
-        .sidebar-nav .nav-group.has-active .nav-group-toggle { color: rgba(255,255,255,0.9); }
-        .sidebar-nav .nav-group-items {
-            max-height: 0; overflow: hidden; transition: max-height 0.25s ease;
-        }
+        .sidebar-nav .nav-group.has-active .nav-group-toggle { color: rgba(242,232,212,0.9); }
+        .sidebar-nav .nav-group-items { max-height: 0; overflow: hidden; transition: max-height 0.25s ease; }
         .sidebar-nav .nav-group.open .nav-group-items { max-height: 500px; }
-        .sidebar-nav .nav-group-items a {
-            padding-left: 38px; font-size: 12.5px;
+        .sidebar-nav .nav-group-items a { padding-left: 36px; font-size: 13px; }
+        .sidebar-nav .nav-group-items a i { font-size: 14px; }
+
+        .sidebar-footer { margin-top: auto; padding: 12px 10px 0; border-top: 1px solid rgba(242,232,212,0.08); color: rgba(242,232,212,0.25); font-size: 10px; text-align: center; }
+
+        /* ── Main column ──────────────────────────────────────────── */
+        .main-col { display: flex; flex-direction: column; min-width: 0; }
+
+        /* ── Topbar ───────────────────────────────────────────────── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 32px;
+            border-bottom: 1px solid var(--hairline);
+            background: var(--bg-app);
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
-        .sidebar-nav .nav-group-items a i {
-            font-size: 14px;
+        .crumbs {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; color: var(--text-muted);
         }
-        .sidebar-footer { padding: 12px 16px; color: rgba(255,255,255,0.2); font-size: 10px; text-align: center; }
-        .main { margin-left: 250px; padding: 28px 36px; min-height: 100vh; }
+        .crumbs .sep { opacity: 0.4; }
+        .crumbs .here { color: var(--ink); font-weight: 600; }
+        .topbar-spacer { flex: 1; }
+        .topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+        /* ── Main content ─────────────────────────────────────────── */
+        .main { padding: 28px 32px 64px; }
+
+        /* ── Page header (legado — ainda funciona) ────────────────── */
         .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-        .page-header h1 { font-size: 24px; font-weight: 800; color: var(--db); margin: 0; }
-        .card { border: none; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.03); }
+        .page-header h1 { font-size: 28px; font-weight: 800; color: var(--ink); margin: 0; letter-spacing: -0.02em; }
+
+        /* ── Cards ────────────────────────────────────────────────── */
+        .card { border: 1px solid var(--hairline); border-radius: var(--r-lg); box-shadow: var(--shadow-card); background: var(--bg-card); }
+        .card-head { padding: 16px 20px; border-bottom: 1px solid var(--hairline); display: flex; align-items: center; justify-content: space-between; }
+        .card-head h3 { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 15px; margin: 0; }
+        .card-body { padding: 20px; }
         .stat-card { padding: 22px; }
         .stat-card .stat-icon { width: 44px; height: 44px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 14px; }
-        .stat-card .stat-value { font-size: 26px; font-weight: 800; color: var(--db); line-height: 1.1; }
-        .stat-card .stat-label { font-size: 12px; color: #999; font-weight: 500; margin-top: 4px; }
+        .stat-card .stat-value { font-size: 26px; font-weight: 800; color: var(--ink); line-height: 1.1; }
+        .stat-card .stat-label { font-size: 12px; color: var(--muted); font-weight: 500; margin-top: 4px; }
+
+        /* ── KPI cards ────────────────────────────────────────────── */
+        .kpi {
+            background: var(--bg-card);
+            border: 1px solid var(--hairline);
+            border-radius: var(--r-lg);
+            padding: 20px;
+            display: flex; flex-direction: column; gap: 6px;
+            position: relative; overflow: hidden;
+            min-height: 130px;
+        }
+        .kpi-label { font-size: 10px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-muted); }
+        .kpi-value { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 36px; letter-spacing: -0.03em; line-height: 1; margin-top: 2px; }
+        .kpi-unit { font-size: 15px; font-weight: 500; color: var(--text-muted); margin-left: 3px; }
+        .kpi-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; margin-top: auto; }
+        .kpi-delta.up { color: #1F6B3C; }
+        .kpi-delta.down { color: #B42828; }
+        .kpi.accent { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+        .kpi.accent .kpi-label { color: rgba(242,232,212,0.60); }
+        .kpi.accent .kpi-value { color: var(--paper); }
+        .kpi.accent .kpi-delta.up { color: var(--accent-soft); }
+
+        /* ── Pills / status ───────────────────────────────────────── */
+        .pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px;
+            border-radius: 100px;
+            font-size: 11px; font-weight: 600;
+            background: var(--bg-soft);
+            color: var(--ink);
+            border: 1px solid var(--hairline);
+            white-space: nowrap;
+        }
+        .pill .dot { width: 6px; height: 6px; border-radius: 100px; background: var(--muted); }
+        .pill.success { background: rgba(45,140,80,0.10); color: #1F6B3C; border-color: rgba(45,140,80,0.20); }
+        .pill.success .dot { background: #2D8C50; }
+        .pill.warning { background: rgba(232,115,42,0.10); color: var(--accent-deep); border-color: rgba(232,115,42,0.22); }
+        .pill.warning .dot { background: var(--accent); }
+        .pill.danger { background: rgba(180,40,40,0.08); color: #B42828; border-color: rgba(180,40,40,0.18); }
+        .pill.danger .dot { background: #B42828; }
+        .pill.info { background: rgba(42,61,90,0.08); color: var(--ink-soft); border-color: rgba(42,61,90,0.15); }
+        .pill.info .dot { background: var(--ink-soft); }
+
+        /* ── Eyebrow ─────────────────────────────────────────────── */
+        .eyebrow {
+            font-family: 'Manrope', sans-serif;
+            font-weight: 600; font-size: 10px;
+            text-transform: uppercase; letter-spacing: 0.22em;
+            color: var(--text-muted);
+        }
+
+        /* ── Buttons ─────────────────────────────────────────────── */
+        .btn-cta { background: var(--accent); color: var(--ink); border: none; font-weight: 700; border-radius: var(--r-md); padding: 9px 20px; transition: all 0.15s; font-family: 'Sora', sans-serif; }
+        .btn-cta:hover { background: var(--accent-deep); color: var(--paper); }
+        .btn-db  { background: var(--ink); color: white; border: none; font-weight: 600; border-radius: var(--r-md); padding: 9px 20px; font-family: 'Sora', sans-serif; }
+        .btn-db:hover  { background: var(--ink-soft); color: white; }
+        .btn-outline { background: var(--bg-card); color: var(--ink); border: 1px solid var(--hairline-strong); border-radius: var(--r-md); padding: 8px 16px; font-weight: 600; }
+        .btn-outline:hover { background: var(--bg-soft); }
+
+        /* ── Tables ───────────────────────────────────────────────── */
         .table { font-size: 13px; }
-        .table th { font-weight: 600; color: var(--sl); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #e9ecef; }
+        .table th { font-weight: 600; color: var(--ink-soft); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--hairline); background: var(--bg-soft); }
         .table td { vertical-align: middle; padding: 12px 10px; }
-        .btn-cta { background: var(--or); color: var(--db); border: none; font-weight: 700; border-radius: 10px; padding: 10px 22px; transition: all 0.2s; }
-        .btn-cta:hover { background: var(--or2); color: var(--db); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(245,166,35,0.3); }
-        .btn-db { background: var(--db); color: white; border: none; font-weight: 600; border-radius: 10px; padding: 10px 22px; }
-        .btn-db:hover { background: #0f1d35; color: white; }
-        .upload-area { border: 2px dashed #d0d5dd; border-radius: 16px; padding: 50px 30px; text-align: center; transition: all 0.3s; cursor: pointer; background: white; }
-        .upload-area:hover, .upload-area.drag-over { border-color: var(--or); background: var(--orl); }
-        .upload-area i { font-size: 44px; color: var(--or); }
-        .badge-pago { background: #dcfce7; color: #166534; font-weight: 600; }
+
+        /* ── Forms ────────────────────────────────────────────────── */
+        .form-control:focus, .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,115,42,0.12); }
+        .form-label { font-weight: 600; font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.3px; }
+
+        /* ── Alerts ───────────────────────────────────────────────── */
+        .alert { border-radius: var(--r-md); border: none; font-weight: 500; font-size: 14px; }
+
+        /* ── Upload area ──────────────────────────────────────────── */
+        .upload-area { border: 2px dashed var(--hairline-strong); border-radius: var(--r-lg); padding: 50px 30px; text-align: center; transition: all 0.3s; cursor: pointer; background: var(--bg-card); }
+        .upload-area:hover, .upload-area.drag-over { border-color: var(--accent); background: rgba(232,115,42,0.04); }
+        .upload-area i { font-size: 44px; color: var(--accent); }
+
+        /* ── Badges ───────────────────────────────────────────────── */
+        .badge-pago    { background: #dcfce7; color: #166534; font-weight: 600; }
         .badge-pendente { background: #fef9c3; color: #854d0e; font-weight: 600; }
-        .form-control:focus, .form-select:focus { border-color: var(--or); box-shadow: 0 0 0 3px rgba(245,166,35,0.12); }
-        .form-label { font-weight: 600; font-size: 12px; color: var(--sl); text-transform: uppercase; letter-spacing: 0.3px; }
-        .alert { border-radius: 12px; border: none; font-weight: 500; font-size: 14px; }
+
+        /* ── Mono util ────────────────────────────────────────────── */
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* ── Scrollbar ────────────────────────────────────────────── */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(14,27,46,0.15); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+        ::-webkit-scrollbar-thumb:hover { background-color: rgba(14,27,46,0.25); background-clip: content-box; }
     </style>
+    {% block head %}{% endblock %}
 </head>
 <body>
-<div class="sidebar">
-    <div class="sidebar-logo">
-        <img src="/logo/logo_white_v_colored.png" alt="SoLev Energia" onerror="this.outerHTML='<div style=&quot;color:white;font-size:22px;font-weight:800&quot;>SoLe<span style=&quot;color:#f5a623&quot;>V</span></div>'">
-        <div class="slogan">O sol gera. A SoLev reduz.</div>
+<div class="app-shell">
+
+<!-- ── Sidebar ─────────────────────────────────────────────── -->
+<aside class="sidebar">
+    <div class="sidebar-brand">
+        <span class="wm">
+            <span class="b">s</span>
+            <span class="o">
+                <svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="50" fill="#F2E8D4"/>
+                    <circle cx="50" cy="50" r="33" fill="#E8732A"/>
+                </svg>
+            </span>
+            <span class="b">l</span>
+            <span class="l">e</span>
+            <span class="l">v</span>
+        </span>
     </div>
+
     {% set ep = request.endpoint or '' %}
     {% set in_cadastros = (
         ('cliente' in ep and 'importar' not in ep) or
@@ -98,80 +346,97 @@
         'investidor' in ep
     ) %}
     {% set in_gerar = ep in ['gerar', 'gerar_auto', 'gerar_manual', 'gerar_lote'] %}
+
     <nav class="sidebar-nav">
+        <div class="side-section">Trabalho</div>
         <a href="/" class="{% if ep == 'dashboard' %}active{% endif %}"><i class="bi bi-grid-1x2-fill"></i> Painel</a>
 
-        {# ── Grupo: Cadastros ───────────────────────── #}
         <div class="nav-group {% if in_cadastros %}open has-active{% endif %}">
             <button type="button" class="nav-group-toggle" onclick="this.parentElement.classList.toggle('open')">
                 <i class="bi bi-folder-fill"></i> Cadastros
                 <i class="bi bi-chevron-down chevron"></i>
             </button>
             <div class="nav-group-items">
-                <a href="/clientes" class="{% if 'cliente' in ep and 'importar' not in ep %}active{% endif %}"><i class="bi bi-people-fill"></i> Clientes</a>
-                <a href="/importar" class="{% if 'importar' in ep %}active{% endif %}"><i class="bi bi-cloud-arrow-up-fill"></i> Importar</a>
-                <a href="/usinas" class="{% if 'usina' in ep and ep != 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-sun-fill"></i> Usinas</a>
-                <a href="/donos" class="{% if 'dono' in ep %}active{% endif %}"><i class="bi bi-person-fill-check"></i> Donos</a>
-                <a href="/titulares" class="{% if 'titular' in ep %}active{% endif %}"><i class="bi bi-person-badge-fill"></i> Titulares UC</a>
+                <a href="/clientes"    class="{% if 'cliente' in ep and 'importar' not in ep %}active{% endif %}"><i class="bi bi-people-fill"></i> Clientes</a>
+                <a href="/importar"    class="{% if 'importar' in ep %}active{% endif %}"><i class="bi bi-cloud-arrow-up-fill"></i> Importar</a>
+                <a href="/usinas"      class="{% if 'usina' in ep and ep != 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-sun-fill"></i> Usinas</a>
+                <a href="/donos"       class="{% if 'dono' in ep %}active{% endif %}"><i class="bi bi-person-fill-check"></i> Donos</a>
+                <a href="/titulares"   class="{% if 'titular' in ep %}active{% endif %}"><i class="bi bi-person-badge-fill"></i> Titulares UC</a>
                 <a href="/recebedores" class="{% if 'recebedor' in ep %}active{% endif %}"><i class="bi bi-qr-code"></i> Recebedores PIX</a>
-                <a href="/investidor" class="{% if 'investidor' in ep %}active{% endif %}"><i class="bi bi-briefcase-fill"></i> Investidores</a>
+                <a href="/investidor"  class="{% if 'investidor' in ep %}active{% endif %}"><i class="bi bi-briefcase-fill"></i> Investidores</a>
             </div>
         </div>
 
-        <a href="/rateio" class="{% if ep == 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-pie-chart-fill"></i> Rateio</a>
-        <a href="/conciliacao" class="{% if 'conciliacao' in ep %}active{% endif %}"><i class="bi bi-clipboard-check-fill"></i> Conciliação</a>
-        <a href="/tarifas" class="{% if 'tarifa' in ep %}active{% endif %}"><i class="bi bi-tag-fill"></i> Tarifas</a>
+        <a href="/rateio"       class="{% if ep == 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-pie-chart-fill"></i> Rateio</a>
+        <a href="/conciliacao"  class="{% if 'conciliacao' in ep %}active{% endif %}"><i class="bi bi-clipboard-check-fill"></i> Conciliacao</a>
+        <a href="/tarifas"      class="{% if 'tarifa' in ep %}active{% endif %}"><i class="bi bi-tag-fill"></i> Tarifas</a>
 
-        {# ── Grupo: Gerar Cobrança ───────────────────── #}
         <div class="nav-group {% if in_gerar %}open has-active{% endif %}">
             <button type="button" class="nav-group-toggle" onclick="this.parentElement.classList.toggle('open')">
                 <i class="bi bi-lightning-charge-fill"></i> Gerar Cobrança
                 <i class="bi bi-chevron-down chevron"></i>
             </button>
             <div class="nav-group-items">
-                <a href="/gerar/auto" class="{% if ep == 'gerar_auto' %}active{% endif %}"><i class="bi bi-lightning-charge-fill"></i> Automático</a>
-                <a href="/gerar" class="{% if ep == 'gerar' %}active{% endif %}"><i class="bi bi-file-earmark-pdf-fill"></i> Via Fatura Equatorial</a>
+                <a href="/gerar/auto"  class="{% if ep == 'gerar_auto' %}active{% endif %}"><i class="bi bi-lightning-charge-fill"></i> Automatico</a>
+                <a href="/gerar"       class="{% if ep == 'gerar' %}active{% endif %}"><i class="bi bi-file-earmark-pdf-fill"></i> Via Fatura Equatorial</a>
                 <a href="/gerar/manual" class="{% if ep == 'gerar_manual' %}active{% endif %}"><i class="bi bi-pencil-square"></i> Manual</a>
-                <a href="/lote" class="{% if ep == 'gerar_lote' %}active{% endif %}"><i class="bi bi-files"></i> Em Lote</a>
+                <a href="/lote"        class="{% if ep == 'gerar_lote' %}active{% endif %}"><i class="bi bi-files"></i> Em Lote</a>
             </div>
         </div>
 
-        <div class="nav-divider"></div>
-        <a href="/pagamento" class="{% if ep == 'pagamento' %}active{% endif %}"><i class="bi bi-cash-coin"></i> Pagamentos</a>
-        <a href="/faturas" class="{% if ep == 'faturas' %}active{% endif %}"><i class="bi bi-receipt"></i> Faturas</a>
-        <a href="/relatorio" class="{% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-bar-chart-line-fill"></i> Relatórios</a>
-        <div class="nav-divider"></div>
-        <a href="/simulador" class="{% if ep == 'simulador' %}active{% endif %}"><i class="bi bi-calculator-fill"></i> Simulador</a>
+        <div class="side-section">Analise</div>
+        <a href="/pagamento"   class="{% if ep == 'pagamento' %}active{% endif %}"><i class="bi bi-cash-coin"></i> Pagamentos</a>
+        <a href="/faturas"     class="{% if ep == 'faturas' %}active{% endif %}"><i class="bi bi-receipt"></i> Faturas</a>
+        <a href="/relatorio"   class="{% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-bar-chart-line-fill"></i> Relatorios</a>
+        <a href="/simulador"   class="{% if ep == 'simulador' %}active{% endif %}"><i class="bi bi-calculator-fill"></i> Simulador</a>
+
+        <div class="side-section">Config</div>
         <a href="/whatsapp/config" class="{% if 'whatsapp' in ep %}active{% endif %}"><i class="bi bi-whatsapp"></i> WhatsApp</a>
-        <a href="/sync" class="{% if 'sync' in ep %}active{% endif %}"><i class="bi bi-cloud-check-fill"></i> Supabase</a>
-        <div class="nav-divider"></div>
-        <a href="/contrato" class="{% if 'contrato' in ep %}active{% endif %}"><i class="bi bi-file-earmark-text-fill"></i> Gerar Contrato</a>
+        <a href="/sync"        class="{% if 'sync' in ep %}active{% endif %}"><i class="bi bi-cloud-check-fill"></i> Supabase</a>
+        <a href="/contrato"    class="{% if 'contrato' in ep %}active{% endif %}"><i class="bi bi-file-earmark-text-fill"></i> Contratos</a>
     </nav>
-    <div class="sidebar-footer">SoLev Energia © 2026 — v1.0</div>
-</div>
-<div class="main">
+
+    <div class="sidebar-footer">SoLev Energia &copy; 2026 &mdash; v1.0</div>
+</aside>
+
+<!-- ── Main column ─────────────────────────────────────────── -->
+<div class="main-col">
+    <!-- Topbar -->
+    <header class="topbar">
+        <div class="crumbs">
+            {% block topbar_breadcrumb %}<span class="here">Painel</span>{% endblock %}
+        </div>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-actions">
+            {% block topbar_actions %}{% endblock %}
+        </div>
+    </header>
+
+    <!-- Flash messages -->
+    <div style="padding: 12px 32px 0;">
     {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat, msg in messages %}
     <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">{{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>
     {% endfor %}{% endif %}{% endwith %}
-    {% block content %}{% endblock %}
+    </div>
+
+    <!-- Page content -->
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
 </div>
+
+</div>{# /app-shell #}
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
 
-    // ── Utilitário: aplica função em todos os campos com esses nomes ──────────
     function porNome(nomes, fn){
         nomes.forEach(function(n){
             document.querySelectorAll('input[name="'+n+'"]').forEach(fn);
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  DUPLO-CLIQUE seleciona TUDO  (single-click NÃO seleciona — preserva caret)
-    //  Ao restaurar foco programaticamente (_restaurar abaixo), o caret é
-    //  preservado exatamente onde estava — sem seleção automática que apagaria
-    //  o conteúdo na próxima tecla.
-    // ═══════════════════════════════════════════════════════════════════════════
     document.addEventListener('dblclick', function(e){
         var el = e.target;
         if(!el || !el.tagName) return;
@@ -181,9 +446,6 @@ document.addEventListener('DOMContentLoaded', function(){
         try{ el.select(); }catch(_){}
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  MÁSCARA DATA  dd/mm/aaaa
-    // ═══════════════════════════════════════════════════════════════════════════
     function maskData(){ var v=this.value.replace(/\D/g,''); if(v.length>2)v=v.slice(0,2)+'/'+v.slice(2); if(v.length>5)v=v.slice(0,5)+'/'+v.slice(5); if(v.length>10)v=v.slice(0,10); this.value=v; }
     porNome(['data','data_pagamento','data_pagamento_anterior','venc_contalev_anterior',
              'anterior_leitura','data_leitura','proxima_leitura','vencimento_contalev',
@@ -192,17 +454,11 @@ document.addEventListener('DOMContentLoaded', function(){
              'investidor_dia_pagamento'],
         function(el){ el.setAttribute('inputmode','numeric'); if(!el.placeholder)el.placeholder='dd/mm/aaaa'; el.addEventListener('input',maskData); });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  MÁSCARA MÊS/ANO  mm/aaaa
-    // ═══════════════════════════════════════════════════════════════════════════
     porNome(['mes_referencia'],function(el){
         el.setAttribute('inputmode','numeric'); if(!el.placeholder)el.placeholder='mm/aaaa';
         el.addEventListener('input',function(){ var v=this.value.replace(/\D/g,''); if(v.length>2)v=v.slice(0,2)+'/'+v.slice(2); if(v.length>7)v=v.slice(0,7); this.value=v; });
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  MÁSCARA CPF  xxx.xxx.xxx-xx  /  CNPJ  xx.xxx.xxx/xxxx-xx
-    // ═══════════════════════════════════════════════════════════════════════════
     function maskCpfCnpj(){ var v=this.value.replace(/\D/g,'');
         if(v.length<=11){
             if(v.length>3)  v=v.slice(0,3)+'.'+v.slice(3);
@@ -222,9 +478,6 @@ document.addEventListener('DOMContentLoaded', function(){
              'investidor_cpf_cnpj','desc_cpf_cnpj','desc_dono_cpf_cnpj','inv_desc_cpf_cnpj'],
         function(el){ el.setAttribute('inputmode','numeric'); el.addEventListener('input',maskCpfCnpj); });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  MÁSCARA TELEFONE  (xx) xxxxx-xxxx  /  (xx) xxxx-xxxx
-    // ═══════════════════════════════════════════════════════════════════════════
     function maskTel(){ var v=this.value.replace(/\D/g,'');
         if(v.length>11) v=v.slice(0,11);
         var ddd=v.slice(0,2), num=v.slice(2);
@@ -237,9 +490,6 @@ document.addEventListener('DOMContentLoaded', function(){
              'desc_telefone','desc_telefone_titular','desc_dono_telefone','desc_telefone_pdf'],
         function(el){ el.setAttribute('inputmode','tel'); el.addEventListener('input',maskTel); });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  MÁSCARA CEP  xx.xxx-xxx
-    // ═══════════════════════════════════════════════════════════════════════════
     function maskCep(){ var v=this.value.replace(/\D/g,'');
         if(v.length>8) v=v.slice(0,8);
         if(v.length>5)      this.value=v.slice(0,2)+'.'+v.slice(2,5)+'-'+v.slice(5);
@@ -251,9 +501,6 @@ document.addEventListener('DOMContentLoaded', function(){
         el.addEventListener('input',maskCep);
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  MÁSCARA UC NOVA  xxxx.xxx.xxx.xxx-xx  (15 dígitos) — preserva caret
-    // ═══════════════════════════════════════════════════════════════════════════
     function _fmtUcNova(d){
         if(d.length<=4)  return d;
         if(d.length<=7)  return d.slice(0,4)+'.'+d.slice(4);
@@ -264,8 +511,6 @@ document.addEventListener('DOMContentLoaded', function(){
     function maskUcNova(){
         var raw = this.value;
         var digits = raw.replace(/\D/g,'').slice(0,15);
-        // Auto-formata se já tem pontuação OU se já passou de 8 dígitos (UC antiga é até 11; mas
-        // se chegou aqui via campo nomeado cod_uc/uc_nova/etc, o usuário quer o formato novo)
         var alvo = _fmtUcNova(digits);
         if(alvo === raw) return;
         var oldCaret = (typeof this.selectionStart==='number') ? this.selectionStart : raw.length;
@@ -279,46 +524,25 @@ document.addEventListener('DOMContentLoaded', function(){
         }
         try{ this.setSelectionRange(newCaret,newCaret); }catch(e){}
     }
-    // Variante "inteligente" para campos de BUSCA que aceitam nome/UC antiga/UC nova:
-    // se contém LETRAS, é busca por nome — não mexe.
-    // Se contém só dígitos/pontuação, formata como UC nova já no primeiro separador
-    // (xxxx.xxx.xxx.xxx-xx). O backend normaliza pontuação na busca, então UC antiga
-    // segue funcionando mesmo formatada.
     function maskUcNovaSmart(){
         if(/[A-Za-z]/.test(this.value)) return;
         return maskUcNova.call(this);
     }
-    // Bind por nome (compat) → SEMPRE formata (campos cadastro)
-    porNome(['cod_uc','uc_nova','cod_uc_geradora','cod_uc_alternativa'],function(el){
+    porNome(['cod_uc','uc_nova','cod_uc_geradora','cod_uc'],function(el){
         el.setAttribute('inputmode','numeric'); el.addEventListener('input',maskUcNova);
     });
-    // Bind por atributo data-format="uc-nova" → versão inteligente
     document.querySelectorAll('[data-format="uc-nova"]').forEach(function(el){
         if(el._ucMaskBound) return; el._ucMaskBound = true;
         el.addEventListener('input', maskUcNovaSmart);
         el.addEventListener('paste', function(){ var me=this; setTimeout(function(){ maskUcNovaSmart.call(me); },0); });
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  EMAIL → caixa baixa automática
-    // ═══════════════════════════════════════════════════════════════════════════
     document.querySelectorAll('input[type="email"],input[name*="email"]').forEach(function(el){
         el.addEventListener('input',function(){ var p=this.selectionStart; this.value=this.value.toLowerCase(); this.setSelectionRange(p,p); });
     });
 
-    // ═══════════════════════════════════════════════════════════════════════════
-    //  PERSISTÊNCIA DE FORMULÁRIO  (sessionStorage)
-    //   • Salva valor de TODO input/select/textarea ao digitar — esteja ou não
-    //     dentro de <form>
-    //   • Salva posição do cursor (selectionStart/End) e qual campo estava
-    //     focado para restaurar exatamente onde parou
-    //   • Ao submeter um <form>, limpa apenas os campos daquele form
-    //   • Inputs com data-no-persist="true" são ignorados
-    //   • Convenção do projeto: aplica-se globalmente. Veja
-    //     .claude/skills/form-ux/SKILL.md
-    // ═══════════════════════════════════════════════════════════════════════════
+    /* ── Persistencia de formulario (sessionStorage) ── */
     var STORAGE_KEY = 'solevFormState:'+location.pathname;
-
     function _key(el){ return el.getAttribute('name') || el.id || ''; }
     function _persistivel(el){
         if(!el || !el.tagName) return false;
@@ -331,7 +555,6 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     function _ler(){ try{ return JSON.parse(sessionStorage.getItem(STORAGE_KEY))||{}; }catch(e){ return {}; } }
     function _grav(s){ try{ sessionStorage.setItem(STORAGE_KEY,JSON.stringify(s)); }catch(e){} }
-
     function _snapshot(){
         var s=_ler(); s.fields = s.fields || {};
         document.querySelectorAll('input,textarea,select').forEach(function(el){
@@ -341,7 +564,6 @@ document.addEventListener('DOMContentLoaded', function(){
         });
         _grav(s);
     }
-
     function _restaurar(){
         var s=_ler(); if(!s||!s.fields) return;
         var disparouMascara = false;
@@ -353,72 +575,52 @@ document.addEventListener('DOMContentLoaded', function(){
             if(el.type==='checkbox'||el.type==='radio'){ el.checked = !!v; }
             else if(el.value !== v){ el.value = v; disparouMascara = true; }
         });
-        // Re-aplica máscara UC nova nos campos restaurados
         if(disparouMascara){
-            document.querySelectorAll('input[name="cod_uc"], input[name="uc_nova"], input[name="cod_uc_geradora"], input[name="cod_uc_alternativa"]').forEach(function(el){
+            document.querySelectorAll('input[name="cod_uc"],input[name="uc_nova"],input[name="cod_uc_geradora"]').forEach(function(el){
                 try{ maskUcNova.call(el); }catch(e){}
             });
             document.querySelectorAll('[data-format="uc-nova"]').forEach(function(el){
                 try{ maskUcNovaSmart.call(el); }catch(e){}
             });
         }
-        // Restaura foco e caret
         if(s.focus && s.focus.k){
             var sel=null;
-            try{
-                sel = document.querySelector('[name="'+s.focus.k+'"]')
-                   || document.getElementById(s.focus.k);
-            }catch(e){}
+            try{ sel=document.querySelector('[name="'+s.focus.k+'"]')||document.getElementById(s.focus.k); }catch(e){}
             if(sel){
                 setTimeout(function(){
                     try{
                         sel.focus({preventScroll:true});
-                        if(typeof sel.setSelectionRange==='function' && sel.type !== 'checkbox' && sel.type !== 'radio'){
-                            sel.setSelectionRange(s.focus.start||0, s.focus.end||s.focus.start||0);
-                        }
+                        if(typeof sel.setSelectionRange==='function' && sel.type!=='checkbox'&&sel.type!=='radio')
+                            sel.setSelectionRange(s.focus.start||0,s.focus.end||s.focus.start||0);
                     }catch(e){}
-                }, 60);
+                },60);
             }
         }
     }
-
-    // Listeners globais (delegação no document)
-    document.addEventListener('input', function(e){ if(_persistivel(e.target)) _snapshot(); });
-    document.addEventListener('change',function(e){ if(_persistivel(e.target)) _snapshot(); });
-
-    // Caret/foco
-    document.addEventListener('selectionchange', function(){
-        var el = document.activeElement;
-        if(!_persistivel(el)) return;
-        if(typeof el.selectionStart!=='number') return;
-        var s=_ler();
-        s.focus = { k: _key(el), start: el.selectionStart, end: el.selectionEnd };
-        _grav(s);
+    document.addEventListener('input',  function(e){ if(_persistivel(e.target)) _snapshot(); });
+    document.addEventListener('change', function(e){ if(_persistivel(e.target)) _snapshot(); });
+    document.addEventListener('selectionchange',function(){
+        var el=document.activeElement;
+        if(!_persistivel(el)||typeof el.selectionStart!=='number') return;
+        var s=_ler(); s.focus={k:_key(el),start:el.selectionStart,end:el.selectionEnd}; _grav(s);
     });
-    document.addEventListener('focusin', function(e){
+    document.addEventListener('focusin',function(e){
         var el=e.target; if(!_persistivel(el)) return;
         var s=_ler();
-        s.focus = { k: _key(el),
-                    start: (typeof el.selectionStart==='number')?el.selectionStart:0,
-                    end:   (typeof el.selectionEnd==='number')?el.selectionEnd:0 };
+        s.focus={k:_key(el),start:(typeof el.selectionStart==='number')?el.selectionStart:0,end:(typeof el.selectionEnd==='number')?el.selectionEnd:0};
         _grav(s);
     });
-
-    // Limpa só os campos do form que foi submetido — preserva os demais
-    document.addEventListener('submit', function(e){
+    document.addEventListener('submit',function(e){
         var f=e.target; if(!f||f.tagName!=='FORM') return;
         var s=_ler(); if(!s||!s.fields) return;
         f.querySelectorAll('input,textarea,select').forEach(function(el){
             if(_persistivel(el)){ var k=_key(el); if(k in s.fields) delete s.fields[k]; }
         });
-        if(s.focus && f.querySelector('[name="'+s.focus.k+'"], #'+s.focus.k)) delete s.focus;
-        if(!Object.keys(s.fields).length && !s.focus) sessionStorage.removeItem(STORAGE_KEY);
+        if(s.focus&&f.querySelector('[name="'+s.focus.k+'"],#'+s.focus.k)) delete s.focus;
+        if(!Object.keys(s.fields).length&&!s.focus) sessionStorage.removeItem(STORAGE_KEY);
         else _grav(s);
     });
-
-    // Restauração inicial — após máscaras já estarem ligadas
-    setTimeout(_restaurar, 0);
-
+    setTimeout(_restaurar,0);
 });
 </script>
 {% block scripts %}{% endblock %}
