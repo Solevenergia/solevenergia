@@ -384,7 +384,7 @@ def _html_para_pdf(html_str: str) -> bytes:
 
 
 # ─── Overlay ReportLab para a pagina da Equatorial ───────────────────────────
-def _criar_overlay_pdf() -> bytes:
+def _criar_overlay_pdf(page_w: float = None, page_h: float = None) -> bytes:
     INK    = HexColor("#0E1B2E")
     ACCENT = HexColor("#E8732A")
     PAPER  = HexColor("#F2E8D4")
@@ -392,8 +392,9 @@ def _criar_overlay_pdf() -> bytes:
     MUTED  = HexColor("#888888")
 
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    W, H = A4
+    _ps = (page_w, page_h) if (page_w and page_h) else A4
+    c = canvas.Canvas(buf, pagesize=_ps)
+    W, H = _ps
 
     # Faixa superior — cobre cabecalho Equatorial
     STRIP_H = 20
@@ -602,10 +603,12 @@ def _pagina2(d: dict, path: str):
     if not eq or not os.path.exists(eq):
         return
     from pypdf import PdfReader, PdfWriter
-    overlay_bytes = _criar_overlay_pdf()
+    eq_reader  = PdfReader(eq)
+    eq_page    = eq_reader.pages[0]
+    pw = float(eq_page.mediabox.width)
+    ph = float(eq_page.mediabox.height)
+    overlay_bytes = _criar_overlay_pdf(pw, ph)
     overlay_page  = PdfReader(io.BytesIO(overlay_bytes)).pages[0]
-    eq_reader = PdfReader(eq)
-    eq_page = eq_reader.pages[0]
     eq_page.merge_page(overlay_page)
     writer = PdfWriter()
     writer.add_page(eq_page)
