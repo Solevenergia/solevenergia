@@ -383,6 +383,27 @@ def _html_para_pdf(html_str: str) -> bytes:
             pass
 
 
+# ─── Registro de fonte decorativa para o rodape ──────────────────────────────
+def _registrar_fonte_rodape():
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    import os
+    _base = r"C:\Windows\Fonts"
+    _map = {
+        "Georgia":           os.path.join(_base, "georgia.ttf"),
+        "Georgia-Italic":    os.path.join(_base, "georgiai.ttf"),
+        "Georgia-Bold":      os.path.join(_base, "georgiab.ttf"),
+    }
+    try:
+        registered = pdfmetrics.getRegisteredFontNames()
+        for name, path in _map.items():
+            if name not in registered and os.path.exists(path):
+                pdfmetrics.registerFont(TTFont(name, path))
+        return "Georgia" in pdfmetrics.getRegisteredFontNames()
+    except Exception:
+        return False
+
+
 # ─── Overlay ReportLab para a pagina da Equatorial ───────────────────────────
 def _criar_overlay_pdf(page_w: float = None, page_h: float = None) -> bytes:
     INK    = HexColor("#0E1B2E")
@@ -391,63 +412,116 @@ def _criar_overlay_pdf(page_w: float = None, page_h: float = None) -> bytes:
     WHITE  = HexColor("#FFFFFF")
     MUTED  = HexColor("#888888")
 
+    _geo = _registrar_fonte_rodape()
+    F_TITLE = "Helvetica-Bold"
+    F_SUB   = "Georgia"        if _geo else "Times-Roman"
+    F_VERSE = "Georgia-Italic" if _geo else "Times-Italic"
+
     buf = io.BytesIO()
     _ps = (page_w, page_h) if (page_w and page_h) else A4
     c = canvas.Canvas(buf, pagesize=_ps)
     W, H = _ps
 
-    # Faixa superior — cobre cabecalho Equatorial
-    STRIP_H = 20
+    # ── Faixa superior: wordmark + label direita ──────────────────────────────
+    STRIP_H = 10 * mm
     c.setFillColor(INK)
     c.rect(0, H - STRIP_H, W, STRIP_H, fill=1, stroke=0)
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", 8)
-    c.drawString(12 * mm, H - STRIP_H + 7, "solev")
-    lw_s = c.stringWidth("solev", "Helvetica-Bold", 8)
-    c.setFont("Helvetica", 8)
-    c.drawString(12 * mm + lw_s + 4, H - STRIP_H + 7,
-                 "  ·  Fatura Equatorial GO  ·  Anexo")
 
-    # Area inferior — cobre boleto (~95 mm)
-    COVER_H = 95 * mm
+    MID_Y = H - STRIP_H / 2
+    SX    = 12 * mm
+    FS_WM = 12
+
+    c.setFillColor(WHITE)
+    c.setFont("Helvetica-Bold", FS_WM)
+    s_w = c.stringWidth("s", "Helvetica-Bold", FS_WM)
+    c.drawString(SX, MID_Y - FS_WM * 0.35, "s")
+
+    o_cx = SX + s_w + FS_WM * 0.25
+    o_cy = MID_Y - FS_WM * 0.05
+    OR   = FS_WM * 0.42
+    IR   = OR * 0.58
+    c.setFillColor(WHITE);  c.circle(o_cx, o_cy, OR, fill=1, stroke=0)
+    c.setFillColor(ACCENT); c.circle(o_cx, o_cy, IR, fill=1, stroke=0)
+
+    lx = o_cx + OR + FS_WM * 0.08
+    c.setFillColor(WHITE)
+    c.setFont("Helvetica-Bold", FS_WM)
+    l_w = c.stringWidth("l", "Helvetica-Bold", FS_WM)
+    c.drawString(lx, MID_Y - FS_WM * 0.35, "l")
+    c.setFont("Helvetica", FS_WM)
+    c.drawString(lx + l_w, MID_Y - FS_WM * 0.35, "ev")
+
+    c.setFillColor(ACCENT)
+    c.setFont("Helvetica", 7)
+    right_txt = "FATURA  EQUATORIAL  GO    ·    ANEXO"
+    rw = c.stringWidth(right_txt, "Helvetica", 7)
+    c.drawString(W - 12 * mm - rw, MID_Y - 2.5, right_txt)
+
+    # ── Area inferior ─────────────────────────────────────────────────────────
+    COVER_H = 115 * mm
     c.setFillColor(PAPER)
     c.rect(0, 0, W, COVER_H, fill=1, stroke=0)
-
-    # Linha laranja no topo da area coberta
     c.setFillColor(ACCENT)
-    c.rect(0, COVER_H, W, 1.2 * mm, fill=1, stroke=0)
+    c.rect(0, COVER_H, W, 1.5 * mm, fill=1, stroke=0)
 
-    CX = W / 2
+    # ── Simbolo SoLev + bloco "Obrigado" (grupo centralizado) ────────────────
+    SYM_R  = 15 * mm
+    GAP    = 9 * mm
+    SYM_CY = COVER_H - 30 * mm
 
-    # Titulo
+    OBR_TXT = "Obrigado pela sua confiança!"
+    OBR_FS  = 22
+    SUB1    = "É um prazer cuidar da sua energia e da sua economia."
+    SUB2    = "Que o sol continue iluminando os seus dias."
+    SUB_FS  = 11.5
+
+    c.setFont(F_TITLE, OBR_FS)
+    obr_w  = c.stringWidth(OBR_TXT, F_TITLE, OBR_FS)
+    c.setFont(F_SUB, SUB_FS)
+    sub1_w = c.stringWidth(SUB1, F_SUB, SUB_FS)
+    sub2_w = c.stringWidth(SUB2, F_SUB, SUB_FS)
+    TEXT_W  = max(obr_w, sub1_w, sub2_w)
+
+    GROUP_W   = 2 * SYM_R + GAP + TEXT_W
+    GROUP_X   = (W - GROUP_W) / 2
+    SYM_CX    = GROUP_X + SYM_R
+    TEXT_LEFT = GROUP_X + 2 * SYM_R + GAP
+
+    c.setFillColor(INK);    c.circle(SYM_CX, SYM_CY, SYM_R, fill=1, stroke=0)
+    c.setFillColor(ACCENT); c.circle(SYM_CX, SYM_CY, SYM_R * 0.58, fill=1, stroke=0)
+
     c.setFillColor(INK)
-    c.setFont("Helvetica-Bold", 15)
-    c.drawCentredString(CX, COVER_H - 16 * mm, "Obrigado pela sua confianca!")
+    c.setFont(F_TITLE, OBR_FS)
+    c.drawString(TEXT_LEFT, SYM_CY + 6 * mm, OBR_TXT)
+    c.setFont(F_SUB, SUB_FS)
+    c.drawString(TEXT_LEFT, SYM_CY - 2 * mm, SUB1)
+    c.drawString(TEXT_LEFT, SYM_CY - 9 * mm, SUB2)
 
-    # Subtitulo
-    c.setFont("Helvetica", 9)
-    c.drawCentredString(CX, COVER_H - 22 * mm,
-                        "E um prazer cuidar da sua energia e da sua economia.")
-    c.drawCentredString(CX, COVER_H - 26 * mm,
-                        "Que o sol continue iluminando os seus dias.")
-
-    # Separador laranja
+    # ── Separador e versiculo ─────────────────────────────────────────────────
+    CX    = W / 2
+    SEP_Y = COVER_H - 62 * mm
     c.setStrokeColor(ACCENT)
     c.setLineWidth(0.4 * mm)
-    c.line(W / 4, COVER_H - 31 * mm, 3 * W / 4, COVER_H - 31 * mm)
+    c.line(20 * mm, SEP_Y, W - 20 * mm, SEP_Y)
 
-    # Versiculo
+    V1 = "\"O amor é paciente, o amor é bondoso."
+    V2 = "Não inveja, não se vangloria, não se orgulha."
+    V3 = "Não maltrata, não procura seus interesses,"
+    V4 = "não se ira facilmente, não guarda rancor.\""
+    REF = "1 Coríntios 13:4-7"
+    FS_V = 10.5
+    LH   = 6.5 * mm
+
     c.setFillColor(ACCENT)
-    c.setFont("Helvetica-BoldOblique", 8.5)
-    c.drawCentredString(CX, COVER_H - 39 * mm,
-                        '"Porque sou eu que conheco os planos que tenho para voces,')
-    c.drawCentredString(CX, COVER_H - 44 * mm,
-                        "planos de prosperidade e nao de calamidade,")
-    c.drawCentredString(CX, COVER_H - 49 * mm,
-                        'planos de dar a voces esperanca e um futuro."')
+    c.setFont(F_VERSE, FS_V)
+    c.drawCentredString(CX, SEP_Y - 9 * mm,        V1)
+    c.drawCentredString(CX, SEP_Y - 9 * mm - LH,   V2)
+    c.drawCentredString(CX, SEP_Y - 9 * mm - 2*LH, V3)
+    c.drawCentredString(CX, SEP_Y - 9 * mm - 3*LH, V4)
+
     c.setFillColor(MUTED)
-    c.setFont("Helvetica", 7)
-    c.drawCentredString(CX, COVER_H - 55 * mm, "Jeremias 29:11")
+    c.setFont(F_VERSE, 9)
+    c.drawCentredString(CX, SEP_Y - 9 * mm - 4*LH - 3*mm, REF)
 
     c.save()
     buf.seek(0)
