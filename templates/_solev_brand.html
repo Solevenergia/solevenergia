@@ -1,0 +1,40 @@
+{#
+  _solev_brand.html — macros canonicos da marca SoLev
+  Uso:
+    {% from '_solev_brand.html' import solev_wordmark, solev_symbol %}
+    {{ solev_wordmark(size=36) }}               — padrao sobre fundo claro
+    {{ solev_wordmark(size=36, on_dark=True) }} — sobre fundo Noite Solev
+    {{ solev_wordmark(size=24, mono=True) }}    — P&B papel timbrado
+    {{ solev_symbol(size=24) }}                 — so o "o"
+#}
+
+{%- macro solev_wordmark(size=36, on_dark=False, mono=False) -%}
+  {#- ink = cor do texto + anel externo do "o" -#}
+  {%- set ink = '#F2E8D4' if on_dark else '#0E1B2E' -%}
+  {#- miolo laranja, ou mesmo ink quando mono (tira o laranja) -#}
+  {%- set miolo = ink if mono else '#E8732A' -%}
+  <span class="solev-wm" style="font-size:{{ size }}px;color:{{ ink }}" aria-label="SoLev Energia">
+    <span class="solev-wm-b">s</span>
+    <span class="solev-wm-o" aria-hidden="true">
+      <svg viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="50" fill="{{ ink }}"/>
+        <circle cx="50" cy="50" r="33" fill="{{ miolo }}"/>
+      </svg>
+    </span>
+    <span class="solev-wm-b">l</span>
+    <span class="solev-wm-l">e</span>
+    <span class="solev-wm-l">v</span>
+  </span>
+{%- endmacro -%}
+
+
+{%- macro solev_symbol(size=36, kind='default') -%}
+  {#- kind: 'default' | 'mono' -#}
+  {%- set miolo = '#0E1B2E' if kind == 'mono' else '#E8732A' -%}
+  <span class="solev-symbol" aria-label="SoLev">
+    <svg viewBox="0 0 100 100" width="{{ size }}" height="{{ size }}">
+      <circle cx="50" cy="50" r="50" fill="#0E1B2E"/>
+      <circle cx="50" cy="50" r="33" fill="{{ miolo }}"/>
+    </svg>
+  </span>
+{%- endmacro -%}

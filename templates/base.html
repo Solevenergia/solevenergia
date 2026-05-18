@@ -1,3 +1,4 @@
+{%- from '_solev_brand.html' import solev_wordmark, solev_symbol -%}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -18,6 +19,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/css/solev-brand.css">
     <style>
         /* ── Tokens ──────────────────────────────────────────────── */
         :root {
@@ -81,31 +83,12 @@
         }
         .sidebar::-webkit-scrollbar { display: none; }
 
-        /* Wordmark */
+        /* Wordmark — estilos em /static/css/solev-brand.css */
         .sidebar-brand {
             padding: 4px 10px 16px;
             border-bottom: 1px solid rgba(242,232,212,0.10);
             margin-bottom: 8px;
         }
-        .wm {
-            font-family: 'Sora', sans-serif;
-            letter-spacing: -0.045em;
-            line-height: 1;
-            display: inline-flex;
-            align-items: baseline;
-            white-space: nowrap;
-            color: #F2E8D4;
-            font-size: 34px;
-        }
-        .wm .b { font-weight: 800; }
-        .wm .l { font-weight: 300; }
-        .wm .o {
-            display: inline-block;
-            width: 0.66em; height: 0.66em;
-            transform: translateY(0.05em);
-            margin: 0 -0.07em 0 -0.02em;
-        }
-        .wm .o svg { display: block; width: 100%; height: 100%; }
 
         /* Section labels */
         .side-section {
@@ -321,18 +304,7 @@
 <!-- ── Sidebar ─────────────────────────────────────────────── -->
 <aside class="sidebar">
     <div class="sidebar-brand">
-        <span class="wm">
-            <span class="b">s</span>
-            <span class="o">
-                <svg viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="50" fill="#F2E8D4"/>
-                    <circle cx="50" cy="50" r="33" fill="#E8732A"/>
-                </svg>
-            </span>
-            <span class="b">l</span>
-            <span class="l">e</span>
-            <span class="l">v</span>
-        </span>
+        {{ solev_wordmark(size=34, on_dark=True) }}
     </div>
 
     {% set ep = request.endpoint or '' %}
