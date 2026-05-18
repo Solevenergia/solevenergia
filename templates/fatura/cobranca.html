@@ -1,0 +1,489 @@
+{% from '_solev_brand.html' import solev_wordmark %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Solev · Fatura {{ fatura.mes_ref }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:           #0E1B2E;
+    --ink-soft:      #2A3D5A;
+    --accent:        #E8732A;
+    --accent-soft:   #F5A867;
+    --accent-deep:   #C25C1C;
+    --paper:         #F2E8D4;
+    --paper-soft:    #F7F1E4;
+    --muted:         rgba(14,27,46,0.55);
+    --text-faint:    rgba(14,27,46,0.40);
+    --hairline:      rgba(14,27,46,0.12);
+    --hairline-strong: rgba(14,27,46,0.22);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; background: #e8e4dc;
+    font-family: 'Manrope', system-ui, sans-serif;
+    color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+  .page {
+    width: 210mm; min-height: 297mm;
+    background: #FFFFFF;
+    margin: 8mm auto;
+    padding: 14mm 14mm 10mm;
+    box-shadow: 0 4px 30px rgba(0,0,0,0.10);
+    display: flex; flex-direction: column;
+    position: relative;
+    page-break-after: always;
+  }
+
+  /* ── Wordmark (macro solev_wordmark) ─────────────────────── */
+  .solev-wm {
+    font-family: 'Sora', sans-serif; letter-spacing: -0.045em; line-height: 1;
+    display: inline-flex; align-items: baseline; white-space: nowrap;
+  }
+  .solev-wm .solev-wm-b { font-weight: 800; }
+  .solev-wm .solev-wm-l { font-weight: 300; }
+  .solev-wm .solev-wm-o {
+    display: inline-block; width: 0.66em; height: 0.66em; position: relative;
+    transform: translateY(0.05em); margin: 0 -0.07em 0 -0.02em;
+  }
+  .solev-wm .solev-wm-o svg { display: block; width: 100%; height: 100%; }
+
+  /* ── Header ──────────────────────────────────────────────── */
+  .header {
+    display: flex; justify-content: space-between; align-items: flex-end;
+    padding-bottom: 5mm;
+    border-bottom: 0.4mm solid var(--accent);
+  }
+  .header .brand-block { display: flex; flex-direction: column; gap: 1.5mm; }
+  .header .solev-wm { font-size: 11mm; }
+  .header .tag {
+    font-family: 'Manrope', sans-serif; font-size: 6.5pt; font-weight: 600;
+    letter-spacing: 0.32em; text-transform: uppercase; opacity: 0.55;
+    display: flex; align-items: center; gap: 2mm;
+  }
+  .header .tag::before {
+    content: ''; width: 5mm; height: 0.3mm;
+    background: var(--accent); display: inline-block;
+  }
+  .header .meta { text-align: right; display: flex; flex-direction: column; gap: 1.5mm; }
+  .header .meta .doc-type {
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: 12pt;
+    letter-spacing: -0.015em;
+  }
+  .header .meta .ref {
+    font-family: 'JetBrains Mono', monospace; font-size: 7pt;
+    opacity: 0.55; letter-spacing: 0.04em;
+  }
+  .header .meta .ref strong { color: var(--ink); opacity: 1; font-weight: 500; }
+  .header .meta .fid {
+    font-family: 'JetBrains Mono', monospace; font-size: 6pt;
+    opacity: 0.30; letter-spacing: 0.06em; text-align: right;
+  }
+
+  /* ── Eyebrow labels ──────────────────────────────────────── */
+  .eyebrow {
+    font-family: 'Manrope', sans-serif; font-weight: 600;
+    font-size: 6.5pt; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink); opacity: 0.55;
+  }
+
+  /* ── Cliente + Leitura grid ──────────────────────────────── */
+  .client-block {
+    display: grid; grid-template-columns: 1.4fr 1fr;
+    gap: 7mm; padding: 5mm 0 0;
+  }
+  .client-block .col { display: flex; flex-direction: column; gap: 2mm; }
+  .client-block .name {
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: 12pt;
+    letter-spacing: -0.02em; line-height: 1.1;
+  }
+  .client-block dl {
+    margin: 0; display: grid; grid-template-columns: auto 1fr;
+    column-gap: 3.5mm; row-gap: 0.8mm;
+    font-size: 8pt; line-height: 1.4;
+  }
+  .client-block dt { color: var(--muted); font-weight: 500; }
+  .client-block dd { margin: 0; font-weight: 500; }
+  .client-block dd.mono { font-family: 'JetBrains Mono', monospace; font-size: 7.5pt; }
+
+  /* ── Comparativo ─────────────────────────────────────────── */
+  .compare {
+    margin-top: 6mm;
+    display: grid; grid-template-columns: 1fr 1fr;
+    border-radius: 2.5mm; overflow: hidden;
+    border: 0.3mm solid var(--hairline);
+  }
+  .compare > .side {
+    padding: 5mm 5mm 4mm;
+    display: flex; flex-direction: column; gap: 2.5mm;
+    position: relative;
+  }
+  .compare .sem {
+    background: var(--paper-soft);
+    border-right: 0.3mm solid var(--hairline);
+  }
+  .compare .com { background: var(--ink); color: var(--paper); }
+  .compare .side-head {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .compare .side-head .label {
+    font-family: 'Manrope', sans-serif; font-weight: 700;
+    font-size: 7.5pt; letter-spacing: 0.24em; text-transform: uppercase;
+  }
+  .compare .sem .side-head .label { color: var(--ink); opacity: 0.5; }
+  .compare .com .side-head .label { color: var(--accent-soft); }
+  .compare .badge {
+    background: var(--accent); color: var(--ink);
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: 7.5pt;
+    padding: 0.7mm 2mm; border-radius: 100px; letter-spacing: -0.005em;
+  }
+  .compare .rows { display: flex; flex-direction: column; gap: 1mm; }
+  .compare .row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 8.5pt; line-height: 1.35; padding: 0.5mm 0;
+  }
+  .compare .row .k { color: var(--muted); font-weight: 500; }
+  .compare .row .v { font-family: 'JetBrains Mono', monospace; font-weight: 500; font-size: 8.5pt; }
+  .compare .com .row .k { color: rgba(242,232,212,0.65); }
+  .compare .com .row .v { color: var(--paper); }
+  .compare hr { border: 0; height: 0.2mm; background: var(--hairline); margin: 0.5mm 0; }
+  .compare .com hr { background: rgba(242,232,212,0.15); }
+  .compare .total-row {
+    margin-top: auto; padding-top: 3.5mm;
+    border-top: 0.3mm dashed var(--hairline);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .compare .com .total-row { border-top-color: rgba(242,232,212,0.20); }
+  .compare .total-row .k {
+    font-family: 'Manrope', sans-serif; font-weight: 700; font-size: 7.5pt;
+    text-transform: uppercase; letter-spacing: 0.16em;
+  }
+  .compare .total-row .v {
+    font-family: 'Sora', sans-serif; font-weight: 700;
+    letter-spacing: -0.035em; line-height: 1;
+  }
+  .compare .sem .total-row .v { font-size: 17pt; color: var(--ink); }
+  .compare .com .total-row .v { font-size: 22pt; color: var(--paper); }
+  .compare .sem .total-row .k { color: var(--muted); }
+  .compare .com .total-row .k { color: var(--accent-soft); }
+  .compare .com .sun-deco {
+    position: absolute; right: -8mm; bottom: -8mm;
+    width: 24mm; height: 24mm; opacity: 0.12;
+  }
+
+  /* ── Hero da economia ────────────────────────────────────── */
+  .savings {
+    margin-top: 6mm;
+    background: var(--accent); color: var(--ink);
+    border-radius: 2.5mm;
+    padding: 6mm 7mm;
+    display: grid; grid-template-columns: 1.4fr 1fr;
+    align-items: center; gap: 5mm;
+    position: relative; overflow: hidden;
+  }
+  .savings .label {
+    font-family: 'Manrope', sans-serif; font-weight: 700;
+    font-size: 8.5pt; letter-spacing: 0.22em; text-transform: uppercase;
+    margin-bottom: 1.5mm;
+  }
+  .savings .amount {
+    font-family: 'Sora', sans-serif; font-weight: 800;
+    font-size: 48pt; letter-spacing: -0.045em; line-height: 0.95;
+  }
+  .savings .amount .currency {
+    font-size: 19pt; font-weight: 600; margin-right: 1.5mm;
+    vertical-align: top; letter-spacing: -0.02em;
+  }
+  .savings .right {
+    border-left: 0.3mm solid rgba(14,27,46,0.25);
+    padding-left: 5mm;
+    display: flex; flex-direction: column; gap: 2mm;
+  }
+  .savings .right .k {
+    font-family: 'Manrope', sans-serif; font-weight: 600; font-size: 7pt;
+    letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.7;
+  }
+  .savings .right .v {
+    font-family: 'Sora', sans-serif; font-weight: 700;
+    font-size: 14pt; letter-spacing: -0.025em;
+  }
+  .savings .right .due {
+    font-family: 'JetBrains Mono', monospace; font-size: 7.5pt;
+    margin-top: 0.5mm; opacity: 0.7;
+  }
+
+  /* ── Pagamento ────────────────────────────────────────────── */
+  .payment {
+    margin-top: 6mm;
+    border-top: 0.3mm solid var(--accent);
+    padding-top: 4.5mm;
+    display: grid; grid-template-columns: 1.5fr 1fr; gap: 5mm;
+  }
+  .payment-title {
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: 10pt;
+    margin: 0 0 2.5mm; letter-spacing: -0.015em;
+    display: flex; align-items: baseline; gap: 2.5mm;
+  }
+  .payment-title .due-pill {
+    font-family: 'JetBrains Mono', monospace; font-size: 7pt;
+    background: var(--ink); color: var(--paper);
+    padding: 0.8mm 2mm; border-radius: 100px;
+    letter-spacing: 0.04em; font-weight: 500;
+  }
+  .boleto { display: flex; flex-direction: column; gap: 2mm; }
+  .boleto .blabel { color: var(--muted); font-size: 7.5pt; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase; }
+  .boleto .barcode {
+    font-family: 'JetBrains Mono', monospace; font-size: 7.5pt;
+    background: var(--paper-soft); border: 0.3mm solid var(--hairline);
+    border-radius: 1.5mm; padding: 2.5mm 3mm; letter-spacing: 0.02em;
+    color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .boleto .barcode-css {
+    margin-top: 1.5mm; height: 12mm;
+    background-image: repeating-linear-gradient(90deg,
+      var(--ink) 0,var(--ink) 0.35mm,transparent 0.35mm,transparent 0.65mm,
+      var(--ink) 0.65mm,var(--ink) 1.5mm,transparent 1.5mm,transparent 2.2mm,
+      var(--ink) 2.2mm,var(--ink) 2.4mm,transparent 2.4mm,transparent 3.1mm);
+    border-radius: 0.8mm;
+  }
+  .boleto img.barcode-img { margin-top: 1.5mm; height: 12mm; width: auto; display: block; }
+  .pix {
+    display: flex; flex-direction: column; gap: 1.5mm;
+    align-items: center; text-align: center;
+  }
+  .pix .qr {
+    width: 28mm; height: 28mm;
+    background: var(--paper-soft); border: 0.3mm solid var(--hairline);
+    border-radius: 1.5mm; padding: 1.5mm; position: relative;
+  }
+  .pix .qr img { width: 100%; height: 100%; border-radius: 1mm; display: block; }
+  .pix .qr .qr-fake {
+    width: 100%; height: 100%;
+    background:
+      radial-gradient(circle at 14% 14%, var(--ink) 0 12%, transparent 12.5% 19%, var(--ink) 19.5% 22%, transparent 22.5%),
+      radial-gradient(circle at 86% 14%, var(--ink) 0 12%, transparent 12.5% 19%, var(--ink) 19.5% 22%, transparent 22.5%),
+      radial-gradient(circle at 14% 86%, var(--ink) 0 12%, transparent 12.5% 19%, var(--ink) 19.5% 22%, transparent 22.5%),
+      conic-gradient(from 0deg at 50% 50%, var(--ink) 0 8%, transparent 8% 16%, var(--ink) 16% 22%, transparent 22% 30%, var(--ink) 30% 38%, transparent 38% 50%, var(--ink) 50% 58%, transparent 58% 70%, var(--ink) 70% 78%, transparent 78% 100%);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 22% 22%;
+    background-position: 0 0, 0 0, 0 0, 50% 50%;
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat;
+    border-radius: 0.8mm;
+  }
+  .pix .pix-label { font-size: 7.5pt; color: var(--muted); margin-top: 0.5mm; line-height: 1.5; }
+  .pix .pix-label strong { color: var(--ink); font-weight: 600; }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  .footer {
+    margin-top: auto; padding-top: 5mm;
+    border-top: 0.3mm solid var(--accent);
+    display: flex; justify-content: space-between; align-items: flex-end;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6pt; letter-spacing: 0.06em;
+    color: var(--ink); opacity: 0.7;
+  }
+  .footer .legal { max-width: 105mm; line-height: 1.6; }
+  .footer .legal strong { color: var(--ink); font-weight: 500; opacity: 1; }
+  .footer .contact { text-align: right; line-height: 1.6; }
+  .footer .page-num {
+    font-family: 'Sora', sans-serif; font-weight: 600; font-size: 6.5pt;
+    color: var(--ink); opacity: 0.5; margin-top: 1mm;
+  }
+
+  @media print {
+    @page { size: A4 portrait; margin: 0; }
+    html, body { background: #fff; }
+    .page { margin: 0; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<article class="page">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="brand-block">
+      {{ solev_wordmark(44) }}
+      <span class="tag">Cobrança Solev</span>
+    </div>
+    <div class="meta">
+      <span class="doc-type">{{ fatura.mes_ref }}</span>
+      <span class="ref">Vence em <strong>{{ fatura.vencimento }}</strong></span>
+      {% if fatura.id_fatura %}<span class="fid">#{{ fatura.id_fatura }}</span>{% endif %}
+    </div>
+  </div>
+
+  <!-- CLIENTE + LEITURA -->
+  <section class="client-block">
+    <div class="col">
+      <span class="eyebrow">Cliente</span>
+      <span class="name">{{ fatura.cliente.nome }}</span>
+      <dl>
+        <dt>CPF</dt><dd class="mono">{{ fatura.cliente.cpf }}</dd>
+        <dt>Endereço</dt><dd>{{ fatura.cliente.endereco | replace('\n', '<br>') }}</dd>
+        {% if fatura.cliente.cep %}<dt>CEP</dt><dd class="mono">{{ fatura.cliente.cep }}</dd>{% endif %}
+      </dl>
+    </div>
+    <div class="col">
+      <span class="eyebrow">Informações de leitura</span>
+      <dl>
+        <dt>Unidade Consumidora</dt><dd class="mono">{{ fatura.uc }}</dd>
+        <dt>Fornecimento</dt><dd>{{ fatura.fornecimento }}</dd>
+        <dt>Mês referência</dt><dd class="mono">{{ fatura.leitura.mes_ref }}</dd>
+        <dt>Leitura anterior</dt><dd class="mono">{{ fatura.leitura.anterior }}</dd>
+        <dt>Leitura atual</dt><dd class="mono">{{ fatura.leitura.atual }}</dd>
+        <dt>Próxima leitura</dt><dd class="mono">{{ fatura.leitura.proxima }}</dd>
+        <dt>Dias do ciclo</dt><dd class="mono">{{ fatura.leitura.dias }} dias</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- COMPARATIVO -->
+  <section class="compare">
+
+    <!-- SEM SOLEV -->
+    <div class="side sem">
+      <div class="side-head">
+        <span class="label">Sem Solev</span>
+        <span class="eyebrow" style="opacity:0.4">tarifa Equatorial</span>
+      </div>
+      <div class="rows">
+        <div class="row"><span class="k">Consumo total</span>         <span class="v">{{ fatura.sem_solev.consumo }}</span></div>
+        <div class="row"><span class="k">Tarifa (R$ / kWh)</span>     <span class="v">{{ fatura.sem_solev.tarifa }}</span></div>
+        <hr>
+        <div class="row"><span class="k">Subtotal energia</span>      <span class="v">{{ fatura.sem_solev.energia }}</span></div>
+        <div class="row"><span class="k">Iluminação pública</span>    <span class="v">{{ fatura.sem_solev.ilum }}</span></div>
+        {% if fatura.sem_solev.multa != 'R$ 0,00' %}
+        <div class="row"><span class="k">Multa</span>                  <span class="v">{{ fatura.sem_solev.multa }}</span></div>
+        {% endif %}
+        {% if fatura.sem_solev.juros != 'R$ 0,00' %}
+        <div class="row"><span class="k">Juros</span>                  <span class="v">{{ fatura.sem_solev.juros }}</span></div>
+        {% endif %}
+        {% for row in fatura.extras_sem %}
+        <div class="row"><span class="k">{{ row.label }}</span>        <span class="v">{{ row.valor }}</span></div>
+        {% endfor %}
+      </div>
+      <div class="total-row">
+        <span class="k">Total a pagar</span>
+        <span class="v">{{ fatura.sem_solev.total }}</span>
+      </div>
+    </div>
+
+    <!-- COM SOLEV -->
+    <div class="side com">
+      <div class="side-head">
+        <span class="label">Com Solev</span>
+        <span class="badge">−{{ fatura.com_solev.desconto_pct }}%</span>
+      </div>
+      <div class="rows">
+        <div class="row"><span class="k">Consumo compensado</span>    <span class="v">{{ fatura.com_solev.consumo_comp }}</span></div>
+        <div class="row"><span class="k">Consumo não compensado</span><span class="v">{{ fatura.com_solev.consumo_nao_comp }}</span></div>
+        <div class="row"><span class="k">Tarifa com desconto</span>   <span class="v">{{ fatura.com_solev.tarifa_desc }}</span></div>
+        <hr>
+        <div class="row"><span class="k">Subtotal energia</span>      <span class="v">{{ fatura.com_solev.energia }}</span></div>
+        <div class="row"><span class="k">Iluminação pública</span>    <span class="v">{{ fatura.com_solev.ilum }}</span></div>
+        {% if fatura.com_solev.multa != 'R$ 0,00' %}
+        <div class="row"><span class="k">Multa</span>                  <span class="v">{{ fatura.com_solev.multa }}</span></div>
+        {% endif %}
+        {% if fatura.com_solev.juros != 'R$ 0,00' %}
+        <div class="row"><span class="k">Juros</span>                  <span class="v">{{ fatura.com_solev.juros }}</span></div>
+        {% endif %}
+        {% for row in fatura.extras_com %}
+        <div class="row"><span class="k">{{ row.label }}</span>        <span class="v">{{ row.valor }}</span></div>
+        {% endfor %}
+      </div>
+      <div class="total-row">
+        <span class="k">Valor a pagar</span>
+        <span class="v">{{ fatura.com_solev.total }}</span>
+      </div>
+      <svg class="sun-deco" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="50" fill="#F2E8D4"/>
+        <circle cx="50" cy="50" r="33" fill="#E8732A"/>
+      </svg>
+    </div>
+
+  </section>
+
+  <!-- ECONOMIA HERO -->
+  <section class="savings">
+    <div class="left">
+      <div class="label">Sua economia em {{ fatura.mes_nome }}</div>
+      <div class="amount">
+        <span class="currency">R$</span>{{ fatura.economia_mes }}
+      </div>
+    </div>
+    <div class="right">
+      <div>
+        <div class="k">Economia acumulada</div>
+        <div class="v">{{ fatura.economia_acumulada }}</div>
+      </div>
+      <div>
+        <div class="k">Vencimento</div>
+        <div class="v">{{ fatura.vencimento }}</div>
+        <div class="due">a pagar · {{ fatura.com_solev.total }}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGAMENTO -->
+  <section class="payment">
+    <div>
+      <h2 class="payment-title">
+        Boleto bancário
+        <span class="due-pill">Vence em {{ fatura.vencimento }} · {{ fatura.com_solev.total }}</span>
+      </h2>
+      <div class="boleto">
+        <span class="blabel">Linha digitável</span>
+        <div class="barcode">{{ fatura.boleto.linha_digitavel }}</div>
+        {% if fatura.boleto.barcode_b64 %}
+        <img class="barcode-img" src="data:image/png;base64,{{ fatura.boleto.barcode_b64 }}" alt="codigo de barras">
+        {% else %}
+        <div class="barcode-css"></div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div>
+      <h2 class="payment-title">PIX</h2>
+      <div class="pix">
+        <div class="qr">
+          {% if fatura.pix.qr_b64 %}
+          <img src="data:image/png;base64,{{ fatura.pix.qr_b64 }}" alt="QR Code PIX">
+          {% else %}
+          <div class="qr-fake"></div>
+          {% endif %}
+        </div>
+        <div class="pix-label">
+          Escaneie ou copie o código.<br>
+          <strong>Solev Energia</strong> · {{ fatura.pix.banco }}
+          {% if fatura.pix.chave_display %}<br><strong>{{ fatura.pix.chave_display }}</strong>{% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <div class="legal">
+      <strong>Importante.</strong> Você recebeu desconto sobre a tarifa Equatorial GO porque sua unidade está
+      vinculada à usina compartilhada Solev. Após o vencimento, incidem
+      <strong>multa de 2%</strong> + <strong>juros de 0,1627% ao dia</strong> sobre o valor Solev.
+      Em caso de dúvidas, fale conosco em <strong>solevenergia@gmail.com</strong>.
+    </div>
+    <div class="contact">
+      <strong>Solev Energia</strong><br>
+      Rua D-10, Q.91, L.09 · Vila Novo Horizonte<br>
+      CEP 74.363-510 · Goiânia, GO<br>
+      solevenergia@gmail.com · solevenergia.com.br
+      <div class="page-num">Fatura 1 / 2</div>
+    </div>
+  </div>
+
+</article>
+
+</body>
+</html>

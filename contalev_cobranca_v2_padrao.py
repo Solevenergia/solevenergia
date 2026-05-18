@@ -1,4 +1,4 @@
-"""
+﻿"""
 =============================================================
   SOLEV — TEMPLATE PADRAO DE COBRANCA (v2 - COM FORMULAS)
 =============================================================
@@ -298,449 +298,319 @@ def calcular(d):
 
 
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor
+from reportlab.pdfgen import canvas
 from reportlab.graphics.barcode import code128
-from reportlab.graphics.barcode import qr
-from reportlab.graphics import renderPDF
 from reportlab.graphics.shapes import Drawing
-import reportlab.graphics.shapes as shapes
-from PIL import Image
-import numpy as np
+import io
+import base64
 import os
+import tempfile
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_JPEG = os.path.join(_DIR, "LOGO_SOLEV.jpeg")
-LOGO_COLOR = os.path.join(_DIR, "logo_transparent.png")
-LOGO_WHITE = os.path.join(_DIR, "logo_white_v_colored.png")
 
-
+# ─── Compat: app.py chama _preparar_logos() na inicializacao ──────────────────
 def _preparar_logos():
-    if os.path.exists(LOGO_COLOR) and os.path.exists(LOGO_WHITE):
-        return
-    if not os.path.exists(LOGO_JPEG):
-        raise FileNotFoundError(f"Logo nao encontrada: {LOGO_JPEG}")
-    img = Image.open(LOGO_JPEG).convert('RGBA')
-    arr = np.array(img)
-    r, g, b, a = arr[:,:,0], arr[:,:,1], arr[:,:,2], arr[:,:,3]
-    white_mask = (r > 235) & (g > 235) & (b > 235)
-    arr[white_mask, 3] = 0
-    near_white = (r > 210) & (g > 210) & (b > 210) & ~white_mask
-    avg = (r[near_white].astype(int) + g[near_white].astype(int) + b[near_white].astype(int)) // 3
-    arr[near_white, 3] = (255 - (avg - 210) * 255 // 45).clip(0, 255).astype(np.uint8)
-    transparent = Image.fromarray(arr)
-    bbox = transparent.getbbox()
-    if bbox: transparent = transparent.crop(bbox)
-    transparent.save(LOGO_COLOR)
-    arr2 = np.array(transparent.copy(), dtype=np.float64)
-    r2, g2, b2, a2 = arr2[:,:,0], arr2[:,:,1], arr2[:,:,2], arr2[:,:,3]
-    brightness = (r2 + g2 + b2) / 3
-    is_visible = a2 > 30
-    is_dark_blue = is_visible & (brightness < 100) & (b2 > r2 * 1.2)
-    is_warm = (r2 > b2 * 1.3) & is_visible
-    mask = is_dark_blue & ~is_warm
-    arr2[mask, 0] = 255; arr2[mask, 1] = 255; arr2[mask, 2] = 255
-    transition = is_visible & (brightness >= 50) & (brightness < 150) & (b2 > r2) & ~is_warm
-    for ch in range(3):
-        arr2[transition, ch] = np.clip(arr2[transition, ch] * 0.3 + 255 * 0.7, 0, 255)
-    Image.fromarray(arr2.astype(np.uint8)).save(LOGO_WHITE)
-    print("✅ Logos processadas.")
+    pass
 
 
-def _get_logo_ratio():
-    img = Image.open(LOGO_COLOR)
-    return img.height / img.width
+# ─── Geracao de barcode PNG em base64 ─────────────────────────────────────────
+def _gerar_barcode_b64(codigo_barras: str) -> str:
+    digits = "".join(c for c in (codigo_barras or "") if c.isdigit())
+    if len(digits) < 10:
+        return ""
+    try:
+        BAR_H = 40
+        bc = code128.Code128(digits, barHeight=BAR_H, barWidth=0.9, humanReadable=False)
+        d = Drawing(bc.width, BAR_H)
+        d.add(bc)
+        buf = io.BytesIO()
+        renderPM.drawToFile(d, buf, fmt="PNG")
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode()
+    except Exception:
+        return ""
 
 
-def _rodape(c, W, FT_H, dark_blue, orange, white):
-    ratio = _get_logo_ratio()
-    c.setFillColor(dark_blue); c.rect(0, 0, W, FT_H, fill=1, stroke=0)
-    c.setFillColor(orange); c.rect(0, FT_H, W, 1.2*mm, fill=1, stroke=0)
-    FLW = 30*mm; FLH = FLW * ratio
-    c.drawImage(LOGO_WHITE, 10*mm, (FT_H - FLH)/2, width=FLW, height=FLH, mask='auto')
-    c.setFillColor(white); c.setFont("Helvetica", 6)
-    c.drawRightString(W - 10*mm, 11*mm,
-                      "Apos o vencimento: multa de 2% + juros de 0,1627% ao dia (valor SOLEV).")
-
-
-def _pagina1(d, path):
-    ratio = _get_logo_ratio()
-    c = canvas.Canvas(path, pagesize=A4)
-    W, H = A4
-    dark_blue = HexColor("#1a2a4a"); orange = HexColor("#f5a623")
-    light_gray = HexColor("#f4f4f4"); mid_gray = HexColor("#cccccc")
-    green = HexColor("#2e7d32"); white = colors.white; black = colors.black
-    slate = HexColor("#455a64"); amber_bg = HexColor("#fff8e1")
-    amber_text = HexColor("#7a5c00"); green_bg = HexColor("#e8f5e9")
-    MX = 10*mm; FS = 8.5; FSB = 9.0; ROW = 6*mm; GAP = 6*mm
-    CW = (W - 2*MX)/2 - 2*mm
-
-    # Header
-    HH = 22*mm
-    c.setFillColor(white); c.rect(0, H - HH, W, HH, fill=1, stroke=0)
-    DT = W * 0.50; DB = W * 0.58
-    p = c.beginPath()
-    p.moveTo(DT, H); p.lineTo(W, H); p.lineTo(W, H - HH); p.lineTo(DB, H - HH); p.close()
-    c.setFillColor(dark_blue); c.drawPath(p, fill=1, stroke=0)
-    S = 1.8*mm; p2 = c.beginPath()
-    p2.moveTo(DT - S*.5, H); p2.lineTo(DT + S*.5, H)
-    p2.lineTo(DB + S*.5, H - HH); p2.lineTo(DB - S*.5, H - HH); p2.close()
-    c.setFillColor(orange); c.drawPath(p2, fill=1, stroke=0)
-    c.rect(0, H - HH - 1.5*mm, W, 1.5*mm, fill=1, stroke=0)
-    LW = 40*mm; LH = LW * ratio
-    c.drawImage(LOGO_COLOR, MX, H - HH + (HH - LH)/2, width=LW, height=LH, mask='auto')
-    rcx = DT + (W - DT)/2 + 4*mm
-    c.setFillColor(HexColor("#aabbcc")); c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(rcx, H - 6*mm, "FATURA DE ENERGIA")
-    c.setStrokeColor(orange); c.setLineWidth(0.5)
-    lw = (W - DT) * 0.6; c.line(rcx - lw/2, H - 8.5*mm, rcx + lw/2, H - 8.5*mm)
-    c.setFillColor(white); c.setFont("Helvetica-Bold", 11)
-    c.drawCentredString(rcx, H - 15.5*mm, d["mes_ano_fatura"])
-
-    # ID da fatura — texto discreto no canto superior direito do header escuro
-    _id_fatura = d.get("id_fatura")
-    if _id_fatura:
-        c.setFillColor(HexColor("#aabbcc")); c.setFont("Helvetica", 6.5)
-        c.drawRightString(W - MX, H - 3.5*mm, f"#{int(_id_fatura)}")
-
-    y = H - HH - 1.5*mm - GAP
-    FT_H = 16*mm; PBH = 30*mm; PG = 3*mm
-    PB = FT_H + 1.2*mm + PG; PTH = 8*mm
-    CONT = y - (PB + PBH + PTH + GAP)
-    STH = 5*mm; DBH = 36*mm; CHH = 9*mm; TBH = 14*mm; EBH = 16.5*mm
-    CPH = STH + 6*mm + 7*mm + 7*mm; AVH = 7*mm
-    # Listas montadas antes dos calculos de altura para dimensionamento preciso
-    sf = [("Consumo",                   d["consumo_kwh_fmt"],  False),
-          ("Tarifa (R$/kWh)",           d["tarifa_sem_fmt"],   False),
-          ("Subtotal Energia",          d["subtotal_sem_fmt"], True)]
-    cf = [("Consumo Compensado",        d["consumo_comp_fmt"],  False),
-          ("Consumo Nao Compensado",    d["consumo_ncomp_fmt"], False),
-          ("Tarifa c/ Desc. (R$/kWh)", d["tarifa_com_fmt"],    False),
-          ("Desconto Aplicado",         d["desconto_pct_fmt"],  False),
-          ("Subtotal Energia",          d["subtotal_com_fmt"],  True)]
-    fi_sem = [("Iluminacao Publica", d["ilum_fmt"],  False),
-              ("Multa",              d["multa_fmt"], False),
-              ("Juros",              d["juros_fmt"], False)]
-    if d.get("_ipca", 0) > 0:
-        fi_sem.append(("Correcao IPCA", d["ipca_fmt"], False))
-    # COM SOLEV: mostra multa/juros/IPCA da Equatorial (repassados ao cliente)
-    # Se tambem houve atraso no pagamento SOLEV, adiciona como linha extra
-    fi_com = [("Iluminacao Publica", d["ilum_fmt"],  False),
-              ("Multa",              d["multa_fmt"],  False),
-              ("Juros",              d["juros_fmt"],  False)]
-    if d.get("_ipca", 0) > 0:
-        fi_com.append(("Correcao IPCA", d["ipca_fmt"], False))
-    # Bandeira tarifaria — valores diferentes entre SEM e COM SOLEV:
-    # SEM SOLEV: bandeira sobre TODO o consumo (cliente nao teria SCEE)
-    # COM SOLEV: ADC Equatorial passado + SOLEV opcional (so sem_bandeira)
-    if d.get("_band_amar_total_sem", 0) > 0 or d.get("_band_amar_total_com", 0) > 0:
-        fi_sem.append(("Bandeira Amarela", d.get("band_amar_total_sem_fmt", ""), False))
-        fi_com.append(("Bandeira Amarela", d.get("band_amar_total_com_fmt", ""), False))
-    if d.get("_band_verm_total_sem", 0) > 0 or d.get("_band_verm_total_com", 0) > 0:
-        fi_sem.append(("Bandeira Vermelha", d.get("band_verm_total_sem_fmt", ""), False))
-        fi_com.append(("Bandeira Vermelha", d.get("band_verm_total_com_fmt", ""), False))
-    if d.get("_multa_com", 0) > 0:
-        fi_com.append(("Multa SOLEV", d["multa_com_fmt"], False))
-    if d.get("_juros_com", 0) > 0:
-        fi_com.append(("Juros SOLEV", d["juros_com_fmt"], False))
-    if d.get("difci", 0) > 0:
-        fi_com.append(("DIFCI",     d["difci_fmt"],     False))
-    if d.get("ecnisenta", 0) > 0:
-        fi_com.append(("ECNISENTA", d["ecnisenta_fmt"], False))
-    if d.get("ajuste_valor", 0) > 0:
-        fi_sem.append(("Acrescimo", d["ajuste_valor_fmt"], False))
-        fi_com.append(("Acrescimo", d["ajuste_valor_fmt"], False))
-    elif d.get("ajuste_valor", 0) < 0:
-        fi_sem.append(("Desconto", f"- {d['ajuste_valor_fmt']}", False))
-        fi_com.append(("Desconto", f"- {d['ajuste_valor_fmt']}", False))
-    if d.get("compensacao_dic", 0) != 0:
-        fi_sem.append(("Comp. DIC Mensal", f"- {d['compensacao_dic_fmt']}", False))
-        fi_com.append(("Comp. DIC Mensal", f"- {d['compensacao_dic_fmt']}", False))
-    ROW_FI = (5 if len(fi_com) > 3 else 6) * mm
-    FH  = max(len(sf), len(cf)) * ROW + 8*mm
-    FIH = max(len(fi_sem), len(fi_com)) * ROW_FI + 6*mm
-    CLSH = CHH + FH + FIH + TBH
-    FXH = STH + GAP + DBH + GAP + CLSH + GAP + EBH + GAP + CPH + GAP + AVH
-    EG = max(GAP, GAP + (CONT - FXH)/6)
-
-    def st(lbl, yy):
-        c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", FSB)
-        c.drawString(MX, yy, lbl)
-        c.setStrokeColor(dark_blue); c.setLineWidth(0.6)
-        c.line(MX, yy - 2*mm, W - MX, yy - 2*mm)
-
-    def kv(lx, yy, lbl, val):
-        c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", FS)
-        c.drawString(lx, yy, lbl)
-        vx = lx + c.stringWidth(lbl, "Helvetica-Bold", FS) + 1.5*mm
-        c.setFillColor(black); c.setFont("Helvetica", FS); c.drawString(vx, yy, val)
-
-    def cs(x, yy, title, items, row_h=None):
-        if row_h is None: row_h = ROW
-        c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", FSB)
-        c.drawString(x, yy, title)
-        c.setStrokeColor(mid_gray); c.setLineWidth(0.4)
-        c.line(x, yy - 2*mm, x + CW, yy - 2*mm)
-        ry = yy - row_h
-        for lbl, val, bold in items:
-            c.setFillColor(black)
-            c.setFont("Helvetica-Bold" if bold else "Helvetica", FS)
-            c.drawString(x + 1*mm, ry, lbl)
-            if val.endswith("%"):
-                bw = c.stringWidth(val, "Helvetica-Bold", FS) + 3.5*mm
-                bh = 3.5*mm; bx = x + CW - bw; by = ry - bh/2 + 2*mm
-                c.setFillColor(orange); c.roundRect(bx, by, bw, bh, 1.2*mm, fill=1, stroke=0)
-                c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", FS)
-                c.drawCentredString(bx + bw/2, by + bh/2 - 2.5, val)
-            else:
-                c.setFillColor(black)
-                c.setFont("Helvetica-Bold" if bold else "Helvetica", FS)
-                c.drawRightString(x + CW, ry, val)
-            ry -= row_h
-
-    st("DADOS DO CLIENTE  /  INFORMACOES DE LEITURA", y); y -= STH + 2*mm
-    c.setFillColor(light_gray); c.setStrokeColor(mid_gray); c.setLineWidth(0.5)
-    c.roundRect(MX, y - DBH, W - 2*MX, DBH + 0.5*mm, 2.5*mm, fill=1, stroke=1)
-    D1 = MX + (W - 2*MX) * 0.43; D2 = MX + (W - 2*MX) * 0.70
-    for dx in [D1, D2]:
-        c.setStrokeColor(mid_gray); c.line(dx, y - DBH + 3*mm, dx, y - 2*mm)
-    LX = MX + 3*mm
-    IND = LX + c.stringWidth("Endereco: ", "Helvetica-Bold", FS) + 1.5*mm
-    R1 = y - 5.5*mm; R2 = y - 11.5*mm; R3 = y - 17.5*mm; R4 = y - 23.5*mm; R5 = y - 29.5*mm; R6 = y - 35.5*mm; R7 = y - 41.5*mm
-    kv(LX, R1, "Nome:", d["nome"]); kv(LX, R2, "CPF:", d.get("cpf_fmt") or d.get("cpf", ""))
-
-    # ── Endereco com quebra automatica na coluna 1 ──
-    # Monta endereco completo (formato novo ou legado)
-    _end_full = d.get("endereco", "")
-    if not _end_full:
-        _parts = [d.get("endereco_linha1", ""), d.get("endereco_linha2", ""), d.get("endereco_linha3", "")]
-        _end_full = ", ".join(p for p in _parts if p)
-    # Quebra em linhas que caibam na coluna 1
-    _max_w = D1 - IND - 2*mm
-    _end_lines = []
-    _words = _end_full.split()
-    _cur = ""
-    for _w in _words:
-        _test = (_cur + " " + _w).strip() if _cur else _w
-        if c.stringWidth(_test, "Helvetica", FS) <= _max_w:
-            _cur = _test
-        else:
-            if _cur: _end_lines.append(_cur)
-            _cur = _w
-    if _cur: _end_lines.append(_cur)
-    if not _end_lines: _end_lines = [""]
-
-    # Desenha label "Endereco:" + primeira linha
-    kv(LX, R3, "Endereco:", _end_lines[0])
-    # Linhas seguintes do endereco (indentadas) — aumentado de 2 para 4 linhas
-    c.setFillColor(black); c.setFont("Helvetica", FS)
-    _end_rows = [R4, R5, R6, R7]  # +2 linhas de buffer para enderecos longos
-    for _i, _ln in enumerate(_end_lines[1:]):
-        if _i < len(_end_rows):
-            c.drawString(IND, _end_rows[_i], _ln)
-
-    # ── Coluna 2: UC, Tipo, Mes (com font ajustavel) ──
-    MD = D1 + 3*mm
-    _col2_w = D2 - D1 - 6*mm
-    # UC — ajusta fonte se muito longo
-    _uc_label = "UC: "
-    _uc_val = d["unidade_consumidora"]
-    _uc_fs = FS
-    while c.stringWidth(_uc_label, "Helvetica-Bold", _uc_fs) + c.stringWidth(_uc_val, "Helvetica", _uc_fs) > _col2_w and _uc_fs > 6:
-        _uc_fs -= 0.3
-    c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", _uc_fs)
-    c.drawString(MD, R1, _uc_label)
-    _uc_vx = MD + c.stringWidth(_uc_label, "Helvetica-Bold", _uc_fs) + 1*mm
-    c.setFillColor(black); c.setFont("Helvetica", _uc_fs)
-    c.drawString(_uc_vx, R1, _uc_val)
-
-    kv(MD, R2, "Tipo Fornecimento:", d["tipo_fornecimento"])
-    kv(MD, R3, "Mes Referencia:", d["mes_referencia"])
-
-    # ── Coluna 3: Leituras ──
-    RG = D2 + 3*mm
-    kv(RG, R1, "Leit. Anterior:", d["anterior_leitura"]); kv(RG, R2, "Leitura:", d["data_leitura"])
-    kv(RG, R3, "Prox. Leitura:", d["proxima_leitura"]); kv(RG, R4, "N. Dias:", d["num_dias"])
-    kv(RG, R5, "Venc. Equatorial:", d["venc_equatorial"])
-    y -= DBH + EG
-
-    CLX = MX; CRX = W/2 + 2*mm
-    c.setFillColor(slate); c.roundRect(CLX, y - CHH, CW, CHH, 2.5*mm, fill=1, stroke=0)
-    c.setFillColor(white); c.setFont("Helvetica-Bold", 9.5)
-    c.drawCentredString(CLX + CW/2, y - CHH/2 - 3, "SEM SOLEV")
-    c.setFillColor(dark_blue); c.roundRect(CRX, y - CHH, CW, CHH, 2.5*mm, fill=1, stroke=0)
-    c.setFillColor(orange); c.setFont("Helvetica-Bold", 9.5)
-    c.drawCentredString(CRX + CW/2, y - CHH/2 - 3, "COM SOLEV")
-    y -= CHH + 4*mm
-
-    cs(CLX, y, "FORNECIMENTO", sf); cs(CRX, y, "FORNECIMENTO", cf)
-    y -= max(len(sf), len(cf)) * ROW + 8*mm
-    cs(CLX, y, "ITENS FINANCEIROS", fi_sem, ROW_FI); cs(CRX, y, "ITENS FINANCEIROS", fi_com, ROW_FI)
-    y -= max(len(fi_sem), len(fi_com)) * ROW_FI + 6*mm
-
-    c.setFillColor(slate); c.roundRect(CLX, y - TBH, CW, TBH, 2.5*mm, fill=1, stroke=0)
-    c.setFillColor(white); c.setFont("Helvetica", 7.5)
-    c.drawString(CLX + 3*mm, y - 5*mm, "TOTAL A PAGAR")
-    c.setFont("Helvetica-Bold", 14); c.drawString(CLX + 3*mm, y - 10.5*mm, d["total_sem_fmt"])
-    c.setFillColor(dark_blue); c.roundRect(CRX, y - TBH, CW, TBH, 2.5*mm, fill=1, stroke=0)
-    c.setFillColor(orange); c.setFont("Helvetica", 7.5)
-    c.drawString(CRX + 3*mm, y - 5*mm, "VALOR A PAGAR")
-    c.setFont("Helvetica-Bold", 14); c.drawString(CRX + 3*mm, y - 10.5*mm, d["total_com_fmt"])
-    y -= TBH + EG
-
-    ER = 2.5*mm; GW = 26*mm; EBH2 = EBH + 0.5*mm
-    c.setFillColor(green_bg); c.setStrokeColor(green); c.setLineWidth(0.8)
-    c.roundRect(MX, y - EBH, W - 2*MX, EBH2, ER, fill=1, stroke=1)
-    c.saveState()
-    pc = c.beginPath(); pc.roundRect(MX, y - EBH, W - 2*MX, EBH2, ER)
-    c.clipPath(pc, stroke=0)
-    c.setFillColor(green); c.roundRect(MX, y - EBH, GW, EBH2, ER, fill=1, stroke=0)
-    c.restoreState()
-    c.setFillColor(white); c.setFont("Helvetica-Bold", 10)
-    c.drawCentredString(MX + GW/2, y - EBH + EBH2/2 - 3.5, "ECONOMIA")
-    c.setFillColor(green); c.setFont("Helvetica-Bold", 8)
-    c.drawString(MX + GW + 4*mm, y - 5.5*mm, "Economia este mes:")
-    c.setFont("Helvetica-Bold", 15); c.drawString(MX + GW + 4*mm, y - 13.5*mm, d["economia_mes_fmt"])
-    c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", 8)
-    c.drawString(W/2 + 10*mm, y - 5.5*mm, "Economia acumulada:")
-    c.setFont("Helvetica-Bold", 15); c.drawString(W/2 + 10*mm, y - 13.5*mm, d["economia_acum_fmt"])
-    y -= EBH + EG
-
-    BW = W - 2*MX
-    st("COMPARATIVO", y); y -= STH + 2*mm
-    c.setFillColor(slate); c.roundRect(MX, y - TBH, BW, TBH, 2.5*mm, fill=1, stroke=0)
-    MY1 = y - TBH/2 - 3.5
-    c.setFillColor(white); c.setFont("Helvetica-Bold", 14)
-    c.drawString(MX + 3*mm, MY1, f"SEM SOLEV: {d['total_sem_fmt']}")
-    y -= TBH + 2*mm
-    c.setFillColor(dark_blue); c.roundRect(MX, y - TBH, BW, TBH, 2.5*mm, fill=1, stroke=0)
-    MY = y - TBH/2 - 3.5
-    c.setFillColor(orange); c.setFont("Helvetica-Bold", 14)
-    c.drawString(MX + 3*mm, MY, f"COM SOLEV: {d['total_com_fmt']}")
-    c.drawRightString(MX + BW - 3*mm, MY, f"VENCIMENTO: {d['venc_contalev']}")
-
-    SYP = PB + PBH + PTH - 1*mm; st("FORMAS DE PAGAMENTO", SYP)
-    AT = SYP + 3*mm; AB = AT - AVH
-    c.setFillColor(amber_bg); c.setStrokeColor(orange); c.setLineWidth(0.5)
-    c.roundRect(MX, AB, W - 2*MX, AVH, 2*mm, fill=1, stroke=1)
-    c.setFillColor(amber_text); c.setFont("Helvetica-Bold", 7.5)
-    lw2 = c.stringWidth("IMPORTANTE:  ", "Helvetica-Bold", 7.5)
-    c.drawString(MX + 3*mm, AB + AVH/2 - 2.5, "IMPORTANTE:")
-    c.setFont("Helvetica", 7.5)
-    c.drawString(MX + 3*mm + lw2, AB + AVH/2 - 2.5,
-                 f"{d['desconto_pct_fmt']} de desconto sobre a tarifa Equatorial GO. Pague ate {d['venc_contalev']}.")
-
-    c.setFillColor(light_gray); c.setStrokeColor(mid_gray); c.setLineWidth(0.5)
-    c.roundRect(MX, PB, W - 2*MX, PBH, 2*mm, fill=1, stroke=1)
-    DX = MX + (W - 2*MX) * 0.70; BX = MX + 3*mm; BAW = DX - BX - 4*mm
-    MV = 3*mm; NH = 4*mm; BBH = PBH - MV - 5*mm - NH - MV
-    c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", 7)
-    c.drawString(BX, PB + PBH - MV - 2*mm, f"BOLETO  —  Venc.: {d['venc_contalev']}  |  {d['total_com_fmt']}")
-    BY2 = PB + MV + NH; bd = d["codigo_barras"]
-    if bd.replace(" ", "").isdigit() and len(bd.replace(" ", "")) >= 10:
-        bc = code128.Code128(bd, barHeight=BBH, barWidth=0.72, humanReadable=False)
-        sx = BAW / bc.width if bc.width > 0 else 1.0
-        c.saveState(); c.translate(BX, BY2); c.scale(sx, 1.0); bc.drawOn(c, 0, 0); c.restoreState()
-    else:
-        c.setFillColor(mid_gray); c.rect(BX, BY2, BAW, BBH, fill=1, stroke=0)
-        c.setFillColor(HexColor("#777777")); c.setFont("Helvetica", 7)
-        c.drawCentredString(BX + BAW/2, BY2 + BBH/2 - 3, "CODIGO DE BARRAS EM DESENVOLVIMENTO")
-    c.setFillColor(black); c.setFont("Helvetica", 6)
-    c.drawCentredString(BX + BAW/2, PB + MV - 0.5*mm, d["linha_digitavel"])
-    c.setStrokeColor(mid_gray); c.setLineWidth(0.4)
-    c.line(DX, PB + 2*mm, DX, PB + PBH - 2*mm)
-    rw = W - MX - DX - 2*mm; PCX = DX + rw/2
-    # Reserva 7mm na base para 2 linhas de texto (instrucao + chave PIX legivel)
-    # e 5mm no topo para o titulo "PIX". QR fica no meio.
-    _QR_PAD_TOP, _QR_PAD_BOTTOM = 5*mm, 7*mm
-    QS = min(rw - 6*mm, PBH - _QR_PAD_TOP - _QR_PAD_BOTTOM)
-    QX = PCX - QS/2
-    QY = PB + _QR_PAD_BOTTOM + (PBH - _QR_PAD_TOP - _QR_PAD_BOTTOM - QS)/2
-    c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", 7.5)
-    c.drawCentredString(PCX, PB + PBH - MV - 3*mm, "PIX")
-    pix = d.get("pix_payload", "")
-    pix_qr_img = d.get("pix_qr_path", "")
-    _qr_drawn = False
-    # Prioridade 1: QR Code ja gerado como imagem PNG
-    if pix_qr_img and os.path.exists(pix_qr_img):
+# ─── Geracao de QR Code PIX em base64 ─────────────────────────────────────────
+def _gerar_qr_b64(pix_qr_path: str, pix_payload: str) -> str:
+    if pix_qr_path and os.path.exists(pix_qr_path):
+        with open(pix_qr_path, "rb") as f:
+            return base64.b64encode(f.read()).decode()
+    if pix_payload and len(pix_payload) >= 20:
         try:
-            from reportlab.lib.utils import ImageReader
-            c.drawImage(ImageReader(pix_qr_img), QX, QY, QS, QS)
-            _qr_drawn = True
-        except: pass
-    # Prioridade 2: Payload PIX como texto (gera QR inline)
-    if not _qr_drawn and pix and len(pix) >= 20:
-        qrw = qr.QrCodeWidget(pix); bnds = qrw.getBounds()
-        qw = bnds[2] - bnds[0]; qh = bnds[3] - bnds[1]
-        d2 = Drawing(QS, QS)
-        d2.add(shapes.Group(qrw, transform=[QS/qw, 0, 0, QS/qh, 0, 0]))
-        renderPDF.draw(d2, c, QX, QY)
-        _qr_drawn = True
-    # Fallback: placeholder cinza
-    if not _qr_drawn:
-        c.setFillColor(mid_gray); c.rect(QX, QY, QS, QS, fill=1, stroke=0)
+            import qrcode as _qr
+            qr_obj = _qr.QRCode(box_size=8, border=1)
+            qr_obj.add_data(pix_payload)
+            qr_obj.make(fit=True)
+            img = qr_obj.make_image(fill_color="#0E1B2E", back_color="#FFFFFF")
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return base64.b64encode(buf.getvalue()).decode()
+        except Exception:
+            pass
+    return ""
 
-    # Texto: instrucao + chave PIX legivel (fallback se QR nao escanear)
-    _chave_disp = d.get("pix_chave_display", "")
-    c.setFillColor(HexColor("#555555")); c.setFont("Helvetica", 6)
-    if _chave_disp:
-        # Duas linhas: instrucao + chave (espacadas em ~3mm uma da outra)
-        c.drawCentredString(PCX, PB + 4.5*mm, "Escaneie ou use a chave PIX:")
-        c.setFont("Helvetica-Bold", 6.5); c.setFillColor(dark_blue)
-        c.drawCentredString(PCX, PB + 1.5*mm, _chave_disp)
-    else:
-        c.drawCentredString(PCX, PB + 1.5*mm, "Escaneie para pagar")
 
-    _rodape(c, W, FT_H, dark_blue, orange, white)
+# ─── Playwright HTML → PDF ────────────────────────────────────────────────────
+def _html_para_pdf(html_str: str) -> bytes:
+    with tempfile.NamedTemporaryFile(
+        suffix=".html", mode="w", encoding="utf-8", delete=False
+    ) as f:
+        f.write(html_str)
+        tmp_path = f.name
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page()
+            page.goto("file:///" + tmp_path.replace("\\", "/"))
+            page.wait_for_load_state("networkidle", timeout=20000)
+            pdf_bytes = page.pdf(
+                format="A4",
+                print_background=True,
+                margin={"top": "0mm", "right": "0mm",
+                        "bottom": "0mm", "left": "0mm"},
+                prefer_css_page_size=True,
+            )
+            browser.close()
+        return pdf_bytes
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+# ─── Overlay ReportLab para a pagina da Equatorial ───────────────────────────
+def _criar_overlay_pdf() -> bytes:
+    INK    = HexColor("#0E1B2E")
+    ACCENT = HexColor("#E8732A")
+    PAPER  = HexColor("#F2E8D4")
+    WHITE  = HexColor("#FFFFFF")
+    MUTED  = HexColor("#888888")
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    W, H = A4
+
+    # Faixa superior — cobre cabecalho Equatorial
+    STRIP_H = 20
+    c.setFillColor(INK)
+    c.rect(0, H - STRIP_H, W, STRIP_H, fill=1, stroke=0)
+    c.setFillColor(WHITE)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(12 * mm, H - STRIP_H + 7, "solev")
+    lw_s = c.stringWidth("solev", "Helvetica-Bold", 8)
+    c.setFont("Helvetica", 8)
+    c.drawString(12 * mm + lw_s + 4, H - STRIP_H + 7,
+                 "  ·  Fatura Equatorial GO  ·  Anexo")
+
+    # Area inferior — cobre boleto (~95 mm)
+    COVER_H = 95 * mm
+    c.setFillColor(PAPER)
+    c.rect(0, 0, W, COVER_H, fill=1, stroke=0)
+
+    # Linha laranja no topo da area coberta
+    c.setFillColor(ACCENT)
+    c.rect(0, COVER_H, W, 1.2 * mm, fill=1, stroke=0)
+
+    CX = W / 2
+
+    # Titulo
+    c.setFillColor(INK)
+    c.setFont("Helvetica-Bold", 15)
+    c.drawCentredString(CX, COVER_H - 16 * mm, "Obrigado pela sua confianca!")
+
+    # Subtitulo
+    c.setFont("Helvetica", 9)
+    c.drawCentredString(CX, COVER_H - 22 * mm,
+                        "E um prazer cuidar da sua energia e da sua economia.")
+    c.drawCentredString(CX, COVER_H - 26 * mm,
+                        "Que o sol continue iluminando os seus dias.")
+
+    # Separador laranja
+    c.setStrokeColor(ACCENT)
+    c.setLineWidth(0.4 * mm)
+    c.line(W / 4, COVER_H - 31 * mm, 3 * W / 4, COVER_H - 31 * mm)
+
+    # Versiculo
+    c.setFillColor(ACCENT)
+    c.setFont("Helvetica-BoldOblique", 8.5)
+    c.drawCentredString(CX, COVER_H - 39 * mm,
+                        '"Porque sou eu que conheco os planos que tenho para voces,')
+    c.drawCentredString(CX, COVER_H - 44 * mm,
+                        "planos de prosperidade e nao de calamidade,")
+    c.drawCentredString(CX, COVER_H - 49 * mm,
+                        'planos de dar a voces esperanca e um futuro."')
+    c.setFillColor(MUTED)
+    c.setFont("Helvetica", 7)
+    c.drawCentredString(CX, COVER_H - 55 * mm, "Jeremias 29:11")
+
     c.save()
+    buf.seek(0)
+    return buf.getvalue()
 
 
-def _pagina2(d, path):
-    A4W, A4H = A4
-    dark_blue = HexColor("#1a2a4a"); orange = HexColor("#f5a623"); white = colors.white
-    FT_H = 16*mm
-    import pypdfium2 as pdfium
-    doc = pdfium.PdfDocument(d["equatorial_pdf"])
-    page = doc[0]
-    pil_img = page.render(scale=200/72).to_pil()
-    doc.close()
-    arr = np.array(pil_img); oh = arr.shape[0]
-    gray = np.mean(arr, axis=2)
-    cy = None
-    for y_pos in range(int(oh * 0.58), oh):
-        if float(np.mean(gray[y_pos])) < 60 and float(np.std(gray[y_pos])) < 40:
-            cy = y_pos; break
-    if cy is None: cy = int(oh * 0.63)
-    cy = max(0, cy - 8)
-    tp = path.replace(".pdf", "_top.png")
-    Image.fromarray(arr[:cy, :]).save(tp)
-    ch = A4H * (cy / oh); BH = 28*mm
-    c = canvas.Canvas(path, pagesize=A4)
-    c.drawImage(tp, 0, A4H - ch, width=A4W, height=ch, preserveAspectRatio=False)
-    by = A4H - ch - BH
-    c.setFillColor(dark_blue); c.roundRect(8*mm, by, A4W - 16*mm, BH, 3*mm, fill=1, stroke=0)
-    c.setFillColor(orange); c.rect(8*mm, by + BH - 1.5*mm, A4W - 16*mm, 1.5*mm, fill=1, stroke=0)
-    c.setFillColor(white); c.setFont("Helvetica-Bold", 15)
-    c.drawCentredString(A4W/2, by + BH/2 - 5, "Simples Conferencia — Boleto a ser pago pela SOLEV")
-    sc = FT_H + 1.2*mm + (by - FT_H - 1.2*mm)/2; cx = A4W/2
-    c.setStrokeColor(orange); c.setLineWidth(1)
-    c.line(cx - 60*mm, sc + 14*mm, cx + 60*mm, sc + 14*mm)
-    c.line(cx - 60*mm, sc - 16*mm, cx + 60*mm, sc - 16*mm)
-    c.setFillColor(dark_blue); c.setFont("Helvetica-Bold", 12)
-    c.drawCentredString(cx, sc + 8*mm, "Obrigado pela sua confianca!")
-    c.setFillColor(HexColor("#444444")); c.setFont("Helvetica", 9)
-    c.drawCentredString(cx, sc + 2.5*mm, "E um prazer cuidar da sua energia e da sua economia.")
-    c.setFillColor(orange); c.setFont("Helvetica-BoldOblique", 9)
-    c.drawCentredString(cx, sc - 5*mm, '"Porque sou eu que conheco os planos que tenho para voces,')
-    c.drawCentredString(cx, sc - 9.5*mm, 'planos de prosperidade e nao de calamidade,')
-    c.drawCentredString(cx, sc - 14*mm, 'planos de dar a voces esperanca e um futuro."')
-    c.setFillColor(HexColor("#888888")); c.setFont("Helvetica", 7.5)
-    c.drawCentredString(cx, sc - 19*mm, "Jeremias 29:11")
-    _rodape(c, A4W, FT_H, dark_blue, orange, white)
-    c.save()
-    os.remove(tp)
+# ─── Listas de linhas extras (bandeiras, IPCA, etc.) ─────────────────────────
+def _extras_sem(d: dict) -> list:
+    extras = []
+    if d.get("_ipca", 0) > 0:
+        extras.append({"label": "Correcao IPCA", "valor": d["ipca_fmt"]})
+    if d.get("_band_amar_total_sem", 0) > 0:
+        extras.append({"label": "Bandeira Amarela",
+                       "valor": d.get("band_amar_total_sem_fmt", "")})
+    if d.get("_band_verm_total_sem", 0) > 0:
+        extras.append({"label": "Bandeira Vermelha",
+                       "valor": d.get("band_verm_total_sem_fmt", "")})
+    av = d.get("ajuste_valor", 0)
+    if av > 0:
+        extras.append({"label": "Acrescimo", "valor": d["ajuste_valor_fmt"]})
+    elif av < 0:
+        extras.append({"label": "Desconto", "valor": "- " + d["ajuste_valor_fmt"]})
+    if d.get("compensacao_dic", 0) != 0:
+        extras.append({"label": "Comp. DIC Mensal",
+                       "valor": "- " + d.get("compensacao_dic_fmt", "")})
+    return extras
+
+
+def _extras_com(d: dict) -> list:
+    extras = []
+    if d.get("_ipca", 0) > 0:
+        extras.append({"label": "Correcao IPCA", "valor": d["ipca_fmt"]})
+    if d.get("_band_amar_total_com", 0) > 0:
+        extras.append({"label": "Bandeira Amarela",
+                       "valor": d.get("band_amar_total_com_fmt", "")})
+    if d.get("_band_verm_total_com", 0) > 0:
+        extras.append({"label": "Bandeira Vermelha",
+                       "valor": d.get("band_verm_total_com_fmt", "")})
+    if d.get("_multa_com", 0) > 0:
+        extras.append({"label": "Multa SOLEV", "valor": d["multa_com_fmt"]})
+    if d.get("_juros_com", 0) > 0:
+        extras.append({"label": "Juros SOLEV", "valor": d["juros_com_fmt"]})
+    if d.get("difci", 0) > 0:
+        extras.append({"label": "DIFCI", "valor": d["difci_fmt"]})
+    if d.get("ecnisenta", 0) > 0:
+        extras.append({"label": "ECNISENTA", "valor": d["ecnisenta_fmt"]})
+    av = d.get("ajuste_valor", 0)
+    if av > 0:
+        extras.append({"label": "Acrescimo", "valor": d["ajuste_valor_fmt"]})
+    elif av < 0:
+        extras.append({"label": "Desconto", "valor": "- " + d["ajuste_valor_fmt"]})
+    if d.get("compensacao_dic", 0) != 0:
+        extras.append({"label": "Comp. DIC Mensal",
+                       "valor": "- " + d.get("compensacao_dic_fmt", "")})
+    return extras
+
+
+# ─── Monta contexto para o template Jinja2 ────────────────────────────────────
+def _dict_para_contexto(d: dict, qr_b64: str, bar_b64: str) -> dict:
+    _meses = ["", "janeiro", "fevereiro", "marco", "abril", "maio", "junho",
+              "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+    try:
+        mes_num = int(str(d.get("mes_referencia", "01/2026")).split("/")[0])
+        mes_nome = _meses[mes_num] if 1 <= mes_num <= 12 else ""
+    except Exception:
+        mes_nome = ""
+
+    end = d.get("endereco", "")
+    if not end:
+        parts = [d.get("endereco_linha1", ""), d.get("endereco_linha2", ""),
+                 d.get("endereco_linha3", "")]
+        end = "\n".join(p for p in parts if p)
+
+    pct_int = int(round(float(d.get("desconto_pct", 0)) * 100))
+    eco_mes = d.get("economia_mes_fmt", "R$ 0,00").replace("R$ ", "")
+
+    return {
+        "mes_ref":    d.get("mes_ano_fatura", ""),
+        "mes_nome":   mes_nome,
+        "vencimento": d.get("venc_contalev", ""),
+        "id_fatura":  d.get("id_fatura", ""),
+        "cliente": {
+            "nome":     d.get("nome", ""),
+            "cpf":      d.get("cpf_fmt", "") or d.get("cpf", ""),
+            "endereco": end,
+            "cep":      d.get("cep", ""),
+        },
+        "uc":          d.get("unidade_consumidora", ""),
+        "fornecimento": d.get("tipo_fornecimento", ""),
+        "leitura": {
+            "mes_ref":  d.get("mes_referencia", ""),
+            "anterior": d.get("anterior_leitura", ""),
+            "atual":    d.get("data_leitura", ""),
+            "proxima":  d.get("proxima_leitura", ""),
+            "dias":     d.get("num_dias", ""),
+        },
+        "sem_solev": {
+            "consumo": d.get("consumo_kwh_fmt", ""),
+            "tarifa":  d.get("tarifa_sem_fmt", ""),
+            "energia": d.get("subtotal_sem_fmt", ""),
+            "ilum":    d.get("ilum_fmt", ""),
+            "multa":   d.get("multa_fmt", ""),
+            "juros":   d.get("juros_fmt", ""),
+            "total":   d.get("total_sem_fmt", ""),
+        },
+        "com_solev": {
+            "consumo_comp":     d.get("consumo_comp_fmt", ""),
+            "consumo_nao_comp": d.get("consumo_ncomp_fmt", ""),
+            "tarifa_desc":      d.get("tarifa_com_fmt", ""),
+            "desconto_pct":     pct_int,
+            "energia":          d.get("subtotal_com_fmt", ""),
+            "ilum":             d.get("ilum_fmt", ""),
+            "multa":            d.get("multa_fmt", ""),
+            "juros":            d.get("juros_fmt", ""),
+            "total":            d.get("total_com_fmt", ""),
+        },
+        "economia_mes":       eco_mes,
+        "economia_acumulada": d.get("economia_acum_fmt", ""),
+        "boleto": {
+            "linha_digitavel": d.get("linha_digitavel", ""),
+            "valor":           d.get("total_com_fmt", ""),
+            "barcode_b64":     bar_b64,
+        },
+        "pix": {
+            "qr_b64":        qr_b64,
+            "chave_display": d.get("pix_chave_display", ""),
+            "banco":         "Banco Inter",
+        },
+        "extras_sem": _extras_sem(d),
+        "extras_com":  _extras_com(d),
+    }
+
+
+
+
+def _pagina1(d: dict, path: str):
+    from jinja2 import Environment, FileSystemLoader
+    qr_b64  = _gerar_qr_b64(d.get("pix_qr_path", ""), d.get("pix_payload", ""))
+    bar_b64 = _gerar_barcode_b64(d.get("codigo_barras", ""))
+    fatura  = _dict_para_contexto(d, qr_b64, bar_b64)
+    env = Environment(
+        loader=FileSystemLoader(os.path.join(_DIR, "templates")),
+        autoescape=False,
+    )
+    html = env.get_template("fatura/cobranca.html").render(fatura=fatura)
+    pdf  = _html_para_pdf(html)
+    with open(path, "wb") as f:
+        f.write(pdf)
+
+
+def _pagina2(d: dict, path: str):
+    eq = d.get("equatorial_pdf", "")
+    if not eq or not os.path.exists(eq):
+        return
+    from pypdf import PdfReader, PdfWriter
+    overlay_bytes = _criar_overlay_pdf()
+    overlay_page  = PdfReader(io.BytesIO(overlay_bytes)).pages[0]
+    eq_reader = PdfReader(eq)
+    eq_page = eq_reader.pages[0]
+    eq_page.merge_page(overlay_page)
+    writer = PdfWriter()
+    writer.add_page(eq_page)
+    with open(path, "wb") as f:
+        writer.write(f)
 
 
 def _nome_para_arquivo(nome):
