@@ -42,6 +42,11 @@ def _fatura_para_dict(f: Fatura) -> dict:
     d["venc_equatorial"]     = f.vencimento
     d["endereco_fatura"]     = f.endereco
 
+    # aliases SCEE — campos planos para o formulário / front-end
+    d["scee_ciclo_mes"]    = f.ciclo_geracao_mes
+    d["scee_uc_geradora"]  = (f.scee.uc_geradora if f.scee else "") or (f.rateio[0].uc_geradora if f.rateio else "")
+    d["scee_pct_rateio"]   = f.rateio[0].percentual if f.rateio else 0.0
+
     return d
 
 

@@ -110,7 +110,7 @@ def conciliacao_detalhe(uid):
         for c_tb in _tbc():
             uc_tb = c_tb.get("cod_uc", "")
             if uc_tb and uc_tb not in ucs_vistos:
-                uc_alt = c_tb.get("cod_uc_alternativa", "") or ""
+                uc_alt = c_tb.get("cod_uc", "") or ""
                 todos_clientes.append({
                     "uc":         uc_tb,
                     "uc_display": _fmt_uc15(uc_alt) if uc_alt else uc_tb,

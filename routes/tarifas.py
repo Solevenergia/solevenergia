@@ -89,3 +89,62 @@ def tarifa_remover(mes_ref):
         salvar_tarifas(tarifas)
         flash(f"Tarifa {mes_ref} removida!", "warning")
     return redirect(url_for(".tarifas_lista"))
+
+
+# ── JSON API (usada pelo modal em gerar_manual.html) ──
+
+@bp.route("/api/tarifas-json", methods=["GET"])
+def api_tarifas_lista():
+    """Retorna todas as tarifas ordenadas por mês desc."""
+    tarifas = carregar_tarifas()
+    def _sort_key(k):
+        parts = k.split("/")
+        try:
+            return int(parts[1]) * 100 + int(parts[0]) if len(parts) == 2 else 0
+        except ValueError:
+            return 0
+    itens = sorted(
+        [{"mes": k, **v} for k, v in tarifas.items()],
+        key=lambda x: _sort_key(x["mes"]),
+        reverse=True,
+    )
+    return jsonify({"tarifas": itens})
+
+
+@bp.route("/api/tarifas-json", methods=["POST"])
+def api_tarifa_salvar():
+    """Cria ou atualiza uma tarifa via JSON."""
+    body = request.get_json(silent=True) or {}
+    mes_ref = (body.get("mes") or "").strip()
+    if not mes_ref:
+        return jsonify({"erro": "mes e obrigatorio"}), 400
+    def _f(key):
+        v = body.get(key, 0)
+        try:
+            return float(str(v).replace(",", ".")) if v not in (None, "") else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+    tarifas = carregar_tarifas()
+    mes_antigo = body.get("mes_antigo", "").strip() or None
+    if mes_antigo and mes_antigo != mes_ref and mes_antigo in tarifas:
+        del tarifas[mes_antigo]
+    tarifas[mes_ref] = {
+        "tarifa_sem":       _f("tarifa_sem"),
+        "bandeira_amarela": _f("bandeira_amarela"),
+        "bandeira_vermelha":_f("bandeira_vermelha"),
+        "fio_b":            _f("fio_b"),
+        "observacao":       (body.get("observacao") or "").strip(),
+    }
+    salvar_tarifas(tarifas)
+    return jsonify({"ok": True, "mes": mes_ref})
+
+
+@bp.route("/api/tarifas-json/<path:mes_ref>", methods=["DELETE"])
+def api_tarifa_remover(mes_ref):
+    """Remove uma tarifa pelo mês (ex.: 05/2026)."""
+    tarifas = carregar_tarifas()
+    if mes_ref not in tarifas:
+        return jsonify({"erro": "nao encontrada"}), 404
+    del tarifas[mes_ref]
+    salvar_tarifas(tarifas)
+    return jsonify({"ok": True})

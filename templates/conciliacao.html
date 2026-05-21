@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Conciliação {{ usina.nome }} — {{ mes_ref }}{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Conciliacao</span><span class="sep">›</span><span class="here">{{ usina.nome }}</span>{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-4 py-4">
@@ -12,7 +13,7 @@
                 <i class="bi bi-clipboard-check-fill me-2" style="color:var(--orange)"></i>
                 {{ usina.nome }}
             </h3>
-            <small class="text-muted">UC Geradora: {{ usina.uc_geradora or '—' }} · Conciliação de <strong>{{ mes_ref }}</strong></small>
+            <small class="text-muted">UC Geradora: {{ (usina.uc_geradora | fmt_uc15) or '—' }} · Conciliação de <strong>{{ mes_ref }}</strong></small>
         </div>
     </div>
 
@@ -131,7 +132,7 @@
                                                 <i class="bi bi-check-circle-fill ms-1" style="color:#22c55e;font-size:11px" title="Já no rateio"></i>
                                             {% endif %}
                                             <br>
-                                            <code style="font-size:10px">{{ v.uc_display or v.uc }}</code>
+                                            <code style="font-size:10px">{{ v.uc_display or (v.uc | fmt_uc15) }}</code>
                                         </td>
                                         <td>
                                             <div class="input-group input-group-sm">
@@ -262,7 +263,7 @@
                                     </span>
                                 {% endif %}
                                 <br>
-                                <code style="font-size:10px">{{ l.uc }}</code>
+                                <code style="font-size:10px">{{ l.uc | fmt_uc15 }}</code>
                             </td>
                             <td class="text-end">{{ "%.2f"|format(l.percentual) }}%</td>
                             <td class="text-end">{{ "%.2f"|format(l.kwh_esperado) }} kWh</td>

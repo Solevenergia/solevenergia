@@ -34,6 +34,7 @@ class ScopeSCEE:
     saldo_kwh: float
     saldo_expirar_30d_kwh: float
     saldo_expirar_60d_kwh: float
+    ciclo_mes: str = ""              # ex: "04/2026"
     rateio: List[RateioItem] = field(default_factory=list)
 
 
@@ -111,6 +112,7 @@ class Fatura:
     geracao_medidor_kwh: float = 0.0
 
     # SCEE (campos planos para compatibilidade)
+    ciclo_geracao_mes: str = ""          # ex: "04/2026"  — mês da geração (pode diferir do mês da fatura)
     geracao_ciclo_kwh: float = 0.0
     excedente_recebido_kwh: float = 0.0
     credito_recebido_kwh: float = 0.0

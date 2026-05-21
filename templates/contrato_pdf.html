@@ -7,15 +7,16 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --navy: #1A2D5A;
-    --navy-mid: #2C4A8A;
-    --navy-light: #EEF2FA;
-    --navy-stripe: #E8EDF7;
-    --accent: #3A6BC8;
-    --text: #1A1C22;
-    --text-muted: #5A6070;
-    --rule: #C8D3EC;
-    --orange: #E8761A;
+    /* Paleta SoLev v1: Noite Solev + Sol Cerrado + Areia Quente */
+    --navy: #0E1B2E;          /* Noite Solev */
+    --navy-mid: #2A3D5A;       /* Noite leve */
+    --navy-light: #F2E8D4;     /* Areia Quente (faixa clara) */
+    --navy-stripe: #F7F1E4;    /* Paper soft (linhas zebradas) */
+    --accent: #2A3D5A;         /* Noite leve para destaques */
+    --text: #0E1B2E;           /* Noite Solev */
+    --text-muted: #9A8E7A;     /* Bruma */
+    --rule: #E8DBC0;           /* Areia escurecida para hairlines */
+    --orange: #E8732A;         /* Sol Cerrado */
     --white: #FAFBFD;
     --margin: 14mm;
   }
@@ -170,7 +171,7 @@
 <div class="doc">
 
   <div class="doc-header">
-    <img src="/contrato/assets/LOGO_SOLEV_white.png" class="logo-img" alt="SOLEV" onerror="this.outerHTML='<div style=&quot;color:white;font-size:14pt;font-weight:800;letter-spacing:1px&quot;>SOLE<span style=&quot;color:#E8761A&quot;>V</span></div>'">
+    <img src="/contrato/assets/solev-wordmark-dark.svg" class="logo-img" alt="SOLEV" onerror="this.outerHTML='<div style=&quot;color:white;font-size:14pt;font-weight:800;letter-spacing:1px&quot;>SOLE<span style=&quot;color:#E8761A&quot;>V</span></div>'">
     <div class="hdr-right">
       <div class="hdr-label">Instrumento Particular de Locação de Sistema Fotovoltaico</div>
       <div class="hdr-title">SOLEV &nbsp;·&nbsp; {{ d.locatario_razao_social|upper }}</div>
@@ -374,7 +375,7 @@
         <tr><td class="center">3</td><td>Inversor(es)</td><td>{{ d.anexo_inversor }}</td></tr>
         <tr><td class="center">4</td><td>Estrutura de Fixação</td><td>{{ d.anexo_estrutura }}</td></tr>
         <tr><td class="center">5</td><td>Local de Instalação</td><td>{{ d.anexo_local }}</td></tr>
-        <tr><td class="center">6</td><td>Unidade Consumidora Beneficiada</td><td><strong>UC: {{ d.uc_numero }}</strong></td></tr>
+        <tr><td class="center">6</td><td>Unidade Consumidora Beneficiada</td><td><strong>UC: {{ d.uc_numero | fmt_uc15 }}</strong></td></tr>
         <tr><td class="center">7</td><td>Previsão de Geração Mensal Média</td><td><strong>{{ d.anexo_geracao_media }} kWh/mês</strong></td></tr>
         <tr><td class="center">8</td><td>Data de Comissionamento</td><td>{{ d.anexo_comissionamento }}</td></tr>
         <tr><td class="center">9</td><td>Garantia dos Equipamentos</td><td><strong>{{ d.anexo_garantia }}</strong></td></tr>

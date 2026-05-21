@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Titulares UC{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Titulares UC</span>{% endblock %}
+{% block topbar_actions %}<a href="/titulares/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Titular</a>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-person-badge-fill me-2" style="color:var(--or)"></i>Titulares das UCs</h1>
-    <a href="/titulares/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Titular</a>
 </div>
 
 <div class="card">

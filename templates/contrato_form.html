@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Gerar Contrato{% endblock %}
+{% block topbar_breadcrumb %}<span>Config</span><span class="sep">›</span><span class="here">Contratos</span>{% endblock %}
 {% block content %}
 
 <div class="page-header">
@@ -25,8 +26,8 @@
               data-cpf="{{ c.desc_cpf or '' }}"
               data-email="{{ c.desc_email or '' }}"
               data-desconto="{{ ((c.pct_desconto or 0.25)|float * 100)|int }}"
-              data-uc="{{ c.cod_uc_alternativa or c.cod_uc or '' }}"
-            >{{ c.desc_nome }} — UC {{ c.cod_uc_alternativa or c.cod_uc }}</option>
+              data-uc="{{ c.cod_uc or c.cod_uc or '' }}"
+            >{{ c.desc_nome }} — UC {{ (c.cod_uc or c.cod_uc) | fmt_uc15 }}</option>
             {% endfor %}
           </select>
         </div>

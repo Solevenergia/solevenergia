@@ -1,4 +1,4 @@
-"""
+﻿"""
 CONTALEV — Correcoes de Portugues, Estrutura e Layout
 ========================================================
 Revisao profissional do PDF de cobranca (contalev_cobranca_v2_padrao.py)
@@ -133,11 +133,11 @@ Rodape da simulacao:
 
 BUSCAR:
 "IMPORTANTE:  {d['desconto_pct']}% de desconto sobre a tarifa Equatorial GO. "
-"Pague ate {d['vencimento_contalev']}."
+"Pague ate {d['vencimento_solev']}."
 
 SUBSTITUIR POR:
 "IMPORTANTE: Desconto de {d['desconto_pct']}% aplicado sobre a tarifa da "
-"distribuidora Equatorial GO. Vencimento: {d['vencimento_contalev']}."
+"distribuidora Equatorial GO. Vencimento: {d['vencimento_solev']}."
   (Frase mais clara; "Vencimento:" em vez de "Pague ate" — tom profissional)
 
 

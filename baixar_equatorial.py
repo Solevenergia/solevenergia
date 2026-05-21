@@ -1,5 +1,5 @@
-"""
-baixar_equatorial.py — CONTALEV
+﻿"""
+baixar_equatorial.py — SoLev
 Baixa automaticamente as faturas do portal Equatorial GO via Playwright.
 
 Uso:
@@ -510,7 +510,7 @@ def salvar_screenshot_erro(page, uc: str):
         pass
 
 
-# ─── BUSCA UC NOVA DO CLIENTE (cod_uc_alternativa) ───────────────────────────
+# ─── BUSCA UC NOVA DO CLIENTE (cod_uc) ───────────────────────────
 def buscar_uc_nova(uc: str) -> dict:
     """
     Retorna dict com as versoes da UC nova para uso no portal Equatorial:
@@ -524,7 +524,7 @@ def buscar_uc_nova(uc: str) -> dict:
     cliente_tb = tb_get_cliente_por_uc(uc)
     if not cliente_tb:
         return {"login": uc, "dropdown": uc}
-    uc_nova = (cliente_tb.get("cod_uc_alternativa") or "").strip()
+    uc_nova = (cliente_tb.get("cod_uc") or "").strip()
     if uc_nova:
         digits = "".join(filter(str.isdigit, uc_nova))
         return {
@@ -688,12 +688,12 @@ def gerar_cobranca_cliente(
 ) -> str | None:
     """
     Extrai dados do PDF Equatorial, busca o cliente no Supabase e gera
-    o PDF de cobranca CONTALEV na mesma pasta do cliente.
+    o PDF de cobranca SoLev na mesma pasta do cliente.
 
-    Nome do arquivo: {mes_str}-{nome_camel}Contalev.pdf
-    Ex: 042026-KellenSouzaContalev.pdf
+    Nome do arquivo: {mes_str}-SoLev{nome_camel}.pdf
+    Ex: 042026-SoLevKellenSouza.pdf
     """
-    print(f"  📊 Gerando cobranca CONTALEV...")
+    print(f"  📊 Gerando cobranca SoLev...")
     try:
         from extrair_equatorial import extrair_equatorial
         from contalev_cobranca_v2_padrao import gerar_cobranca, calcular
@@ -809,11 +809,11 @@ def gerar_cobranca_cliente(
             print(f"  ⚠️  Arquivo de cobranca nao encontrado apos geracao: {arquivo_gerado}")
             return None
 
-        # Nome do arquivo CONTALEV: YYYYMM-ContalevPrimeiroUltimo.pdf
+        # Nome do arquivo SoLev: YYYYMM-SoLevPrimeiroUltimo.pdf
         # Usa mes_referencia ja extraido do PDF Equatorial (equatorial dict)
         _mes_ref_extr = (equatorial.get("mes_referencia") or "").strip()
         mes_str_cob   = _mes_para_yyyymm(_mes_ref_extr) if _mes_ref_extr else mes_str
-        nome_arquivo = f"{mes_str_cob}-ContaLev{nome_camel}.pdf"
+        nome_arquivo = f"{mes_str_cob}-SoLev{nome_camel}.pdf"
         destino = os.path.join(pasta_cliente, nome_arquivo)
         shutil.move(arquivo_gerado, destino)
         print(f"  ✅ Cobranca salva: {destino}")
@@ -842,7 +842,7 @@ def gerar_cobranca_cliente(
                 tb_writeback_pos_cobranca(
                     cliente_tb["id_cliente"],
                     round(dados_calc.get("_total_com", 0), 2),
-                    dados_calc.get("venc_contalev", ""),
+                    dados_calc.get("venc_solev", ""),
                     round(dados_calc.get("_economia_acum", 0), 2),
                 )
                 print(f"  💾 Supabase atualizado (economia acumulada, vencimento)")
@@ -860,7 +860,7 @@ def gerar_cobranca_cliente(
                 total_com=dados_calc.get("_total_com", 0),
                 economia_mes=dados_calc.get("_economia_mes", 0),
                 economia_acum=dados_calc.get("_economia_acum", 0),
-                venc=dados_calc.get("venc_contalev", ""),
+                venc=dados_calc.get("venc_solev", ""),
                 pdf_path=destino,
                 consumo_kwh=equatorial.get("consumo_kwh", 0),
                 compensado_kwh=equatorial.get("valor_parc_injet", 0),
@@ -879,8 +879,8 @@ def gerar_cobranca_cliente(
                 ilum_publica=equatorial.get("iluminacao_publica", 0),
                 band_amar_equatorial=dados_calc.get("_band_amar_equatorial", 0),
                 band_verm_equatorial=dados_calc.get("_band_verm_equatorial", 0),
-                band_amar_contalev=dados_calc.get("_band_amar_contalev", 0),
-                band_verm_contalev=dados_calc.get("_band_verm_contalev", 0),
+                band_amar_solev=dados_calc.get("_band_amar_solev", 0),
+                band_verm_solev=dados_calc.get("_band_verm_solev", 0),
                 ajuste_valor=dados_calc.get("ajuste_valor", 0),
                 difci=dados_calc.get("difci", 0),
                 ecnisenta=dados_calc.get("ecnisenta", 0),

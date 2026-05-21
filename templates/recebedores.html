@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Recebedores PIX{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Recebedores PIX</span>{% endblock %}
+{% block topbar_actions %}<a href="/recebedores/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Recebedor</a>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-qr-code me-2" style="color:var(--or)"></i>Recebedores PIX</h1>
-    <a href="/recebedores/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Recebedor</a>
 </div>
 
 <div class="card">

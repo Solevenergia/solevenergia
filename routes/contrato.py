@@ -12,7 +12,7 @@ _PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 @bp.route("/contrato/assets/<filename>")
 def contrato_assets(filename):
-    folder = os.path.join(_PROJECT_DIR, "design_handoff_contrato_contalev", "assets")
+    folder = os.path.join(_PROJECT_DIR, "design_handoff_solev_brand", "assets")
     filepath = os.path.join(folder, filename)
     if os.path.exists(filepath):
         return send_file(filepath)

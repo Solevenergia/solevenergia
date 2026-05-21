@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SoLev Energia</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body {
+    margin: 0;
+    font-family: 'Manrope', sans-serif;
+    background: linear-gradient(180deg, #0E1B2E 0%, #1a2d4d 100%);
+    color: #F2E8D4;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+  }
+  .container { max-width: 400px; }
+  .icon { font-size: 64px; margin-bottom: 20px; }
+  .logo { font-family: 'Sora', sans-serif; font-weight: 700; font-size: 22px; color: #E8732A; margin-bottom: 32px; }
+  .logo span { color: #F2E8D4; font-weight: 300; }
+  h1 { font-family: 'Sora', sans-serif; font-size: 24px; margin: 0 0 12px; }
+  p { opacity: 0.7; font-size: 15px; line-height: 1.5; margin: 0 0 24px; }
+  .whatsapp-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #25D366; color: #fff; padding: 12px 24px;
+    border-radius: 12px; text-decoration: none; font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="logo">SoLev<span>Energia</span></div>
+  <div class="icon">🔒</div>
+  <h1>Link inválido</h1>
+  <p>{{ erro }}<br><br>Se você recebeu este link da SoLev, ele pode ter expirado ou estar incorreto.</p>
+  <a class="whatsapp-btn" href="https://wa.me/5562999999999?text=Olá!%20Recebi%20um%20link%20que%20não%20funciona%20-%20pode%20me%20ajudar?">
+    💬 Falar com a SoLev no WhatsApp
+  </a>
+</div>
+</body>
+</html>

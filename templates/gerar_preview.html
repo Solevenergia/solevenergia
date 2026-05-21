@@ -1,5 +1,6 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Pré-visualizar Cobrança — SOLEV{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Cobranca</span><span class="sep">›</span><span class="here">Pre-visualizar</span>{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-4 py-4">
@@ -32,7 +33,7 @@
                 </div>
                 <div class="col-md-5 text-md-end">
                     <span class="text-muted" style="font-size:12px">Vencimento SOLEV</span>
-                    <strong class="ms-2">{{ calc.venc_contalev or '—' }}</strong>
+                    <strong class="ms-2">{{ calc.venc_solev or '—' }}</strong>
                 </div>
             </div>
         </div>
@@ -49,7 +50,7 @@
         <input type="hidden" name="endereco"                    value="{{ dados.endereco }}">
         <input type="hidden" name="modo_bandeira"               value="{{ dados.modo_bandeira or 'com_bandeira' }}">
         <input type="hidden" name="valor_cobranca_anterior"     value="{{ dados.valor_cobranca_anterior or 0 }}">
-        <input type="hidden" name="venc_contalev_anterior"      value="{{ dados.venc_contalev_anterior or '' }}">
+        <input type="hidden" name="venc_solev_anterior"      value="{{ dados.venc_solev_anterior or '' }}">
         <input type="hidden" name="data_pagamento_anterior"     value="{{ dados.data_pagamento_anterior or '' }}">
         <input type="hidden" name="economia_acumulada_anterior" value="{{ dados.economia_acumulada_anterior or 0 }}">
         <input type="hidden" name="titular_fatura"              value="{{ dados.titular_fatura or '' }}">
@@ -83,8 +84,8 @@
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Venc. SOLEV</label>
-                                <input type="text" name="vencimento_contalev" id="e_venc"
-                                       class="form-control" value="{{ calc.venc_contalev or dados.vencimento_contalev or '' }}" required>
+                                <input type="text" name="vencimento_solev" id="e_venc"
+                                       class="form-control" value="{{ calc.venc_solev or dados.vencimento_solev or '' }}" required>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Desconto (%)</label>

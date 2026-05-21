@@ -1,0 +1,52 @@
+# PDFs gerados (são reproduzidos no servidor)
+*.pdf
+uploads/
+logs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+
+# Ambiente
+.env
+.env.local
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Arquivos locais de teste
+test_*.pdf
+teste_*.pdf
+solev_log.txt
+solev_flask.log
+
+# Documentação
+*.md
+docs/
+
+# Configs locais
+supabase_config.json
+
+# Scripts locais (não rodar no servidor)
+SOLEV.vbs
+*.bat
+*.lnk
+INICIAR_SOLEV*.vbs
+
+# Templates Excel (deploy não usa)
+cadastro_usinas_template.xlsx
+
+# Cache de fontes (Linux baixa Sora/etc do Google novamente se preciso)
+static/fonts/*.ttf.bak

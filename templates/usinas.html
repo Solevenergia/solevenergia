@@ -33,7 +33,7 @@
                 </div>
                 <div class="col-6">
                     <span class="text-muted">UC Geradora:</span><br>
-                    <strong>{{ u.cod_uc_geradora or '—' }}</strong>
+                    <strong>{{ (u.cod_uc_geradora | fmt_uc15) or '—' }}</strong>
                 </div>
                 <div class="col-6">
                     <span class="text-muted">Clientes:</span><br>

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ "Editar" if cliente else "Novo" }} Cliente — SOLEV{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Clientes</span><span class="sep">›</span><span class="here">{{ "Editar" if cliente else "Novo" }} Cliente</span>{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-4 py-4">
@@ -45,25 +46,18 @@
                         {% endif %}
                     </h5>
 
-                    <div class="row">
-                        <div class="col-7 mb-3">
-                            <label class="form-label">
-                                UC <span class="text-danger">*</span>
-                                <small class="text-muted">(formato xxxx.xxx.xxx.xxx-xx)</small>
-                            </label>
-                            <input type="text" name="cod_uc_alternativa" id="campo_uc" class="form-control"
-                                value="{{ dados.cod_uc_alternativa if dados else '' }}"
-                                placeholder="Ex: 2026.034.798.403-00">
-                        </div>
-                        <div class="col-5 mb-3">
-                            <label class="form-label">UC Antiga</label>
-                            <input type="text" name="uc" id="campo_uc_antiga" class="form-control"
-                                value="{{ dados.cod_uc if dados and cliente else '' }}"
-                                placeholder="Ex: 14811832">
-                        </div>
+                    <div class="mb-3">
+                        <label class="form-label">
+                            UC <span class="text-danger">*</span>
+                            <small class="text-muted">(formato xxxx.xxx.xxx.xxx-xx)</small>
+                        </label>
+                        <input type="text" name="cod_uc" id="campo_uc" class="form-control"
+                            value="{{ dados.cod_uc if dados else '' }}"
+                            placeholder="Ex: 2026.034.798.403-00"
+                            required>
                     </div>
                     <div id="erro_uc" class="text-danger mb-2" style="display:none;font-size:13px">
-                        <i class="bi bi-exclamation-triangle me-1"></i>Informe a UC ou a UC Antiga.
+                        <i class="bi bi-exclamation-triangle me-1"></i>Informe a UC (15 digitos).
                     </div>
 
                     <div class="row">
@@ -374,7 +368,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        attachMask('input[name="cod_uc_alternativa"]', maskUC15);
+        attachMask('input[name="cod_uc"]', maskUC15);
         attachMask('input[name="desc_cpf"]',           maskCpfCnpj);
         attachMask('input[name="dt_adesao"]',          maskData);
         attachMask('input[name="cod_cep"]',            maskCep);

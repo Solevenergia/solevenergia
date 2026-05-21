@@ -9,16 +9,26 @@ _UC_SCEE = r"UC\s+[\d.\-]+"
 def parse_scee(texto: str, texto_completo: str) -> dict:
     r: dict = {}
 
-    # GERACAO CICLO
+    # GERACAO CICLO — também extrai o mês "(4/2026)" → "04/2026"
     ger = re.search(
         r"GERA.{1,4}O\s+CICLO\s*\([^)]*\)\s*KWH\s*:\s*" + _UC_SCEE + r"\s*:\s*([\d.,]+\d)",
         texto_completo, re.IGNORECASE,
     )
     geracao_kwh = _n(ger.group(1)) if ger else 0.0
     ger_uc = ""
+    ciclo_mes = ""
     if ger:
         um = re.search(r"UC\s+([\d.\-]+)", ger.group(0), re.IGNORECASE)
         ger_uc = um.group(1).strip() if um else ""
+        # Extrai "(4/2026)" ou "(04/2026)"
+        cm = re.search(r"\((\d{1,2}/\d{4})\)", ger.group(0))
+        if not cm:
+            # Fallback: busca no texto completo mais próximo do CICLO
+            cm2 = re.search(r"GERA.{1,4}O\s+CICLO\s*\((\d{1,2}/\d{4})\)", texto_completo, re.IGNORECASE)
+            if cm2: cm = cm2
+        if cm:
+            partes = cm.group(1).split("/")
+            ciclo_mes = f"{int(partes[0]):02d}/{partes[1]}"
 
     # EXCEDENTE RECEBIDO
     exc = re.search(
@@ -61,6 +71,7 @@ def parse_scee(texto: str, texto_completo: str) -> dict:
     saldo_30        = _n(s30.group(1))   if s30   else 0.0
     saldo_60        = _n(s60.group(1))   if s60   else 0.0
 
+    r["ciclo_geracao_mes"]        = ciclo_mes
     r["geracao_ciclo_kwh"]       = geracao_kwh
     r["excedente_recebido_kwh"]  = excedente_kwh
     r["credito_recebido_kwh"]    = credito_kwh
@@ -78,6 +89,7 @@ def parse_scee(texto: str, texto_completo: str) -> dict:
             saldo_kwh=saldo_kwh,
             saldo_expirar_30d_kwh=saldo_30,
             saldo_expirar_60d_kwh=saldo_60,
+            ciclo_mes=ciclo_mes,
             rateio=rateio_items,
         )
     else:

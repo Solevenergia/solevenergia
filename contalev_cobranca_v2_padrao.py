@@ -4,7 +4,7 @@
 =============================================================
   FORMULAS AUTOMATICAS:
     • num_dias       = data_leitura - anterior_leitura
-    • venc_contalev  = venc_equatorial - 3 dias
+    • venc_solev  = venc_equatorial - 3 dias
     • mes_ano_fatura = mes_referencia → "Marco / 2026"
     • output_path    = Cobranca_{NomeCliente}.pdf
     • subtotal_sem   = consumo_kwh × tarifa_sem
@@ -44,7 +44,7 @@ DADOS = {
     "economia_acumulada_anterior": 0.00,
     # ── Dados do mes anterior (para calculo de multa/juros COM) ──
     "valor_cobranca_anterior":  0.00,       # valor total COM SOLEV do mes anterior
-    "venc_contalev_anterior":   "",          # vencimento da cobranca anterior, ex: "28/02/2026"
+    "venc_solev_anterior":   "",          # vencimento da cobranca anterior, ex: "28/02/2026"
     "data_pagamento_anterior":  "",          # data que o cliente pagou, ex: "05/03/2026" (vazio = em dia)
     "codigo_barras":      "CODIGO DE BARRA EM DESENVOLVIMENTO",
     "linha_digitavel":    "XXXX.XXXX  XXXXX.XXXXX  XXXXX.XXXXX  X  XXXXXXXXXXXXXX",
@@ -95,13 +95,13 @@ def calcular(d):
         num_dias = int(d.get("n_dias", 0) or 0)
 
     # Vencimento SOLEV: usa o informado diretamente, ou calcula a partir do Equatorial
-    venc_contalev = d.get("vencimento_contalev", "").strip()
-    if not venc_contalev and _ve:
+    venc_solev = d.get("vencimento_solev", "").strip()
+    if not venc_solev and _ve:
         dt_venc_eq    = datetime.strptime(_ve, _dfmt)
-        venc_contalev = (dt_venc_eq - timedelta(days=3)).strftime(_dfmt)
+        venc_solev = (dt_venc_eq - timedelta(days=3)).strftime(_dfmt)
 
     out["num_dias"]       = str(num_dias)
-    out["venc_contalev"]  = venc_contalev
+    out["venc_solev"]  = venc_solev
 
     # ── mes_ano_fatura a partir de mes_referencia ──────────
     _meses = {1:"Janeiro",2:"Fevereiro",3:"Marco",4:"Abril",5:"Maio",6:"Junho",
@@ -113,7 +113,7 @@ def calcular(d):
     if _dl and _al:
         print(f"📅 Leitura anterior: {_al} → Leitura atual: {_dl} = {num_dias} dias")
     if _ve:
-        print(f"📅 Venc. Equatorial: {_ve} → Venc. SOLEV: {venc_contalev}")
+        print(f"📅 Venc. Equatorial: {_ve} → Venc. SOLEV: {venc_solev}")
     print(f"📅 Mes referencia: {d['mes_referencia']} → {mes_ano_fatura}")
 
     consumo       = d["consumo_kwh"]
@@ -138,33 +138,73 @@ def calcular(d):
     tarifa_band_amar = float(d.get("bandeira_tarifa_amar", 0) or 0)
     tarifa_band_verm = float(d.get("bandeira_tarifa_verm", 0) or 0)
 
-    # CENARIO "SEM SOLEV": sem o sistema da SOLEV, o cliente nao teria
-    # SCEE — a Equatorial cobraria bandeira sobre TODO o consumo (481 kWh,
-    # nao so os 30 nao compensados). E o que se usa para calcular economia.
-    band_amar_sem_contalev = consumo * tarifa_band_amar if tarifa_band_amar > 0 else 0.0
-    band_verm_sem_contalev = consumo * tarifa_band_verm if tarifa_band_verm > 0 else 0.0
-
-    # CENARIO "COM SOLEV": cliente paga ADC Equatorial (passa direto) +
-    # eventual bandeira SOLEV sobre energia compensada (so para sem_bandeira).
+    # ── MODO BANDEIRA ──────────────────────────────────────────
+    # Define como a bandeira tarifaria aparece na conta:
+    #
+    #   "sem_bandeira" (UI: "Nao compensar"):
+    #     Bandeira EMBUTIDA na tarifa equatorial (uma linha so).
+    #     Tarifa efetiva = tarifa_sem + band_amar + band_verm
+    #     SEM SOLEV: energia = consumo × tarifa_efetiva
+    #     COM SOLEV: energia = comp × tarifa_efetiva × (1 - desconto)
+    #     Nao aparece linha separada de bandeira em nenhum lado.
+    #
+    #   "com_bandeira" (UI: "Compensar bandeira"):
+    #     Bandeira SEPARADA da tarifa equatorial.
+    #     SEM SOLEV: linha de energia (consumo × tarifa) + linhas de bandeira
+    #     COM SOLEV: cliente paga bandeira tambem pra SOLEV com desconto
     modo_band = (d.get("modo_bandeira") or "com_bandeira").strip().lower()
-    cobra_band_contalev = modo_band != "com_bandeira"
+    cobra_band_solev = modo_band != "com_bandeira"
 
-    if cobra_band_contalev:
-        # SOLEV cobra sobre energia compensada, com o mesmo desconto
-        band_amar_contalev = comp * tarifa_band_amar * (1 - desconto) if tarifa_band_amar > 0 else 0.0
-        band_verm_contalev = comp * tarifa_band_verm * (1 - desconto) if tarifa_band_verm > 0 else 0.0
+    if cobra_band_solev:
+        # ── Modo "Nao compensar": bandeira embutida na tarifa ──
+        tarifa_efetiva_sem = tarifa_sem + tarifa_band_amar + tarifa_band_verm
+        tarifa_com         = tarifa_efetiva_sem * (1 - desconto)
+
+        # SEM SOLEV: linha unica de energia (sem linhas de bandeira)
+        total_consumo_tarifa_sem    = consumo * tarifa_efetiva_sem
+        total_consumo_band_amar_sem = 0.0
+        total_consumo_band_verm_sem = 0.0
+        band_amar_sem_solev         = 0.0  # nao usado, mas mantido pra compat
+        band_verm_sem_solev         = 0.0
+
+        # COM SOLEV: linhas de bandeira ZERADAS (bandeira ja incluida na tarifa_com)
+        band_amar_solev              = 0.0
+        band_verm_solev              = 0.0
+        total_compensado_com         = comp     * tarifa_com
+        total_nao_comp_tarifa_com    = nao_comp * tarifa_efetiva_sem  # nao_comp tambem com bandeira embutida
+        total_nao_comp_band_amar_com = 0.0
+        total_nao_comp_band_verm_com = 0.0
+
+        # Tarifa "Equatorial" exibida no PDF (SEM SOLEV) = efetiva
+        tarifa_sem_display = tarifa_efetiva_sem
     else:
-        band_amar_contalev = band_verm_contalev = 0.0
+        # ── Modo "Compensar bandeira": bandeira SEPARADA ──
+        # Cliente paga linhas de bandeira pra Equatorial (no SEM SOLEV).
+        # SOLEV nao cobra bandeira (passa direto pra Equatorial via nao_comp).
+        band_amar_sem_solev = consumo * tarifa_band_amar if tarifa_band_amar > 0 else 0.0
+        band_verm_sem_solev = consumo * tarifa_band_verm if tarifa_band_verm > 0 else 0.0
+        band_amar_solev     = 0.0  # SOLEV nao cobra bandeira
+        band_verm_solev     = 0.0
+        tarifa_com          = tarifa_sem * (1 - desconto)
 
-    # ── FORMULAS SEM SOLEV ──────────────────────────────
-    subtotal_sem  = consumo * tarifa_sem
-    # Bandeira sem SOLEV = sobre TODA a conta (consumo total * tarifa)
-    total_sem     = (subtotal_sem + ilum + multa + juros + ipca
-                     + band_amar_sem_contalev + band_verm_sem_contalev)
+        # SEM SOLEV: 3 linhas (Consumo x Tarifa, Consumo x BandAmar, Consumo x BandVerm)
+        total_consumo_tarifa_sem    = consumo * tarifa_sem
+        total_consumo_band_amar_sem = band_amar_sem_solev
+        total_consumo_band_verm_sem = band_verm_sem_solev
 
-    # ── FORMULAS COM SOLEV ──────────────────────────────
-    tarifa_com    = tarifa_sem * (1 - desconto)
-    subtotal_com  = (comp * tarifa_com) + (nao_comp * tarifa_sem)
+        # COM SOLEV: 4 linhas — comp com desconto, nao_comp com tarifa cheia + bandeiras
+        total_compensado_com         = comp     * tarifa_com
+        total_nao_comp_tarifa_com    = nao_comp * tarifa_sem            # NaoComp paga tarifa Equatorial cheia
+        total_nao_comp_band_amar_com = nao_comp * tarifa_band_amar      # Equatorial cobra band sobre NaoComp
+        total_nao_comp_band_verm_com = nao_comp * tarifa_band_verm
+
+        # Tarifa "Equatorial" exibida no PDF (SEM SOLEV) = soh a tarifa de energia
+        tarifa_sem_display = tarifa_sem
+
+    subtotal_sem = total_consumo_tarifa_sem  # mantido para retrocompat
+    total_sem    = (total_consumo_tarifa_sem + total_consumo_band_amar_sem + total_consumo_band_verm_sem
+                    + ilum + multa + juros + ipca)
+    subtotal_com = total_compensado_com + total_nao_comp_tarifa_com  # mantido para retrocompat
 
     # ── Multa e juros SOLEV (atraso no pagamento do mes anterior) ─
     multa_com = 0.0
@@ -181,7 +221,7 @@ def calcular(d):
     else:
         # Prioridade 2: calculo automatico a partir do mes anterior
         valor_ant = d.get("valor_cobranca_anterior", 0.0)
-        venc_ant  = d.get("venc_contalev_anterior", "").strip()
+        venc_ant  = d.get("venc_solev_anterior", "").strip()
         pgto_ant  = d.get("data_pagamento_anterior", "").strip()
 
         if valor_ant > 0 and venc_ant and pgto_ant:
@@ -201,15 +241,16 @@ def calcular(d):
     ajuste_valor    = float(d.get("ajuste_valor",    0) or 0)
     compensacao_dic = float(d.get("compensacao_dic", 0) or 0)  # negativo = credito da distribuidora
 
+    # ── ITENS FINANCEIROS ─────────────────────────────────────────────────
+    total_financeiro_sem = ilum + multa + juros + ipca
+    total_financeiro_com = ilum + multa_com + juros_com + difci + ecnisenta
+
     # Compensacao DIC e Ajuste afetam ambos (SEM e COM)
     total_sem = total_sem + compensacao_dic + ajuste_valor
-    # multa/juros/IPCA Equatorial entram no COM tambem (SOLEV repassa o custo ao cliente)
-    # Bandeira no COM = ADC Equatorial (passa direto) + SOLEV com desconto (so se nao for com_bandeira)
-    total_com = (subtotal_com + ilum + multa + juros + ipca
-                 + multa_com + juros_com + difci + ecnisenta + ajuste_valor
-                 + compensacao_dic
-                 + adc_band_amar_eq + adc_band_verm_eq
-                 + band_amar_contalev + band_verm_contalev)
+    # TOTAL COM = soma das 4 linhas de energia + financeiros + ajustes
+    total_com = (total_compensado_com + total_nao_comp_tarifa_com
+                 + total_nao_comp_band_amar_com + total_nao_comp_band_verm_com
+                 + total_financeiro_com + ajuste_valor + compensacao_dic)
 
     # ── ECONOMIA ───────────────────────────────────────────
     economia_mes  = total_sem - total_com
@@ -244,7 +285,8 @@ def calcular(d):
 
     out["cpf_fmt"]           = _fmt_cpf(d.get("cpf", ""))
     out["consumo_kwh_fmt"]   = _fmt_kwh(consumo)
-    out["tarifa_sem_fmt"]    = _fmt_tarifa(tarifa_sem)
+    # No modo "Nao compensar", a tarifa exibida no SEM SOLEV inclui bandeira
+    out["tarifa_sem_fmt"]    = _fmt_tarifa(tarifa_sem_display)
     out["subtotal_sem_fmt"]  = _fmt_brl(subtotal_sem)
     out["total_sem_fmt"]     = _fmt_brl(total_sem)
     out["consumo_comp_fmt"]  = _fmt_kwh(comp)
@@ -282,18 +324,43 @@ def calcular(d):
     # Bandeiras — para persistencia em tb_faturas e exibicao na fatura
     out["_band_amar_equatorial"] = adc_band_amar_eq
     out["_band_verm_equatorial"] = adc_band_verm_eq
-    out["_band_amar_contalev"]   = band_amar_contalev
-    out["_band_verm_contalev"]   = band_verm_contalev
+    out["_band_amar_solev"]   = band_amar_solev
+    out["_band_verm_solev"]   = band_verm_solev
     # Valor cobrado COM SOLEV (equatorial + solev por cor)
-    out["_band_amar_total_com"] = adc_band_amar_eq + band_amar_contalev
-    out["_band_verm_total_com"] = adc_band_verm_eq + band_verm_contalev
+    out["_band_amar_total_com"] = adc_band_amar_eq + band_amar_solev
+    out["_band_verm_total_com"] = adc_band_verm_eq + band_verm_solev
     # Valor que seria pago SEM SOLEV (sobre todo o consumo — para economia)
-    out["_band_amar_total_sem"] = band_amar_sem_contalev
-    out["_band_verm_total_sem"] = band_verm_sem_contalev
+    out["_band_amar_total_sem"] = band_amar_sem_solev
+    out["_band_verm_total_sem"] = band_verm_sem_solev
     out["band_amar_total_com_fmt"] = _fmt_brl(out["_band_amar_total_com"]) if out["_band_amar_total_com"] > 0 else ""
     out["band_verm_total_com_fmt"] = _fmt_brl(out["_band_verm_total_com"]) if out["_band_verm_total_com"] > 0 else ""
     out["band_amar_total_sem_fmt"] = _fmt_brl(out["_band_amar_total_sem"]) if out["_band_amar_total_sem"] > 0 else ""
     out["band_verm_total_sem_fmt"] = _fmt_brl(out["_band_verm_total_sem"]) if out["_band_verm_total_sem"] > 0 else ""
+    # Itemizacao por linha — SEM SOLEV (3 linhas)
+    out["_total_consumo_tarifa_sem"]    = total_consumo_tarifa_sem
+    out["_total_consumo_band_amar_sem"] = total_consumo_band_amar_sem
+    out["_total_consumo_band_verm_sem"] = total_consumo_band_verm_sem
+    out["_total_financeiro_sem"]        = total_financeiro_sem
+    out["total_consumo_tarifa_sem_fmt"]    = _fmt_brl(total_consumo_tarifa_sem)
+    out["total_consumo_band_amar_sem_fmt"] = _fmt_brl(total_consumo_band_amar_sem)
+    out["total_consumo_band_verm_sem_fmt"] = _fmt_brl(total_consumo_band_verm_sem)
+    out["total_financeiro_sem_fmt"]        = _fmt_brl(total_financeiro_sem)
+
+    # Itemizacao por linha — COM SOLEV (4 linhas)
+    out["_total_compensado_com"]         = total_compensado_com
+    out["_total_nao_comp_tarifa_com"]    = total_nao_comp_tarifa_com
+    out["_total_nao_comp_band_amar_com"] = total_nao_comp_band_amar_com
+    out["_total_nao_comp_band_verm_com"] = total_nao_comp_band_verm_com
+    out["_total_financeiro_com"]         = total_financeiro_com
+    out["total_compensado_com_fmt"]         = _fmt_brl(total_compensado_com)
+    out["total_nao_comp_tarifa_com_fmt"]    = _fmt_brl(total_nao_comp_tarifa_com)
+    out["total_nao_comp_band_amar_com_fmt"] = _fmt_brl(total_nao_comp_band_amar_com)
+    out["total_nao_comp_band_verm_com_fmt"] = _fmt_brl(total_nao_comp_band_verm_com)
+    out["total_financeiro_com_fmt"]         = _fmt_brl(total_financeiro_com)
+
+    # Tarifas formatadas (alem das ja existentes tarifa_sem_fmt e tarifa_com_fmt)
+    out["tarifa_band_amar_fmt"] = _fmt_tarifa(tarifa_band_amar) if tarifa_band_amar > 0 else "—"
+    out["tarifa_band_verm_fmt"] = _fmt_tarifa(tarifa_band_verm) if tarifa_band_verm > 0 else "—"
     return out
 
 
@@ -355,6 +422,15 @@ def _gerar_qr_b64(pix_qr_path: str, pix_payload: str) -> str:
 
 # ─── Playwright HTML → PDF ────────────────────────────────────────────────────
 def _html_para_pdf(html_str: str) -> bytes:
+    """Renderiza HTML para PDF via Playwright/Chromium.
+
+    Cada chamada cria um browser efêmero — seguro em ambiente multi-thread
+    (Flask threaded). Otimizações vs. versão original:
+      - Espera apenas DOMContentLoaded (não networkidle) — fontes externas
+        do Google são baixadas mas não bloqueiam a renderização
+      - Timeout reduzido (8s vs 20s default)
+      - Args do Chromium otimizados (sem GPU, sem sandbox)
+    """
     with tempfile.NamedTemporaryFile(
         suffix=".html", mode="w", encoding="utf-8", delete=False
     ) as f:
@@ -363,18 +439,38 @@ def _html_para_pdf(html_str: str) -> bytes:
     try:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as pw:
-            browser = pw.chromium.launch()
-            page = browser.new_page()
-            page.goto("file:///" + tmp_path.replace("\\", "/"))
-            page.wait_for_load_state("networkidle", timeout=20000)
-            pdf_bytes = page.pdf(
-                format="A4",
-                print_background=True,
-                margin={"top": "0mm", "right": "0mm",
-                        "bottom": "0mm", "left": "0mm"},
-                prefer_css_page_size=True,
+            browser = pw.chromium.launch(
+                args=[
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                ],
             )
-            browser.close()
+            try:
+                page = browser.new_page()
+                # wait_until="load" garante que fontes e CSS externos terminaram
+                # de carregar antes do PDF ser gerado. Timeout maior (15s) acomoda
+                # redes mais lentas — Google Fonts pode demorar 3-5s no 1º load.
+                page.goto(
+                    "file:///" + tmp_path.replace("\\", "/"),
+                    wait_until="load",
+                    timeout=15000,
+                )
+                # Espera adicional para fontes via FontFace API (web fonts)
+                try:
+                    page.evaluate("document.fonts.ready")
+                    page.wait_for_function("document.fonts.status === 'loaded'", timeout=8000)
+                except Exception:
+                    pass
+                pdf_bytes = page.pdf(
+                    format="A4",
+                    print_background=True,
+                    margin={"top": "0mm", "right": "0mm",
+                            "bottom": "0mm", "left": "0mm"},
+                    prefer_css_page_size=True,
+                )
+            finally:
+                browser.close()
         return pdf_bytes
     finally:
         try:
@@ -422,106 +518,121 @@ def _criar_overlay_pdf(page_w: float = None, page_h: float = None) -> bytes:
     c = canvas.Canvas(buf, pagesize=_ps)
     W, H = _ps
 
-    # ── Faixa superior: wordmark + label direita ──────────────────────────────
-    STRIP_H = 10 * mm
+    # ── Faixa superior: wordmark SoLev + label direita ─────────────────────────
+    STRIP_H = 11 * mm
     c.setFillColor(INK)
     c.rect(0, H - STRIP_H, W, STRIP_H, fill=1, stroke=0)
 
     MID_Y = H - STRIP_H / 2
     SX    = 12 * mm
-    FS_WM = 12
+    FS_WM = 17  # ligeiramente menor
+
+    # Wordmark SoLev — adaptado para Helvetica (Sora real nao disponivel em PDF builtin)
+    # "o" e um circulo: outer PAPER + miolo laranja (proporcao 66% como no SVG da marca)
+    OE = FS_WM
+    BASE_Y    = MID_Y - 0.30 * OE              # baseline (Helvetica desce ~0.21em abaixo do meio)
+    O_RADIUS  = 0.32 * OE                      # diametro = 0.64em
+    O_INNER_R = O_RADIUS * 0.66                # miolo laranja
+    O_CTR_Y   = BASE_Y + O_RADIUS              # base do circulo na baseline (igual aos letras)
 
     c.setFillColor(WHITE)
     c.setFont("Helvetica-Bold", FS_WM)
     s_w = c.stringWidth("s", "Helvetica-Bold", FS_WM)
-    c.drawString(SX, MID_Y - FS_WM * 0.35, "s")
+    c.drawString(SX, BASE_Y, "s")
 
-    o_cx = SX + s_w + FS_WM * 0.25
-    o_cy = MID_Y - FS_WM * 0.05
-    OR   = FS_WM * 0.42
-    IR   = OR * 0.58
-    c.setFillColor(WHITE);  c.circle(o_cx, o_cy, OR, fill=1, stroke=0)
-    c.setFillColor(ACCENT); c.circle(o_cx, o_cy, IR, fill=1, stroke=0)
+    # "o" — encostado no "s" sem overlap visual
+    o_left  = SX + s_w + 0.01 * OE
+    o_cx    = o_left + O_RADIUS
+    c.setFillColor(WHITE);  c.circle(o_cx, O_CTR_Y, O_RADIUS,  fill=1, stroke=0)
+    c.setFillColor(ACCENT); c.circle(o_cx, O_CTR_Y, O_INNER_R, fill=1, stroke=0)
 
-    lx = o_cx + OR + FS_WM * 0.08
+    # "l" — bold, logo apos a borda direita do "o"
+    o_right = o_left + 2 * O_RADIUS
+    lx      = o_right + 0.01 * OE
     c.setFillColor(WHITE)
     c.setFont("Helvetica-Bold", FS_WM)
     l_w = c.stringWidth("l", "Helvetica-Bold", FS_WM)
-    c.drawString(lx, MID_Y - FS_WM * 0.35, "l")
+    c.drawString(lx, BASE_Y, "l")
+
+    # "ev" em peso leve (Helvetica regular como aproximacao do Sora Light)
     c.setFont("Helvetica", FS_WM)
-    c.drawString(lx + l_w, MID_Y - FS_WM * 0.35, "ev")
+    c.drawString(lx + l_w, BASE_Y, "ev")
 
     c.setFillColor(ACCENT)
-    c.setFont("Helvetica", 7)
-    right_txt = "FATURA  EQUATORIAL  GO    ·    ANEXO"
-    rw = c.stringWidth(right_txt, "Helvetica", 7)
+    c.setFont("Helvetica", 7.5)
+    right_txt = "FATURA EQUATORIAL GO  ·  ANEXO"
+    rw = c.stringWidth(right_txt, "Helvetica", 7.5)
     c.drawString(W - 12 * mm - rw, MID_Y - 2.5, right_txt)
 
-    # ── Area inferior ─────────────────────────────────────────────────────────
-    COVER_H = 115 * mm
-    c.setFillColor(PAPER)
-    c.rect(0, 0, W, COVER_H, fill=1, stroke=0)
+    # ── Rodape grande: fundo INK (azul da logo), texto PAPER (areia) ─────────
+    FOOTER_H = 110.5 * mm  # cobre boleto/PIX/codigo de barras da Equatorial
+    c.setFillColor(INK)
+    c.rect(0, 0, W, FOOTER_H, fill=1, stroke=0)
+    # Linha decorativa laranja no topo do rodape
     c.setFillColor(ACCENT)
-    c.rect(0, COVER_H, W, 1.5 * mm, fill=1, stroke=0)
+    c.rect(0, FOOTER_H - 0.5 * mm, W, 0.5 * mm, fill=1, stroke=0)
 
-    # ── Simbolo SoLev + bloco "Obrigado" (grupo centralizado) ────────────────
-    SYM_R  = 15 * mm
-    GAP    = 9 * mm
-    SYM_CY = COVER_H - 30 * mm
+    # ── Logo SoLev + titulo (alinhados horizontalmente, centralizados) ──
+    F_TITLE_FOOT = "Helvetica-Bold"
+    F_SUB_FOOT   = "Georgia"        if _geo else "Times-Roman"
+    F_VERSE_FOOT = "Georgia-Italic" if _geo else "Times-Italic"
 
-    OBR_TXT = "Obrigado pela sua confiança!"
-    OBR_FS  = 22
-    SUB1    = "É um prazer cuidar da sua energia e da sua economia."
-    SUB2    = "Que o sol continue iluminando os seus dias."
-    SUB_FS  = 11.5
+    TITLE_TXT = "Obrigado pela sua confianca!"
+    TITLE_FS  = 20
+    SUB1 = "E um prazer cuidar da sua energia e da sua economia."
+    SUB2 = "Que o sol continue iluminando os seus dias."
+    SUB_FS = 10.5
 
-    c.setFont(F_TITLE, OBR_FS)
-    obr_w  = c.stringWidth(OBR_TXT, F_TITLE, OBR_FS)
-    c.setFont(F_SUB, SUB_FS)
-    sub1_w = c.stringWidth(SUB1, F_SUB, SUB_FS)
-    sub2_w = c.stringWidth(SUB2, F_SUB, SUB_FS)
-    TEXT_W  = max(obr_w, sub1_w, sub2_w)
+    SYM_R = 13 * mm
+    GAP   = 8 * mm
 
-    GROUP_W   = 2 * SYM_R + GAP + TEXT_W
-    GROUP_X   = (W - GROUP_W) / 2
-    SYM_CX    = GROUP_X + SYM_R
-    TEXT_LEFT = GROUP_X + 2 * SYM_R + GAP
+    c.setFont(F_TITLE_FOOT, TITLE_FS)
+    title_w = c.stringWidth(TITLE_TXT, F_TITLE_FOOT, TITLE_FS)
+    c.setFont(F_SUB_FOOT, SUB_FS)
+    sub1_w  = c.stringWidth(SUB1, F_SUB_FOOT, SUB_FS)
+    sub2_w  = c.stringWidth(SUB2, F_SUB_FOOT, SUB_FS)
+    TEXT_W  = max(title_w, sub1_w, sub2_w)
 
-    c.setFillColor(INK);    c.circle(SYM_CX, SYM_CY, SYM_R, fill=1, stroke=0)
+    GROUP_W  = 2 * SYM_R + GAP + TEXT_W
+    GROUP_X  = (W - GROUP_W) / 2
+    SYM_CX   = GROUP_X + SYM_R
+    SYM_CY   = FOOTER_H - 28 * mm
+    TEXT_LFT = GROUP_X + 2 * SYM_R + GAP
+
+    # Logo: outer PAPER (visivel no fundo INK) + miolo laranja
+    c.setFillColor(PAPER);  c.circle(SYM_CX, SYM_CY, SYM_R, fill=1, stroke=0)
     c.setFillColor(ACCENT); c.circle(SYM_CX, SYM_CY, SYM_R * 0.58, fill=1, stroke=0)
 
-    c.setFillColor(INK)
-    c.setFont(F_TITLE, OBR_FS)
-    c.drawString(TEXT_LEFT, SYM_CY + 6 * mm, OBR_TXT)
-    c.setFont(F_SUB, SUB_FS)
-    c.drawString(TEXT_LEFT, SYM_CY - 2 * mm, SUB1)
-    c.drawString(TEXT_LEFT, SYM_CY - 9 * mm, SUB2)
+    # Texto principal em PAPER (areia) sobre fundo INK
+    c.setFillColor(PAPER)
+    c.setFont(F_TITLE_FOOT, TITLE_FS)
+    c.drawString(TEXT_LFT, SYM_CY + 5 * mm, TITLE_TXT)
+    c.setFont(F_SUB_FOOT, SUB_FS)
+    c.drawString(TEXT_LFT, SYM_CY - 2 * mm, SUB1)
+    c.drawString(TEXT_LFT, SYM_CY - 9 * mm, SUB2)
 
-    # ── Separador e versiculo ─────────────────────────────────────────────────
-    CX    = W / 2
-    SEP_Y = COVER_H - 62 * mm
-    c.setStrokeColor(ACCENT)
-    c.setLineWidth(0.4 * mm)
-    c.line(20 * mm, SEP_Y, W - 20 * mm, SEP_Y)
+    # ── Separador decorativo + versiculo 1Co 13:4-7 centralizado ──
+    SEP_Y = FOOTER_H - 56 * mm
+    c.setStrokeColor(ACCENT); c.setLineWidth(0.35 * mm)
+    c.line(28 * mm, SEP_Y, W - 28 * mm, SEP_Y)
 
-    V1 = "\"O amor é paciente, o amor é bondoso."
-    V2 = "Não inveja, não se vangloria, não se orgulha."
-    V3 = "Não maltrata, não procura seus interesses,"
-    V4 = "não se ira facilmente, não guarda rancor.\""
-    REF = "1 Coríntios 13:4-7"
-    FS_V = 10.5
-    LH   = 6.5 * mm
+    # Versiculo em PAPER (areia), levemente atenuado pela transparencia natural do italico
+    c.setFillColor(PAPER)
+    c.setFont(F_VERSE_FOOT, 10)
+    LH = 5.6 * mm
+    versos = [
+        "“O amor e paciente, o amor e bondoso. Nao inveja, nao se vangloria, nao se orgulha.",
+        "Nao maltrata, nao procura seus interesses, nao se ira facilmente, nao guarda rancor.",
+        "O amor nao se alegra com a injustica, mas se alegra com a verdade.",
+        "Tudo sofre, tudo cre, tudo espera, tudo suporta.”",
+    ]
+    for i, linha in enumerate(versos):
+        c.drawCentredString(W / 2, SEP_Y - 8 * mm - i * LH, linha)
 
     c.setFillColor(ACCENT)
-    c.setFont(F_VERSE, FS_V)
-    c.drawCentredString(CX, SEP_Y - 9 * mm,        V1)
-    c.drawCentredString(CX, SEP_Y - 9 * mm - LH,   V2)
-    c.drawCentredString(CX, SEP_Y - 9 * mm - 2*LH, V3)
-    c.drawCentredString(CX, SEP_Y - 9 * mm - 3*LH, V4)
-
-    c.setFillColor(MUTED)
-    c.setFont(F_VERSE, 9)
-    c.drawCentredString(CX, SEP_Y - 9 * mm - 4*LH - 3*mm, REF)
+    c.setFont(F_VERSE_FOOT, 9)
+    c.drawCentredString(W / 2, SEP_Y - 8 * mm - len(versos) * LH - 3 * mm,
+                        "1 Corintios 13:4-7")
 
     c.save()
     buf.seek(0)
@@ -595,13 +706,30 @@ def _dict_para_contexto(d: dict, qr_b64: str, bar_b64: str) -> dict:
                  d.get("endereco_linha3", "")]
         end = "\n".join(p for p in parts if p)
 
-    pct_int = int(round(float(d.get("desconto_pct", 0)) * 100))
+    # Desconto exibido depende do modo de bandeira do cliente:
+    # - COMPENSA bandeira (com_bandeira): (tarifa_eq + band_am + band_vm - tarifa_com) / tarifa_eq * 100
+    #   ex.: Antonio com band_am=0,006346 => 20,56% (= 20% cadastrado + bonus da bandeira)
+    # - NAO COMPENSA (sem_bandeira): apenas o percentual cadastrado, sem calculo
+    desconto_cadastro = float(d.get("desconto_pct", 0) or 0) * 100
+    _modo_band = (d.get("modo_bandeira") or "com_bandeira").strip().lower()
+    if _modo_band == "com_bandeira":
+        _t_eq    = float(d.get("tarifa_sem", 0) or 0)
+        _b_am    = float(d.get("bandeira_tarifa_amar", 0) or 0)
+        _b_vm    = float(d.get("bandeira_tarifa_verm", 0) or 0)
+        _t_com_t = float(d.get("_tarifa_com", 0) or 0)
+        if _t_eq > 0:
+            pct_float = (_t_eq + _b_am + _b_vm - _t_com_t) / _t_eq * 100
+        else:
+            pct_float = desconto_cadastro
+    else:
+        pct_float = desconto_cadastro
+    pct_int = f"{pct_float:.2f}".replace(".", ",")
     eco_mes = d.get("economia_mes_fmt", "R$ 0,00").replace("R$ ", "")
 
     return {
         "mes_ref":    d.get("mes_ano_fatura", ""),
         "mes_nome":   mes_nome,
-        "vencimento": d.get("venc_contalev", ""),
+        "vencimento": d.get("venc_solev", ""),
         "id_fatura":  d.get("id_fatura", ""),
         "cliente": {
             "nome":     d.get("nome", ""),
@@ -619,24 +747,27 @@ def _dict_para_contexto(d: dict, qr_b64: str, bar_b64: str) -> dict:
             "dias":     d.get("num_dias", ""),
         },
         "sem_solev": {
-            "consumo": d.get("consumo_kwh_fmt", ""),
-            "tarifa":  d.get("tarifa_sem_fmt", ""),
-            "energia": d.get("subtotal_sem_fmt", ""),
-            "ilum":    d.get("ilum_fmt", ""),
-            "multa":   d.get("multa_fmt", ""),
-            "juros":   d.get("juros_fmt", ""),
-            "total":   d.get("total_sem_fmt", ""),
+            "consumo":      d.get("consumo_kwh_fmt", ""),
+            "tarifa":       d.get("tarifa_sem_fmt", ""),
+            "energia":      d.get("subtotal_sem_fmt", ""),
+            "ilum":         d.get("ilum_fmt", ""),
+            "multa":        d.get("multa_fmt", "R$ 0,00"),
+            "juros":        d.get("juros_fmt", "R$ 0,00"),
+            "ipca":         d.get("ipca_fmt", ""),
+            "total":        d.get("total_sem_fmt", ""),
         },
         "com_solev": {
-            "consumo_comp":     d.get("consumo_comp_fmt", ""),
-            "consumo_nao_comp": d.get("consumo_ncomp_fmt", ""),
-            "tarifa_desc":      d.get("tarifa_com_fmt", ""),
-            "desconto_pct":     pct_int,
-            "energia":          d.get("subtotal_com_fmt", ""),
-            "ilum":             d.get("ilum_fmt", ""),
-            "multa":            d.get("multa_fmt", ""),
-            "juros":            d.get("juros_fmt", ""),
-            "total":            d.get("total_com_fmt", ""),
+            "consumo_comp":      d.get("consumo_comp_fmt", ""),
+            "consumo_nao_comp":  d.get("consumo_ncomp_fmt", ""),
+            "tarifa_desc":       d.get("tarifa_com_fmt", ""),
+            "energia":           d.get("subtotal_com_fmt", ""),
+            "ilum":              d.get("ilum_fmt", ""),
+            "multa":             d.get("multa_com_fmt", "R$ 0,00"),
+            "juros":             d.get("juros_com_fmt", "R$ 0,00"),
+            "difci":             d.get("difci_fmt", ""),
+            "ecnisenta":         d.get("ecnisenta_fmt", ""),
+            "total":             d.get("total_com_fmt", ""),
+            "desconto_pct":      pct_int,
         },
         "economia_mes":       eco_mes,
         "economia_acumulada": d.get("economia_acum_fmt", ""),
@@ -657,6 +788,44 @@ def _dict_para_contexto(d: dict, qr_b64: str, bar_b64: str) -> dict:
 
 
 
+def _gerar_fontes_locais_css() -> str:
+    """Gera <style> com @font-face apontando para fontes locais via file:// URLs.
+
+    Elimina dependência de Google Fonts ao gerar PDFs — carregamento instantâneo
+    e consistente, sem precisar de internet. Fontes baixadas via:
+        python scripts/baixar_fontes_cobranca.py
+
+    Retorna '' se a pasta static/fonts não existir (cai pro fallback Google).
+    """
+    from pathlib import Path
+    fontes_dir = Path(_DIR) / "static" / "fonts"
+    if not fontes_dir.is_dir():
+        return ""
+    fonts_map = {
+        "Sora":           [300, 400, 500, 600, 700, 800],
+        "Manrope":        [400, 500, 600, 700],
+        "JetBrains Mono": [400, 500],
+    }
+    blocos = []
+    for family, weights in fonts_map.items():
+        fname_base = family.replace(" ", "")
+        for w in weights:
+            for ext in (".woff2", ".ttf", ".woff"):
+                font_file = fontes_dir / f"{fname_base}-{w}-normal{ext}"
+                if font_file.exists():
+                    fmt = {".woff2": "woff2", ".woff": "woff", ".ttf": "truetype"}[ext]
+                    uri = font_file.resolve().as_uri()  # file:///C:/...
+                    blocos.append(
+                        f"@font-face {{ font-family: '{family}'; font-weight: {w}; "
+                        f"font-style: normal; src: url('{uri}') format('{fmt}'); "
+                        f"font-display: block; }}"
+                    )
+                    break
+    if not blocos:
+        return ""
+    return "<style>\n" + "\n".join(blocos) + "\n</style>\n"
+
+
 def _pagina1(d: dict, path: str):
     from jinja2 import Environment, FileSystemLoader
     qr_b64  = _gerar_qr_b64(d.get("pix_qr_path", ""), d.get("pix_payload", ""))
@@ -667,6 +836,22 @@ def _pagina1(d: dict, path: str):
         autoescape=False,
     )
     html = env.get_template("fatura/cobranca.html").render(fatura=fatura)
+
+    # ── Injeta fontes locais ANTES das tags <link> do Google ──
+    # Garante que o Chromium renderiza com as fontes corretas
+    # mesmo sem internet (zero dependência externa).
+    fontes_inline = _gerar_fontes_locais_css()
+    if fontes_inline:
+        # Insere antes do primeiro preconnect (ou no início do <head>)
+        if '<link rel="preconnect"' in html:
+            html = html.replace(
+                '<link rel="preconnect"',
+                fontes_inline + '<link rel="preconnect"',
+                1,
+            )
+        else:
+            html = html.replace("<head>", "<head>\n" + fontes_inline, 1)
+
     pdf  = _html_para_pdf(html)
     with open(path, "wb") as f:
         f.write(pdf)

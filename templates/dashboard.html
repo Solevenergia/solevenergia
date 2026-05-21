@@ -18,7 +18,7 @@
         <div class="mt-2" style="font-size:12px">
         {% for item in alertas_vencidas %}
             <div class="d-flex justify-content-between align-items-center py-1 {% if not loop.last %}border-bottom{% endif %}" style="border-color:rgba(0,0,0,0.1)!important">
-                <span><strong>{{ item.nome[:30] }}</strong> <code style="font-size:10px">{{ item.uc }}</code></span>
+                <span><strong>{{ item.nome[:30] }}</strong> <code style="font-size:10px">{{ item.uc | fmt_uc15 }}</code></span>
                 <span>{{ fmt(item.total_com) }} — venc. {{ item.vencimento }}</span>
             </div>
         {% endfor %}
@@ -35,7 +35,7 @@
         <div class="mt-2" style="font-size:12px">
         {% for item in alertas_vencendo %}
             <div class="d-flex justify-content-between align-items-center py-1 {% if not loop.last %}border-bottom{% endif %}" style="border-color:rgba(0,0,0,0.1)!important">
-                <span><strong>{{ item.nome[:30] }}</strong> <code style="font-size:10px">{{ item.uc }}</code></span>
+                <span><strong>{{ item.nome[:30] }}</strong> <code style="font-size:10px">{{ item.uc | fmt_uc15 }}</code></span>
                 <span>{{ fmt(item.total_com) }}</span>
             </div>
         {% endfor %}
@@ -61,7 +61,7 @@
                     {% if a.status == 'atrasado' %}<i class="bi bi-exclamation-circle-fill me-1" style="color:#dc3545"></i>
                     {% elif a.status == 'urgente' %}<i class="bi bi-exclamation-triangle-fill me-1" style="color:#ffc107"></i>
                     {% else %}<i class="bi bi-clock-fill me-1" style="color:#3b82f6"></i>{% endif %}
-                    <strong>{{ a.nome[:25] }}</strong> <code style="font-size:10px">UC {{ a.uc_geradora }}</code>
+                    <strong>{{ a.nome[:25] }}</strong> <code style="font-size:10px">UC {{ a.uc_geradora | fmt_uc15 }}</code>
                 </span>
                 <span>
                     {% if a.dias_restantes <= 0 %}
@@ -88,7 +88,7 @@
         <div class="mt-2" style="font-size:12px">
         {% for c in clientes_sem_usina[:10] %}
             <span class="badge me-1 mb-1" style="background:rgba(26,42,74,0.1);color:var(--db);font-weight:500;font-size:11px">
-                {{ c.nome[:25] }} <code style="font-size:9px">{{ c.uc }}</code>
+                {{ c.nome[:25] }} <code style="font-size:9px">{{ c.uc | fmt_uc15 }}</code>
             </span>
         {% endfor %}
         {% if clientes_sem_usina|length > 10 %}
@@ -153,7 +153,7 @@
         <table class="table table-sm mb-0" style="font-size:12px">
             <thead><tr><th>Cliente</th><th>Mês</th><th class="text-end">COM</th><th class="text-end">Economia</th><th>Status</th><th>Venc.</th></tr></thead>
             <tbody>{% for item in ultimas %}<tr>
-                <td><strong>{{ item.nome[:22] }}</strong><br><code style="font-size:10px">{{ item.uc }}</code></td>
+                <td><strong>{{ item.nome[:22] }}</strong><br><code style="font-size:10px">{{ item.uc | fmt_uc15 }}</code></td>
                 <td>{{ item.mes_referencia }}</td>
                 <td class="text-end"><strong>{{ fmt(item.total_com) }}</strong></td>
                 <td class="text-end" style="color:var(--green);font-weight:600">{{ fmt(item.economia_mes) }}</td>
@@ -193,7 +193,7 @@
                 {% for a in alertas_rateio %}
                 <tr style="{% if a.status == 'atrasado' %}background:rgba(220,53,69,0.04){% elif a.status == 'urgente' %}background:rgba(255,193,7,0.06){% endif %}">
                     <td><a href="/usinas/ver/{{ a.uid }}" class="text-decoration-none"><strong>{{ a.nome[:22] }}</strong></a></td>
-                    <td><code style="font-size:11px">{{ a.uc_geradora }}</code></td>
+                    <td><code style="font-size:11px">{{ a.uc_geradora | fmt_uc15 }}</code></td>
                     <td class="text-center">{{ a.total_clientes }}</td>
                     <td class="text-end"><strong style="color:var(--or)">{{ "{:,.0f}".format(a.geracao_media).replace(",", ".") }}</strong> kWh</td>
                     <td class="text-center">

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if rec %}Editar{% else %}Novo{% endif %} Recebedor PIX{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Recebedores PIX</span><span class="sep">›</span><span class="here">{% if rec %}Editar Recebedor{% else %}Novo Recebedor{% endif %}</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-qr-code me-2" style="color:var(--or)"></i>{% if rec %}Editar Recebedor{% else %}Novo Recebedor PIX{% endif %}</h1>

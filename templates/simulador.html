@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Simulador{% endblock %}
+{% block topbar_breadcrumb %}<span>Analise</span><span class="sep">›</span><span class="here">Simulador</span>{% endblock %}
 {% block content %}
 <div class="page-header"><h1><i class="bi bi-calculator-fill me-2" style="color:var(--or)"></i>Simulador de Economia</h1></div>
 
@@ -10,7 +11,7 @@
         <div class="card mb-3" style="background:linear-gradient(135deg, var(--db) 0%, #0f1d35 100%);color:white">
             <div class="card-body p-4 text-center">
                 <p class="mb-0" style="color:rgba(255,255,255,0.5);font-size:12px">Simulacao para <strong style="color:var(--or)">{{ resultado.nome }}</strong></p>
-                {% if resultado.uc %}<p class="mb-0" style="color:rgba(255,255,255,0.3);font-size:11px">UC: {{ resultado.uc }} | {{ resultado.tipo_fornecimento }}</p>{% endif %}
+                {% if resultado.uc %}<p class="mb-0" style="color:rgba(255,255,255,0.3);font-size:11px">UC: {{ resultado.uc | fmt_uc15 }} | {{ resultado.tipo_fornecimento }}</p>{% endif %}
                 <h6 class="mb-1 mt-2" style="color:rgba(255,255,255,0.6)">Economia mensal estimada</h6>
                 <h1 class="fw-bold mb-1" style="color:var(--or);font-size:42px">{{ fmt(resultado.economia_mes) }}</h1>
                 <p style="color:rgba(255,255,255,0.5);font-size:13px;margin:0">{{ fmt(resultado.economia_anual) }} por ano — desconto de <strong style="color:var(--or)">{{ resultado.desconto_mostrado }}%</strong> na conta</p>
@@ -74,7 +75,7 @@
             {% if resultado.endereco %}
             <div class="mb-2" style="font-size:11px;color:#666"><i class="bi bi-geo-alt me-1"></i>{{ resultado.endereco }}</div>{% endif %}
             <div class="row" style="font-size:12px">
-                <div class="col-4 mb-1"><span class="text-muted">UC:</span> <strong>{{ resultado.uc or '-' }}</strong></div>
+                <div class="col-4 mb-1"><span class="text-muted">UC:</span> <strong>{{ (resultado.uc | fmt_uc15) or '-' }}</strong></div>
                 <div class="col-4 mb-1"><span class="text-muted">CPF:</span> {{ resultado.cpf or '-' }}</div>
                 <div class="col-4 mb-1"><span class="text-muted">Tipo:</span> {{ resultado.tipo_fornecimento or '-' }}</div>
             </div>
@@ -295,7 +296,7 @@
         <tbody>{% for s in simulacoes %}<tr>
             <td style="font-size:11px">{{ s.data }}</td>
             <td><strong>{{ s.nome[:25] }}</strong>{% if s.telefone %}<br><small class="text-muted">{{ s.telefone }}</small>{% endif %}</td>
-            <td><code style="font-size:10px">{{ s.uc or '—' }}</code></td>
+            <td><code style="font-size:10px">{{ (s.uc | fmt_uc15) or '—' }}</code></td>
             <td>{{ "{:,.0f}".format(s.consumo).replace(",", ".") }} kWh</td>
             <td class="text-muted">{{ fmt(s.total_sem) }}</td>
             <td><strong>{{ fmt(s.total_com) }}</strong></td>

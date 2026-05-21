@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Demonstrativo — {{ usina.investidor_nome }}{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Investidores</span><span class="sep">›</span><span class="here">Gerar Demonstrativo</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-briefcase-fill me-2" style="color:var(--or)"></i>Gerar Demonstrativo</h1>
@@ -15,7 +16,7 @@
     <div class="col-md-4"><div class="card stat-card">
         <div class="stat-label">Usina</div>
         <div class="stat-value" style="font-size:18px">{{ usina.nome or uid }}</div>
-        <div class="stat-label mt-1">UC: {{ usina.uc_geradora }}</div>
+        <div class="stat-label mt-1">UC: {{ usina.uc_geradora | fmt_uc15 }}</div>
     </div></div>
     <div class="col-md-4"><div class="card stat-card">
         <div class="stat-label">Deságio</div>
@@ -28,7 +29,7 @@
 <div class="row g-3">
     <div class="col-md-7"><div class="card"><div class="card-body p-4">
         <h6 class="fw-bold mb-3">Fatura da UC Geradora (Equatorial)</h6>
-        <p class="text-muted mb-3" style="font-size:13px">Envie o PDF da fatura da <strong>UC geradora</strong> ({{ usina.uc_geradora }})</p>
+        <p class="text-muted mb-3" style="font-size:13px">Envie o PDF da fatura da <strong>UC geradora</strong> ({{ usina.uc_geradora | fmt_uc15 }})</p>
         <div class="upload-area" id="uploadArea" onclick="document.getElementById('pdfInput').click()">
             <i class="bi bi-cloud-arrow-up mb-2 d-block" style="font-size:40px;color:var(--or)"></i>
             <h6 class="fw-bold" id="uploadText">Arraste o PDF aqui ou clique</h6>

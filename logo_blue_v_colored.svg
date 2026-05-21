@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 200" width="1200" height="400">
+  <title>Solev · wordmark · color</title>
+  <defs>
+    
+  </defs>
+  
+  <g transform="translate(40 145)">
+    
+    <text x="0" y="0" class="sora-bold" font-size="160" fill="#0E1B2E" letter-spacing="-7">s</text>
+    
+    <g transform="translate(83 -78) scale(0.85)">
+      <circle cx="50" cy="50" r="50" fill="#0E1B2E"></circle>
+      <circle cx="50" cy="50" r="33" fill="#E8732A"></circle>
+    </g>
+    
+    <text x="170" y="0" class="sora-bold" font-size="160" fill="#0E1B2E" letter-spacing="-7">l</text>
+    <text x="210" y="0" class="sora-light" font-size="160" fill="#0E1B2E" letter-spacing="-7">ev</text>
+  </g>
+</svg>

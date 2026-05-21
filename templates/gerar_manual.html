@@ -1,15 +1,20 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Gerar Cobrança Manual — SOLEV{% endblock %}
 
 {% block content %}
 <div class="container-fluid px-4 py-4">
-    <div class="d-flex align-items-center mb-4">
+    <div class="d-flex align-items-center mb-4 flex-wrap gap-2">
         <h3 class="fw-bold mb-0">
-            <i class="bi bi-pencil-square me-2" style="color:var(--orange)"></i>
-            Gerar Cobrança Manual
+            <i class="bi bi-lightning-charge-fill me-2" style="color:var(--orange)"></i>
+            Gerar Cobrança
         </h3>
-        <a href="{{ url_for('gerar') }}" class="btn btn-outline-secondary btn-sm ms-3">
-            <i class="bi bi-file-earmark-pdf me-1"></i>Via Fatura Equatorial
+        <button type="button" class="btn btn-cta btn-sm ms-3"
+                title="Cadastrar / editar tarifas (Equatorial, Bandeiras)"
+                onclick="abrirModalTarifas()">
+            <i class="bi bi-lightning-fill me-1"></i>Tarifas do Mês
+        </button>
+        <a href="{{ url_for('gerar_lote') }}" class="btn btn-outline-secondary btn-sm" title="Gerar várias cobranças de uma vez">
+            <i class="bi bi-files me-1"></i>Em Lote
         </a>
     </div>
 
@@ -72,244 +77,641 @@
         <input type="hidden" name="desconto_pct" id="f_desconto_pct">
         <input type="hidden" name="modo_bandeira" id="f_modo_bandeira">
         <input type="hidden" name="valor_cobranca_anterior" id="f_valor_cobranca_anterior">
-        <input type="hidden" name="venc_contalev_anterior" id="f_venc_contalev_anterior">
+        <input type="hidden" name="venc_solev_anterior" id="f_venc_solev_anterior">
         <input type="hidden" name="data_pagamento_anterior" id="f_data_pagamento_anterior">
         <input type="hidden" name="economia_acumulada_anterior" id="f_economia_acumulada_anterior">
         <input type="hidden" name="titular_fatura" id="f_titular_fatura">
 
-        <div class="row">
-            <!-- Coluna 1: Dados da Fatura -->
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3"><i class="bi bi-lightning-fill me-2" style="color:var(--orange)"></i>Dados da Fatura</h5>
-
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Mês de Referência <span class="text-danger">*</span></label>
-                                <input type="text" name="mes_referencia" id="f_mes_ref" class="form-control" placeholder="MM/AAAA" required>
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Tipo de Fornecimento</label>
-                                <select name="tipo_fornecimento" id="f_tipo_forn" class="form-select">
-                                    <option value="Monofásico">Monofásico</option>
-                                    <option value="Bifásico" selected>Bifásico</option>
-                                    <option value="Trifásico">Trifásico</option>
-                                </select>
-                            </div>
+        <!-- 📋 SEÇÃO 1: DADOS DA FATURA -->
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-4"><i class="bi bi-receipt me-2" style="color:var(--orange)"></i>Dados da Fatura</h5>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Mês <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <input type="text" name="mes_referencia" id="f_mes_ref" class="form-control form-control-lg text-center" placeholder="MM/AAAA" required>
+                            <button type="button" class="btn btn-outline-secondary"
+                                    title="Gerenciar tarifas (Equatorial / Bandeiras)"
+                                    onclick="abrirModalTarifas()"
+                                    style="border-color:#dee2e6">
+                                <i class="bi bi-gear-fill" style="color:var(--orange)"></i>
+                            </button>
                         </div>
-
-                        <div class="row">
-                            <div class="col-4 mb-3">
-                                <label class="form-label">Consumo (kWh) <span class="text-danger">*</span></label>
-                                <input type="text" name="consumo_kwh" id="f_consumo" class="form-control" placeholder="855" required>
-                            </div>
-                            <div class="col-4 mb-3">
-                                <label class="form-label">Compensado (kWh)</label>
-                                <input type="text" name="consumo_compensado" id="f_compensado" class="form-control" placeholder="855">
-                            </div>
-                            <div class="col-4 mb-3">
-                                <label class="form-label">Não Compensado</label>
-                                <input type="text" name="consumo_nao_comp" id="f_nao_comp" class="form-control" placeholder="0" value="0">
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Tarifa (R$/kWh) <span class="text-danger">*</span></label>
-                                <div class="input-group">
-                                    <input type="text" name="tarifa" id="f_tarifa" class="form-control" placeholder="1,135823" required>
-                                    <span class="input-group-text" id="tarifa_origem" title="Origem da tarifa"><i class="bi bi-info-circle"></i></span>
-                                </div>
-                                <small class="text-muted" id="tarifa_hint">Preencha o mês para buscar automaticamente</small>
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Vencimento Equatorial</label>
-                                <input type="text" name="venc_equatorial" id="f_venc_eq" class="form-control" placeholder="dd/mm/aaaa">
-                            </div>
-                        </div>
+                        <div id="tarifa_mes_hint_inline" class="mt-1" style="font-size:11px; min-height:16px"></div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Tipo Fornecimento</label>
+                        <select name="tipo_fornecimento" id="f_tipo_forn" class="form-select form-select-lg">
+                            <option value="Monofásico">Monofásico</option>
+                            <option value="Bifásico" selected>Bifásico</option>
+                            <option value="Trifásico">Trifásico</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Venc. Equatorial</label>
+                        <input type="text" name="venc_equatorial" id="f_venc_eq" class="form-control form-control-lg text-center" placeholder="dd/mm/aaaa">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold">Consumo (kWh) <span class="text-danger">*</span></label>
+                        <input type="text" name="consumo_kwh" id="f_consumo" class="form-control form-control-lg text-center" placeholder="855" required>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="card mb-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3"><i class="bi bi-calendar3 me-2" style="color:var(--orange)"></i>Leituras</h5>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Leitura Anterior</label>
-                                <input type="text" name="anterior_leitura" id="f_leit_ant" class="form-control" placeholder="dd/mm/aaaa">
+        <!-- 📊 SEÇÃO 2: COMPARATIVO SEM SOLEV vs COM SOLEV -->
+        <div class="row g-3 mb-4 align-items-stretch">
+
+            <!-- ══ SEM SOLEV ══ -->
+            <div class="col-lg-6 d-flex">
+                <div class="card h-100 w-100" style="border-left: 5px solid #dc3545">
+                    <div class="card-body p-3 d-flex flex-column">
+                        <h5 class="fw-bold text-danger mb-2"><i class="bi bi-x-circle-fill me-2"></i>SEM SOLEV</h5>
+
+                        <!-- Grade de energia SEM SOLEV -->
+                        <div style="display:grid; grid-template-columns:40% 35% 25%; column-gap:6px; row-gap:5px; align-items:start; margin-bottom:8px">
+                            <div style="font-size:10px; color:#6c757d; border-bottom:1px solid #dee2e6; padding-bottom:3px">CONSUMO (kWh)</div>
+                            <div style="font-size:10px; color:#6c757d; border-bottom:1px solid #dee2e6; padding-bottom:3px">TARIFA (R$/kWh)</div>
+                            <div style="font-size:10px; color:#6c757d; border-bottom:1px solid #dee2e6; padding-bottom:3px; text-align:right">TOTAL (R$)</div>
+
+                            <div>
+                                <input type="text" name="consumo_nao_comp" id="f_nao_comp" class="form-control form-control-sm calcula-sem-solev" placeholder="0" value="0">
+                                <div style="font-size:10px; color:#6c757d; margin-top:2px">Consumo</div>
                             </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Leitura Atual</label>
-                                <input type="text" name="data_leitura" id="f_leit_atual" class="form-control" placeholder="dd/mm/aaaa">
+                            <div><input type="text" name="tarifa" id="f_tarifa" class="form-control form-control-sm calcula-sem-solev" placeholder="1,135823" required></div>
+                            <div><input type="text" id="total_nao_comp_sem" class="form-control form-control-sm text-end bg-light" readonly tabindex="-1"></div>
+
+                            <div>
+                                <input type="text" id="f_nao_comp_sem_band" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1">
+                                <div style="font-size:10px; color:#6c757d; margin-top:2px">Consumo × Band. Amar.</div>
+                            </div>
+                            <div><input type="text" name="bandeira_amarela" id="f_band_am" class="form-control form-control-sm calcula-sem-solev calcula-com-solev" placeholder="0,000000" value="0"></div>
+                            <div><input type="text" id="total_band_amar_sem" class="form-control form-control-sm text-end bg-light" readonly tabindex="-1"></div>
+
+                            <div>
+                                <input type="text" id="f_nao_comp_sem_band2" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1">
+                                <div style="font-size:10px; color:#6c757d; margin-top:2px">Consumo × Band. Verm.</div>
+                            </div>
+                            <div><input type="text" name="bandeira_vermelha" id="f_band_vm" class="form-control form-control-sm calcula-sem-solev calcula-com-solev" placeholder="0,000000" value="0"></div>
+                            <div><input type="text" id="total_band_verm_sem" class="form-control form-control-sm text-end bg-light" readonly tabindex="-1"></div>
+                        </div>
+
+                        <hr class="my-2">
+
+                        <!-- Financeiros -->
+                        <div class="row g-1 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Ilum. Pública (R$)</label>
+                                <input type="text" name="iluminacao_publica" id="f_ilum"
+                                       class="form-control form-control-sm calcula-sem-solev" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Multa (R$)</label>
+                                <input type="text" name="multa" id="f_multa"
+                                       class="form-control form-control-sm calcula-sem-solev" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Juros (R$)</label>
+                                <input type="text" name="juros" id="f_juros"
+                                       class="form-control form-control-sm calcula-sem-solev" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">IPCA (R$)</label>
+                                <input type="text" name="correcao_ipca" id="f_ipca"
+                                       class="form-control form-control-sm calcula-sem-solev" placeholder="0,00" value="0">
                             </div>
                         </div>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Próxima Leitura</label>
-                                <input type="text" name="proxima_leitura" id="f_prox_leit" class="form-control" placeholder="dd/mm/aaaa">
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Nº Dias</label>
-                                <input type="text" name="n_dias" id="f_n_dias" class="form-control" placeholder="30">
-                            </div>
+
+                        <div class="d-flex justify-content-between align-items-center px-2 py-1 rounded mb-2"
+                             style="background:rgba(220,53,69,.08)">
+                            <small class="text-muted">Financeiros</small>
+                            <strong class="fs-6" id="total_financ_sem">R$ 0,00</strong>
+                        </div>
+
+                        <div class="text-center p-3 rounded mt-auto" style="background:rgba(220,53,69,.12)">
+                            <small class="text-uppercase fw-bold d-block text-danger" style="font-size:10px">Total SEM SOLEV</small>
+                            <strong class="fs-3 text-danger" id="prev_sem">R$ 0,00</strong>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Coluna 2: Itens Financeiros + Vencimento -->
-            <div class="col-md-6">
-                <div class="card mb-4">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3"><i class="bi bi-currency-dollar me-2" style="color:var(--orange)"></i>Itens Financeiros</h5>
+            <!-- ══ COM SOLEV ══ -->
+            <div class="col-lg-6 d-flex">
+                <div class="card h-100 w-100" style="border-left: 5px solid var(--orange)">
+                    <div class="card-body p-3 d-flex flex-column">
+                        <h5 class="fw-bold mb-2" style="color:var(--orange)"><i class="bi bi-check-circle-fill me-2"></i>COM SOLEV</h5>
 
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Iluminação Pública (R$)</label>
-                                <input type="text" name="iluminacao_publica" id="f_ilum" class="form-control" placeholder="0,00" value="0">
+                        <!-- Grade de energia COM SOLEV -->
+                        <div style="display:grid; grid-template-columns:40% 35% 25%; column-gap:6px; row-gap:5px; align-items:start; margin-bottom:8px">
+                            <div style="font-size:10px; color:#6c757d; border-bottom:1px solid #dee2e6; padding-bottom:3px">CONSUMO (kWh)</div>
+                            <div style="font-size:10px; color:#6c757d; border-bottom:1px solid #dee2e6; padding-bottom:3px">TARIFA (R$/kWh)</div>
+                            <div style="font-size:10px; color:#6c757d; border-bottom:1px solid #dee2e6; padding-bottom:3px; text-align:right">TOTAL (R$)</div>
+
+                            <div>
+                                <input type="text" name="consumo_compensado_com" id="f_compensado_com" class="form-control form-control-sm calcula-com-solev" placeholder="0" value="0">
+                                <div style="font-size:10px; color:#6c757d; margin-top:2px">Comp. × Tarifa c/ Desc.</div>
                             </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Vencimento SOLEV <span class="text-danger">*</span></label>
-                                <input type="text" name="vencimento_contalev" id="f_venc_contalev" class="form-control" placeholder="dd/mm/aaaa" required>
+                            <div><input type="text" name="tarifa_com_desconto" id="f_tarifa_com" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1" placeholder="auto"></div>
+                            <div><input type="text" id="total_comp_com" class="form-control form-control-sm text-end bg-light" readonly tabindex="-1"></div>
+
+                            <div>
+                                <input type="text" name="consumo_nao_comp_com" id="f_nao_comp_com" class="form-control form-control-sm calcula-com-solev" placeholder="0" value="0">
+                                <div style="font-size:10px; color:#6c757d; margin-top:2px">N.Comp × Band. Amar.</div>
+                            </div>
+                            <div><input type="text" id="f_band_am_com_ro" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1"></div>
+                            <div><input type="text" id="total_nao_comp_band_amar_com" class="form-control form-control-sm text-end bg-light" readonly tabindex="-1"></div>
+
+                            <div>
+                                <input type="text" id="f_nao_comp_com_ro" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1">
+                                <div style="font-size:10px; color:#6c757d; margin-top:2px">N.Comp × Tarifa Equatorial</div>
+                            </div>
+                            <div><input type="text" id="f_tarifa_eq_com_ro" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1"></div>
+                            <div><input type="text" id="total_nao_comp_tarifa_com" class="form-control form-control-sm text-end bg-light" readonly tabindex="-1"></div>
+
+                            <div>
+                                <input type="text" id="f_nao_comp_com_ro2" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1">
+                                <div style="font-size:10px; color:#6c757d; margin-top:2px">N.Comp × Band. Verm.</div>
+                            </div>
+                            <div><input type="text" id="f_band_vm_com_ro" class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1"></div>
+                            <div><input type="text" id="total_nao_comp_band_verm_com" class="form-control form-control-sm text-end bg-light" readonly tabindex="-1"></div>
+                        </div>
+
+                        <hr class="my-2">
+
+                        <!-- Financeiros -->
+                        <div class="row g-1 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Ilum. Pública (R$)</label>
+                                <input type="text" id="f_ilum_com"
+                                       class="form-control form-control-sm bg-light text-muted" readonly tabindex="-1" placeholder="= SEM SOLEV">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Multa (R$)</label>
+                                <input type="text" name="multa_com" id="f_multa_com"
+                                       class="form-control form-control-sm calcula-com-solev" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">Juros (R$)</label>
+                                <input type="text" name="juros_com" id="f_juros_com"
+                                       class="form-control form-control-sm calcula-com-solev" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">DIFCI (R$)</label>
+                                <input type="text" name="difci" id="f_difci"
+                                       class="form-control form-control-sm calcula-com-solev" placeholder="0,00" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small mb-0">ECNISENTA (R$)</label>
+                                <input type="text" name="ecnisenta" id="f_ecnisenta"
+                                       class="form-control form-control-sm calcula-com-solev" placeholder="0,00" value="0">
                             </div>
                         </div>
 
-                        <div class="row">
-                            <div class="col-4 mb-3">
-                                <label class="form-label">Multa Equatorial (R$)</label>
-                                <input type="text" name="multa" id="f_multa" class="form-control" placeholder="0,00" value="0">
-                            </div>
-                            <div class="col-4 mb-3">
-                                <label class="form-label">Juros Equatorial (R$)</label>
-                                <input type="text" name="juros" id="f_juros" class="form-control" placeholder="0,00" value="0">
-                            </div>
-                            <div class="col-4 mb-3">
-                                <label class="form-label">Correção IPCA (R$)</label>
-                                <input type="text" name="correcao_ipca" id="f_ipca" class="form-control" placeholder="0,00" value="0">
-                            </div>
+                        <div class="d-flex justify-content-between align-items-center px-2 py-1 rounded mb-2"
+                             style="background:rgba(255,166,35,.08)">
+                            <small class="text-muted">Financeiros</small>
+                            <strong class="fs-6" id="total_financ_com">R$ 0,00</strong>
                         </div>
 
-                        <hr class="my-3">
-                        <h6 class="text-muted mb-3"><i class="bi bi-flag-fill me-1"></i>Bandeiras Tarifárias</h6>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Bandeira Amarela (R$/kWh)</label>
-                                <input type="text" name="bandeira_amarela" id="f_band_am" class="form-control" placeholder="0,000000" value="0">
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Bandeira Vermelha (R$/kWh)</label>
-                                <input type="text" name="bandeira_vermelha" id="f_band_vm" class="form-control" placeholder="0,000000" value="0">
-                            </div>
+                        <div class="text-center p-3 rounded mt-auto" style="background:rgba(255,166,35,.15)">
+                            <small class="text-uppercase fw-bold d-block" style="font-size:10px; color:var(--orange)">Total COM SOLEV</small>
+                            <strong class="fs-3" style="color:var(--orange)" id="prev_com">R$ 0,00</strong>
                         </div>
+                    </div>
+                </div>
+            </div>
 
-                        <hr class="my-3">
-                        <h6 class="text-muted mb-3"><i class="bi bi-cash-coin me-1"></i>Multa / Juros COM SOLEV</h6>
-                        <small class="text-muted d-block mb-2">Preencha somente se houver atraso na cobrança anterior (valores em R$).</small>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Multa COM (R$)</label>
-                                <input type="text" name="multa_com" id="f_multa_com" class="form-control" placeholder="0,00" value="0">
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Juros COM (R$)</label>
-                                <input type="text" name="juros_com" id="f_juros_com" class="form-control" placeholder="0,00" value="0">
-                            </div>
+        </div>
+
+        <!-- 💰 SEÇÃO 3: RESUMO FINAL -->
+        <div class="card mb-4" style="border-left: 5px solid var(--green)">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-4 text-success"><i class="bi bi-graph-up-arrow me-2"></i>Resumo da Cobrança</h5>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="p-3 rounded" style="background:rgba(100,200,100,.1)">
+                            <small class="text-muted d-block mb-2">Economia do Mês</small>
+                            <strong class="fs-5 text-success" id="prev_eco">R$ 0,00</strong>
                         </div>
-
-                        <hr class="my-3">
-                        <h6 class="text-muted mb-3"><i class="bi bi-plus-circle me-1"></i>Itens Adicionais COM SOLEV</h6>
-                        <small class="text-muted d-block mb-2">Aparecem na cobrança somente se preenchidos (valores em R$).</small>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">DIFCI (R$)</label>
-                                <input type="text" name="difci" id="f_difci" class="form-control" placeholder="0,00">
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">ECNISENTA (R$)</label>
-                                <input type="text" name="ecnisenta" id="f_ecnisenta" class="form-control" placeholder="0,00">
-                            </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Ajuste (R$)</label>
-                                <input type="text" name="ajuste_valor" id="f_ajuste_valor" class="form-control" placeholder="0,00">
-                                <small class="text-muted">Positivo = acréscimo, negativo = desconto</small>
-                            </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Economia Acumulada (R$)</label>
+                        <input type="text" name="economia_acumulada" id="f_eco_acum" class="form-control form-control-lg" placeholder="0,00">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label fw-bold">Data Vencimento SOLEV <span class="text-danger">*</span></label>
+                        <input type="text" name="vencimento_solev" id="f_venc_solev" class="form-control form-control-lg text-center" placeholder="dd/mm/aaaa" required>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="p-3 rounded" style="background:rgba(255,166,35,.1)">
+                            <small class="text-muted d-block mb-2">Valor a Pagar</small>
+                            <strong class="fs-5" style="color:var(--orange)" id="valor_pagar">R$ 0,00</strong>
                         </div>
-
-                        <hr class="my-3">
-                        <h6 class="text-muted mb-3"><i class="bi bi-piggy-bank me-1"></i>Economia Acumulada</h6>
-                        <small class="text-muted d-block mb-2">Informe o total acumulado até o mês anterior (para clientes em transição).</small>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label">Economia Acumulada (R$)</label>
-                                <input type="text" name="economia_acumulada" id="f_eco_acum" class="form-control" placeholder="0,00">
-                            </div>
-                        </div>
-
-                        <hr class="my-3">
-                        <h6 class="text-muted mb-3"><i class="bi bi-paperclip me-1"></i>Fatura Equatorial (anexo)</h6>
-                        <small class="text-muted d-block mb-2">Anexe o PDF da fatura apenas para referência — nenhum dado será extraído.</small>
-                        <div class="mb-3">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fw-bold"><i class="bi bi-paperclip me-1"></i>Fatura Equatorial (PDF — gera página 2)</label>
+                        <div class="input-group">
                             <input type="file" name="equatorial_pdf" id="f_equatorial_pdf" class="form-control" accept=".pdf">
+                            <button type="button" id="btn_extrair_pdf" class="btn btn-outline-primary" title="Lê o PDF e preenche os campos automaticamente">
+                                <i class="bi bi-magic me-1"></i>Extrair dados da fatura
+                            </button>
                         </div>
+                        <small class="text-muted d-block mt-1" id="extracao_msg" style="font-size:11px"></small>
                     </div>
-                </div>
-
-                <!-- Preview da economia -->
-                <div class="card mb-4" id="card_preview" style="border-left:4px solid var(--green)">
-                    <div class="card-body p-4">
-                        <h5 class="fw-bold mb-3"><i class="bi bi-graph-up-arrow me-2 text-success"></i>Prévia da Economia</h5>
-                        <div class="row text-center">
-                            <div class="col-4">
-                                <small class="text-muted d-block">SEM SOLEV</small>
-                                <strong class="fs-5" id="prev_sem">R$ 0,00</strong>
-                            </div>
-                            <div class="col-4">
-                                <small class="text-muted d-block">COM SOLEV</small>
-                                <strong class="fs-5" style="color:var(--orange)" id="prev_com">R$ 0,00</strong>
-                            </div>
-                            <div class="col-4">
-                                <small class="text-muted d-block">ECONOMIA</small>
-                                <strong class="fs-5 text-success" id="prev_eco">R$ 0,00</strong>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="d-flex gap-2 justify-content-end flex-wrap">
-                    <a href="{{ url_for('gerar') }}" class="btn btn-outline-secondary px-4">Cancelar</a>
-                    <button type="submit" name="acao" value="preview"
-                            class="btn btn-outline-primary px-4 btn-lg">
-                        <i class="bi bi-eye-fill me-1"></i>Pré-visualizar
-                    </button>
-                    <button type="submit" name="acao" value="gerar"
-                            class="btn btn-cta px-4 btn-lg">
-                        <i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF direto
-                    </button>
                 </div>
             </div>
+        </div>
+
+        <!-- 📅 DADOS DE LEITURA -->
+        <div class="card mb-4">
+            <div class="card-body p-4">
+                <h6 class="text-muted mb-3"><i class="bi bi-calendar3 me-1"></i>Informações de Leitura</h6>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Leitura Anterior</label>
+                        <input type="text" name="anterior_leitura" id="f_leit_ant" class="form-control text-center" placeholder="dd/mm/aaaa">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Leitura Atual</label>
+                        <input type="text" name="data_leitura" id="f_leit_atual" class="form-control text-center" placeholder="dd/mm/aaaa">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Próxima Leitura</label>
+                        <input type="text" name="proxima_leitura" id="f_prox_leit" class="form-control text-center" placeholder="dd/mm/aaaa">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Nº Dias</label>
+                        <input type="text" name="n_dias" id="f_n_dias" class="form-control text-center" placeholder="30">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ⚡ SEÇÃO SCEE — Compensação de Energia Solar -->
+        <div class="card mb-4" style="border-left: 5px solid #198754">
+            <div class="card-body p-3">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h6 class="fw-bold mb-0" style="color:#198754">
+                        <i class="bi bi-sun-fill me-1"></i>Compensação de Energia Solar (SCEE)
+                    </h6>
+                    <small class="text-muted" style="font-size:10px">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Extraído de "Mensagens Importantes" da fatura Equatorial
+                    </small>
+                </div>
+
+                <!-- BLOCO 1 — Usina Geradora -->
+                <div class="p-2 rounded mb-3" style="background:rgba(25,135,84,.06); border:1px solid rgba(25,135,84,.18)">
+                    <div class="mb-2">
+                        <small class="fw-bold text-uppercase text-success" style="font-size:10px; letter-spacing:.8px">
+                            <i class="bi bi-lightning-charge-fill me-1"></i>Usina Geradora
+                        </small>
+                    </div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">
+                                UC da Usina
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Código da unidade consumidora da usina solar que fornece energia para este cliente"
+                                   style="cursor:help"></i>
+                            </label>
+                            <input type="text" name="scee_uc_geradora" id="f_scee_uc_geradora"
+                                   class="form-control form-control-sm font-monospace"
+                                   placeholder="000435543201270">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                Ciclo de Geração
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Mês de referência em que a usina realizou a geração (pode diferir do mês desta fatura)"
+                                   style="cursor:help"></i>
+                            </label>
+                            <input type="text" name="scee_ciclo_mes" id="f_scee_ciclo_mes"
+                                   class="form-control form-control-sm text-center"
+                                   placeholder="MM/AAAA" maxlength="7">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                Rateio desta UC
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Percentual da geração da usina destinado a este cliente, conforme contrato de rateio"
+                                   style="cursor:help"></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="scee_pct_rateio" id="f_scee_pct_rateio"
+                                       class="form-control text-center" placeholder="3,00">
+                                <span class="input-group-text">%</span>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small mb-1">
+                                <i class="bi bi-lightning-fill me-1 text-success"></i>
+                                Geração total da usina
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Total gerado pela usina no ciclo. Auto-preenchido a partir da fatura da usina (quando importada). Caso contrário, estima por Excedente ÷ % Rateio impresso. Edite manualmente com o valor da fatura da usina para reconciliar."
+                                   style="cursor:help"></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="scee_geracao_usina_kwh" id="f_scee_geracao_usina_kwh"
+                                       class="form-control text-end fw-bold scee-recalc"
+                                       placeholder="14.143,00"
+                                       style="color:#198754">
+                                <span class="input-group-text text-muted" style="font-size:10px">kWh</span>
+                            </div>
+                            <div class="form-text d-flex justify-content-between" style="font-size:10px">
+                                <span id="scee_geracao_fonte" class="text-muted">—</span>
+                                <a href="#" id="scee_estimar_link" style="font-size:10px"
+                                   onclick="sceeEstimarGeracao();return false">
+                                    <i class="bi bi-magic"></i> Estimar
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── PAINEL DE RECONCILIAÇÃO ── -->
+                    <div class="mt-2 p-2 rounded" id="scee_recon_panel"
+                         style="background:rgba(255,255,255,.6); border:1px dashed rgba(25,135,84,.4); display:none">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <i class="bi bi-shield-check text-success"></i>
+                            <small class="fw-bold text-uppercase" style="font-size:10px; letter-spacing:.5px">
+                                Reconciliação de Rateio
+                            </small>
+                            <small class="text-muted" style="font-size:10px">
+                                — comparação de fontes do percentual real
+                            </small>
+                        </div>
+                        <div class="row g-2" style="font-size:11px">
+                            <div class="col-md-3">
+                                <span class="text-muted">Impresso na fatura:</span>
+                                <span id="scee_pct_impresso" class="fw-bold ms-1">—</span>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="text-muted">Cadastrado:</span>
+                                <span id="scee_pct_cadastrado" class="fw-bold ms-1">—</span>
+                            </div>
+                            <div class="col-md-3">
+                                <span class="text-muted">
+                                    Calculado <i class="bi bi-calculator-fill ms-1"
+                                       title="Excedente ÷ Geração — é a verdade matemática" style="cursor:help"></i>:
+                                </span>
+                                <span id="scee_pct_calculado" class="fw-bold ms-1 text-success">—</span>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <span id="scee_recon_status" class="badge bg-secondary">aguardando</span>
+                            </div>
+                        </div>
+                        <div id="scee_recon_alerta" class="mt-1" style="font-size:10px; display:none"></div>
+                    </div>
+                </div>
+
+                <!-- BLOCO 2 — Compensação desta UC -->
+                <div class="p-2 rounded" style="background:rgba(13,110,253,.04); border:1px solid rgba(13,110,253,.15)">
+                    <div class="mb-2">
+                        <small class="fw-bold text-uppercase text-primary" style="font-size:10px; letter-spacing:.8px">
+                            <i class="bi bi-house-fill me-1"></i>Compensação desta UC
+                        </small>
+                    </div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                Excedente Recebido
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="kWh destinados a esta UC pelo rateio da usina. Deve ser igual a: Geração da usina × % Rateio"
+                                   style="cursor:help"></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="scee_excedente_kwh" id="f_scee_excedente_kwh"
+                                       class="form-control text-end scee-recalc" placeholder="424,29">
+                                <span class="input-group-text" style="font-size:10px">kWh</span>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                Crédito Compensado
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="kWh efetivamente usados para compensar o consumo desta UC nesta fatura"
+                                   style="cursor:help"></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="scee_credito_kwh" id="f_scee_credito_kwh"
+                                       class="form-control text-end" placeholder="363,00">
+                                <span class="input-group-text" style="font-size:10px">kWh</span>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                <span id="scee_saldo_badge" class="badge bg-success" style="font-size:10px">Saldo</span>
+                                Disponível
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Saldo acumulado = saldo anterior + excedente recebido − crédito compensado. Valor informado pela Equatorial na fatura."
+                                   style="cursor:help"></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="scee_saldo_kwh" id="f_scee_saldo_kwh"
+                                       class="form-control text-end fw-bold" placeholder="61,29">
+                                <span class="input-group-text" style="font-size:10px">kWh</span>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                Expira em 30 dias
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Saldo que vencerá nos próximos 30 dias se não consumido"
+                                   style="cursor:help"></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="scee_saldo_exp_30d" id="f_scee_saldo_30d"
+                                       class="form-control text-end" placeholder="0,00">
+                                <span class="input-group-text" style="font-size:10px">kWh</span>
+                            </div>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small mb-1">
+                                Expira em 60 dias
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Saldo que vencerá entre 31 e 60 dias se não consumido"
+                                   style="cursor:help"></i>
+                            </label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" name="scee_saldo_exp_60d" id="f_scee_saldo_60d"
+                                       class="form-control text-end" placeholder="0,00">
+                                <span class="input-group-text" style="font-size:10px">kWh</span>
+                            </div>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <div class="w-100 p-2 rounded text-center" style="background:rgba(25,135,84,.08); border:1px dashed rgba(25,135,84,.3)">
+                                <div style="font-size:10px; color:#6c757d; text-transform:uppercase; letter-spacing:.5px">Verificação</div>
+                                <div id="scee_check_msg" style="font-size:11px; color:#6c757d; min-height:18px">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🔴 BOTÕES DE AÇÃO -->
+        <div class="d-flex gap-2 justify-content-end flex-wrap mt-4">
+            <a href="{{ url_for('gerar') }}" class="btn btn-outline-secondary btn-lg px-4">
+                <i class="bi bi-arrow-left me-1"></i>Voltar
+            </a>
+            <button type="submit" name="acao" value="gerar" class="btn btn-cta btn-lg px-4">
+                <i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF
+            </button>
         </div>
     </form>
 </div>
 
 {% include '_modal_pix_validacao.html' %}
+
+<!-- ══════════════ MODAL GERENCIAR TARIFAS ══════════════ -->
+<div class="modal fade" id="modalTarifas" tabindex="-1" aria-labelledby="modalTarifasLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header" style="border-bottom: 2px solid var(--orange)">
+                <h5 class="modal-title fw-bold" id="modalTarifasLabel">
+                    <i class="bi bi-gear-fill me-2" style="color:var(--orange)"></i>
+                    Tarifas por Mês de Referência
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+
+                <!-- Status do mês atual -->
+                <div id="tm_status_banner" class="alert d-none mb-3 py-2"></div>
+
+                <!-- Formulário cadastrar / editar -->
+                <div class="card mb-4" style="border-left: 4px solid var(--orange)">
+                    <div class="card-header fw-bold d-flex align-items-center gap-2" style="background:rgba(245,166,35,.08)">
+                        <i class="bi bi-plus-circle-fill" style="color:var(--orange)"></i>
+                        <span id="tm_form_titulo">Cadastrar nova tarifa</span>
+                    </div>
+                    <div class="card-body pb-3">
+                        <input type="hidden" id="tm_mes_antigo">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-2">
+                                <label class="form-label small mb-1 fw-bold">Mês/Ano <span class="text-danger">*</span></label>
+                                <input type="text" id="tm_mes" class="form-control form-control-sm text-center" placeholder="MM/AAAA" maxlength="7">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small mb-1">
+                                    Tarifa Equatorial
+                                    <span class="text-muted" style="font-size:10px">(R$/kWh)</span>
+                                </label>
+                                <input type="text" id="tm_tarifa_sem" class="form-control form-control-sm" placeholder="1,135823">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small mb-1">
+                                    Band. Amarela
+                                    <span class="text-muted" style="font-size:10px">(R$/kWh)</span>
+                                </label>
+                                <input type="text" id="tm_band_am" class="form-control form-control-sm" placeholder="0,016629">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small mb-1">
+                                    Band. Vermelha
+                                    <span class="text-muted" style="font-size:10px">(R$/kWh)</span>
+                                </label>
+                                <input type="text" id="tm_band_vm" class="form-control form-control-sm" placeholder="0,097200">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small mb-1">
+                                    Fio B
+                                    <span class="text-muted" style="font-size:10px">(R$/kWh)</span>
+                                </label>
+                                <input type="text" id="tm_fio_b" class="form-control form-control-sm" placeholder="0">
+                            </div>
+                            <div class="col-md-2 d-flex gap-1 align-items-end">
+                                <button class="btn btn-cta btn-sm flex-grow-1" onclick="tmSalvar()">
+                                    <i class="bi bi-floppy-fill me-1"></i>Salvar
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="tmLimparForm()" title="Cancelar edição">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-12 mt-2">
+                            <input type="text" id="tm_obs" class="form-control form-control-sm" placeholder="Observação (opcional)">
+                        </div>
+                        <div id="tm_msg" class="mt-2 small" style="min-height:18px"></div>
+                    </div>
+                </div>
+
+                <!-- Tabela de tarifas cadastradas -->
+                <h6 class="fw-bold mb-2"><i class="bi bi-table me-1"></i>Tarifas cadastradas</h6>
+                <div id="tm_tabela" class="table-responsive">
+                    <div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Carregando…</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- ══════════════ FIM MODAL TARIFAS ══════════════ -->
 <script src="{{ url_for('static', filename='js/pix-validacao.js') }}"></script>
 <script>
 // ── Intercepta submit "gerar" para validar PIX antes ──
 (function () {
     var formCob = document.getElementById('form_cobranca');
     if (!formCob) return;
+
+    function garantirVencSolev() {
+        var vencEq  = (document.getElementById('f_venc_eq')   || {}).value || '';
+        var vencSol = (document.getElementById('f_venc_solev') || {}).value || '';
+        if (vencEq && !vencSol && /^\d{2}\/\d{2}\/\d{4}$/.test(vencEq.trim())) {
+            var parts = vencEq.trim().split('/');
+            var dt = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+            dt.setDate(dt.getDate() - 3);
+            document.getElementById('f_venc_solev').value =
+                String(dt.getDate()).padStart(2,'0') + '/' +
+                String(dt.getMonth()+1).padStart(2,'0') + '/' + dt.getFullYear();
+        }
+    }
+
+    // ── Anti double-submit visual: NÃO desabilita o botão (impede sub.click())
+    //    Em vez disso usa pointer-events:none + debounce de 2s no handler.
+    function _travarSubmitVisual(form) {
+        form.querySelectorAll('button[type=submit]').forEach(btn => {
+            if (!btn.dataset.htmlOriginal) btn.dataset.htmlOriginal = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando…';
+            btn.style.pointerEvents = 'none';
+            btn.style.opacity = '0.7';
+        });
+    }
+
+    let _ultimoSubmit = 0;
     formCob.addEventListener('submit', function (ev) {
+        // Debounce: clique duplo acidental dentro de 2s é ignorado
+        const agora = Date.now();
+        if (agora - _ultimoSubmit < 2000) {
+            ev.preventDefault();
+            return;
+        }
+
+        garantirVencSolev();
         var sub = ev.submitter;
-        // Só valida no botão "Gerar PDF direto" (acao=gerar). Preview passa direto.
-        if (!sub || sub.value !== 'gerar') return;
-        if (formCob.dataset.pixOk === '1') return;   // já validado, deixa seguir
+        // Só valida PIX no botão "Gerar PDF" (acao=gerar). Preview passa direto.
+        if (!sub || sub.value !== 'gerar') {
+            _ultimoSubmit = agora;
+            _travarSubmitVisual(formCob);
+            return;
+        }
+        if (formCob.dataset.pixOk === '1') {
+            _ultimoSubmit = agora;
+            _travarSubmitVisual(formCob);
+            return;   // já validado, deixa seguir
+        }
+        // Precisa validar PIX antes
         ev.preventDefault();
         var uc = (document.getElementById('f_uc') || {}).value || '';
         validarPixAntesDeGerar(uc).then(function (podeGerar) {
             if (podeGerar) {
                 formCob.dataset.pixOk = '1';
-                sub.click();   // re-aciona o submit do botão original
+                // NÃO trava antes do click — botão precisa estar clicavel
+                sub.click();   // re-aciona o submit (cai no ramo pixOk='1' acima)
             }
         });
     });
@@ -348,13 +750,16 @@ function buscarCliente() {
         document.getElementById('f_desconto_pct').value = data.desconto_pct;
         document.getElementById('f_modo_bandeira').value = data.modo_bandeira || 'com_bandeira';
         document.getElementById('f_valor_cobranca_anterior').value = data.valor_cobranca_anterior || 0;
-        document.getElementById('f_venc_contalev_anterior').value = data.venc_contalev_anterior || '';
+        document.getElementById('f_venc_solev_anterior').value = data.venc_solev_anterior || '';
         document.getElementById('f_data_pagamento_anterior').value = data.data_pagamento_anterior || '';
         document.getElementById('f_economia_acumulada_anterior').value = data.economia_acumulada_anterior || 0;
         document.getElementById('f_titular_fatura').value = data.titular_fatura || '';
 
         // Mostra formulário
         document.getElementById('form_cobranca').classList.remove('d-none');
+
+        // Pré-preenche multa/juros se houver atraso no pagamento anterior
+        calcularMultaJurosAtraso();
 
         // Foca no mês de referência
         document.getElementById('f_mes_ref').focus();
@@ -383,12 +788,8 @@ function autocompleteBusca(q) {
         .then(data => {
             if (!Array.isArray(data) || data.length === 0) { drop.classList.add('d-none'); return; }
             drop.innerHTML = data.map(c => {
-                // Mostra UC nova (alternativa formatada) com prioridade; UC antiga abaixo
+                // Mostra apenas a UC formatada (xxxx.xxx.xxx.xxx-xx)
                 const ucPrincipal = c.uc_alt_fmt || c.uc_alt || c.uc;
-                const temAntiga   = c.uc && c.uc !== ucPrincipal;
-                const subUcAntiga = temAntiga
-                    ? `<small class="text-muted ms-2" style="font-size:10px">UC antiga: ${c.uc}</small>`
-                    : '';
                 return `<div class="px-3 py-2 border-bottom"
                       style="cursor:pointer;font-size:13px"
                       onmousedown="selecionarCliente('${c.uc}')"
@@ -396,7 +797,6 @@ function autocompleteBusca(q) {
                       onmouseout="this.style.background=''">
                     <strong>${c.nome}</strong>
                     <code class="ms-2" style="font-size:11px;color:var(--orange)">${ucPrincipal}</code>
-                    ${subUcAntiga}
                  </div>`;
             }).join('');
             drop.classList.remove('d-none');
@@ -453,59 +853,696 @@ function fmtBRL(v) {
 }
 
 function calcularPrevia() {
-    const consumo   = parseBR(document.getElementById('f_consumo').value);
-    const tarifa    = parseBR(document.getElementById('f_tarifa').value);
-    const comp      = parseBR(document.getElementById('f_compensado').value);
-    const nao_comp  = parseBR(document.getElementById('f_nao_comp').value);
-    const ilum      = parseBR(document.getElementById('f_ilum').value);
-    const multa     = parseBR(document.getElementById('f_multa').value);
-    const juros     = parseBR(document.getElementById('f_juros').value);
-    const ipca      = parseBR(document.getElementById('f_ipca').value);
-    const multa_com = parseBR(document.getElementById('f_multa_com').value);
-    const juros_com = parseBR(document.getElementById('f_juros_com').value);
-    const difci     = parseBR(document.getElementById('f_difci').value);
-    const ecnisenta = parseBR(document.getElementById('f_ecnisenta').value);
-    const ajuste    = parseBR(document.getElementById('f_ajuste_valor').value);
-    const desconto  = parseBR(document.getElementById('f_desconto_pct').value);
-    const desc = desconto <= 1 ? desconto : desconto / 100;
+    // ── Replica consumo da fatura → SEM SOLEV ──
+    const _consumoEl = document.getElementById('f_consumo');
+    const _naoCompEl = document.getElementById('f_nao_comp');
+    if (_consumoEl && _naoCompEl && _consumoEl.value) {
+        _naoCompEl.value = _consumoEl.value;
+    }
 
-    if (consumo <= 0 || tarifa <= 0) return;
+    // ── Leitura dos campos ──
+    const nao_comp_sem  = parseBR(document.getElementById('f_nao_comp').value);
+    const tarifa_sem    = parseBR(document.getElementById('f_tarifa').value);
+    const band_amar     = parseBR(document.getElementById('f_band_am').value);
+    const band_verm     = parseBR(document.getElementById('f_band_vm').value);
+    const ilum          = parseBR(document.getElementById('f_ilum').value);
+    const multa         = parseBR(document.getElementById('f_multa').value);
+    const juros         = parseBR(document.getElementById('f_juros').value);
+    const ipca          = parseBR(document.getElementById('f_ipca').value);
 
-    // Espelha calcular() Python
-    // SEM SOLEV: consumo total × tarifa
-    const tot_sem = consumo * tarifa + ilum + multa + juros + ipca + ajuste;
+    const comp_com      = parseBR(document.getElementById('f_compensado_com').value);
+    const nao_comp_com  = parseBR(document.getElementById('f_nao_comp_com').value);
+    const tarifa_com    = parseBR(document.getElementById('f_tarifa_com').value);
+    const multa_com     = parseBR(document.getElementById('f_multa_com').value);
+    const juros_com     = parseBR(document.getElementById('f_juros_com').value);
+    const difci         = parseBR(document.getElementById('f_difci').value);
+    const ecnisenta     = parseBR(document.getElementById('f_ecnisenta').value);
 
-    // COM SOLEV: compensado × tarifa_com + nao_comp × tarifa_sem
-    const tarifa_com  = tarifa * (1 - desc);
-    const subtotal_com = comp * tarifa_com + nao_comp * tarifa;
-    const tot_com = subtotal_com + ilum + multa + juros + ipca + multa_com + juros_com + difci + ecnisenta + ajuste;
+    // ── Espelha campos readonly ──
+    document.getElementById('f_nao_comp_sem_band').value  = document.getElementById('f_nao_comp').value;
+    document.getElementById('f_nao_comp_sem_band2').value = document.getElementById('f_nao_comp').value;
+    document.getElementById('f_band_am_com_ro').value     = document.getElementById('f_band_am').value;
+    document.getElementById('f_nao_comp_com_ro').value    = document.getElementById('f_nao_comp_com').value;
+    document.getElementById('f_nao_comp_com_ro2').value   = document.getElementById('f_nao_comp_com').value;
+    document.getElementById('f_tarifa_eq_com_ro').value   = document.getElementById('f_tarifa').value;
+    document.getElementById('f_band_vm_com_ro').value     = document.getElementById('f_band_vm').value;
+    document.getElementById('f_ilum_com').value           = document.getElementById('f_ilum').value;
 
-    document.getElementById('prev_sem').textContent = fmtBRL(tot_sem);
-    document.getElementById('prev_com').textContent = fmtBRL(tot_com);
-    document.getElementById('prev_eco').textContent = fmtBRL(tot_sem - tot_com);
+    // ── Auto-calcula tarifa COM SOLEV ──
+    const descPct    = parseFloat(document.getElementById('f_desconto_pct').value) || 0;
+    const descFrac   = descPct <= 1 ? descPct : descPct / 100;
+    const modoBand   = (document.getElementById('f_modo_bandeira').value || '').trim();
+    const baseTarifa = modoBand === 'com_bandeira'
+        ? tarifa_sem                              // contempla bandeira: só tarifa equatorial
+        : tarifa_sem + band_amar + band_verm;     // não contempla: soma tudo antes do desconto
+    const tarifa_com_auto = baseTarifa * (1 - descFrac);
+    document.getElementById('f_tarifa_com').value = tarifa_com_auto.toFixed(6).replace('.', ',');
+
+    // ────────── SEM SOLEV ──────────
+    const total_nao_comp_sem   = nao_comp_sem * tarifa_sem;
+    const total_band_amar_sem  = nao_comp_sem * band_amar;
+    const total_band_verm_sem  = nao_comp_sem * band_verm;
+    const total_financ_sem     = ilum + multa + juros + ipca;
+    const tot_sem = total_nao_comp_sem + total_band_amar_sem + total_band_verm_sem + total_financ_sem;
+
+    document.getElementById('total_nao_comp_sem').value      = fmtBRL(total_nao_comp_sem).replace('R$ ', '');
+    document.getElementById('total_band_amar_sem').value     = fmtBRL(total_band_amar_sem).replace('R$ ', '');
+    document.getElementById('total_band_verm_sem').value     = fmtBRL(total_band_verm_sem).replace('R$ ', '');
+    document.getElementById('total_financ_sem').textContent  = fmtBRL(total_financ_sem);
+    document.getElementById('prev_sem').textContent          = fmtBRL(tot_sem);
+
+    // ────────── COM SOLEV ──────────
+    const total_comp_com             = comp_com * tarifa_com_auto;
+    const total_nao_comp_band_amar   = nao_comp_com * band_amar;
+    const total_nao_comp_tarifa      = nao_comp_com * tarifa_sem;
+    const total_nao_comp_band_verm   = nao_comp_com * band_verm;
+    const total_financ_com           = ilum + multa_com + juros_com + difci + ecnisenta;
+    const tot_com = total_comp_com + total_nao_comp_band_amar + total_nao_comp_tarifa + total_nao_comp_band_verm + total_financ_com;
+
+    document.getElementById('total_comp_com').value                  = fmtBRL(total_comp_com).replace('R$ ', '');
+    document.getElementById('total_nao_comp_band_amar_com').value    = fmtBRL(total_nao_comp_band_amar).replace('R$ ', '');
+    document.getElementById('total_nao_comp_tarifa_com').value       = fmtBRL(total_nao_comp_tarifa).replace('R$ ', '');
+    document.getElementById('total_nao_comp_band_verm_com').value    = fmtBRL(total_nao_comp_band_verm).replace('R$ ', '');
+    document.getElementById('total_financ_com').textContent          = fmtBRL(total_financ_com);
+    document.getElementById('prev_com').textContent                  = fmtBRL(tot_com);
+
+    // Economia e Valor a Pagar
+    document.getElementById('prev_eco').textContent    = fmtBRL(tot_sem - tot_com);
+    document.getElementById('valor_pagar').textContent = fmtBRL(tot_com);
 }
 
 // Atualiza prévia ao mudar qualquer campo
-['f_consumo', 'f_tarifa', 'f_compensado', 'f_nao_comp', 'f_ilum', 'f_multa', 'f_juros', 'f_ipca', 'f_multa_com', 'f_juros_com', 'f_difci', 'f_ecnisenta', 'f_ajuste_valor'].forEach(id => {
+let _modo_manual = false;
+const camposCalculo = [
+    'f_consumo', 'f_nao_comp', 'f_tarifa', 'f_band_am', 'f_band_vm',
+    'f_ilum', 'f_multa', 'f_juros', 'f_ipca',
+    'f_compensado_com', 'f_nao_comp_com', 'f_multa_com', 'f_juros_com', 'f_difci', 'f_ecnisenta'
+];
+camposCalculo.forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-        el.addEventListener('input', calcularPrevia);
-        el.addEventListener('change', calcularPrevia);
+        el.addEventListener('input',  function() { if (!_modo_manual) calcularPrevia(); });
+        el.addEventListener('change', function() { if (!_modo_manual) calcularPrevia(); });
     }
 });
 
-// Ao mudar compensado, calcula não compensado
-document.getElementById('f_compensado').addEventListener('input', function() {
-    const consumo = parseBR(document.getElementById('f_consumo').value);
-    const comp = parseBR(this.value);
-    document.getElementById('f_nao_comp').value = Math.max(0, consumo - comp).toFixed(0);
-});
+// Fix 3 — Vencimento SOLEV = Vencimento Equatorial − 3 dias
+function _sincronizarVencSolev() {
+    const val = (document.getElementById('f_venc_eq').value || '').trim();
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return;
+    const [d, m, y] = val.split('/');
+    const dt = new Date(+y, +m - 1, +d);
+    dt.setDate(dt.getDate() - 3);
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    document.getElementById('f_venc_solev').value = `${dd}/${mm}/${dt.getFullYear()}`;
+}
+document.getElementById('f_venc_eq').addEventListener('input',  _sincronizarVencSolev);
+document.getElementById('f_venc_eq').addEventListener('change', _sincronizarVencSolev);
 
-// Ao mudar consumo, atualiza compensado se vazio
-document.getElementById('f_consumo').addEventListener('input', function() {
-    const comp = document.getElementById('f_compensado');
-    if (!comp.value) comp.value = this.value;
+// Fix 4 — Multa/juros por atraso no pagamento anterior
+function calcularMultaJurosAtraso() {
+    const vencAnt  = document.getElementById('f_venc_solev_anterior').value;
+    const pagtoAnt = document.getElementById('f_data_pagamento_anterior').value;
+    const valorAnt = parseFloat(document.getElementById('f_valor_cobranca_anterior').value) || 0;
+    if (!vencAnt || !pagtoAnt || valorAnt <= 0) return;
+
+    function parseDataQualquer(s) {
+        s = (s || '').trim().slice(0, 10);
+        if (s.includes('-')) { const [a, m, d] = s.split('-'); return new Date(+a, +m - 1, +d); }
+        if (s.includes('/')) { const [d, m, a] = s.split('/'); return new Date(+a, +m - 1, +d); }
+        return null;
+    }
+    const dtVenc  = parseDataQualquer(vencAnt);
+    const dtPagto = parseDataQualquer(pagtoAnt);
+    if (!dtVenc || !dtPagto) return;
+
+    const diasAtraso = Math.ceil((dtPagto - dtVenc) / 86400000);
+    if (diasAtraso <= 0) return;
+
+    const multa = valorAnt * 0.02;
+    const juros = valorAnt * 0.0016666 * diasAtraso;
+    document.getElementById('f_multa_com').value = multa.toFixed(2).replace('.', ',');
+    document.getElementById('f_juros_com').value = juros.toFixed(2).replace('.', ',');
     calcularPrevia();
-});
+}
+
+// ── Extrair dados da fatura Equatorial e preencher o formulário ──
+(function() {
+    const btn  = document.getElementById('btn_extrair_pdf');
+    const file = document.getElementById('f_equatorial_pdf');
+    const msg  = document.getElementById('extracao_msg');
+    if (!btn || !file) return;
+
+    function setMsg(texto, cor) {
+        msg.textContent = texto;
+        msg.style.color = cor || '#6c757d';
+    }
+
+    // Converte "yyyy-mm-dd" → "dd/mm/yyyy"; passa direto se já BR
+    function isoParaBR(s) {
+        if (!s) return '';
+        s = String(s).trim();
+        const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+        return s;
+    }
+
+    // Converte numero float (US: 0.774023) para formato BR (0,774023)
+    function numBR(v) {
+        if (v === null || v === undefined || v === '') return '';
+        return String(v).replace('.', ',');
+    }
+
+    // Define valor de campo se existir (não sobrescreve se vazio na extração)
+    function setIfPresent(id, value, transform) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (value === undefined || value === null || value === '') return;
+        el.value = transform ? transform(value) : value;
+        el.dispatchEvent(new Event('input',  { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    btn.addEventListener('click', async () => {
+        if (!file.files || !file.files[0]) {
+            setMsg('Selecione primeiro o PDF da fatura Equatorial.', '#dc3545');
+            return;
+        }
+        const f = file.files[0];
+        if (!f.name.toLowerCase().endsWith('.pdf')) {
+            setMsg('O arquivo precisa ser PDF.', '#dc3545');
+            return;
+        }
+
+        setMsg('Extraindo dados, aguarde…', '#0d6efd');
+        btn.disabled = true;
+
+        const fd = new FormData();
+        fd.append('pdf', f);
+        try {
+            const r = await fetch('/api/extrair-fatura-equatorial', { method: 'POST', body: fd });
+            const d = await r.json();
+            if (!r.ok || d.erro) {
+                setMsg('Falha: ' + (d.erro || r.status), '#dc3545');
+                return;
+            }
+
+            // Preenche campos a partir dos dados extraídos
+            //   - Strings vão direto; números são convertidos para BR (vírgula)
+            //   - Datas em ISO (yyyy-mm-dd) são convertidas para dd/mm/yyyy
+            //   - Datas em BR (dd/mm/yyyy) passam direto via isoParaBR
+            setIfPresent('f_mes_ref',         d.mes_referencia);
+            setIfPresent('f_venc_eq',         d.venc_equatorial || d.vencimento, isoParaBR);
+            setIfPresent('f_consumo',         d.consumo_kwh,            numBR);
+            setIfPresent('f_tarifa',          d.tarifa_sem || d.tarifa_scee, numBR);
+            setIfPresent('f_band_am',         d.bandeira_amarela,       numBR);
+            setIfPresent('f_band_vm',         d.bandeira_vermelha,      numBR);
+            setIfPresent('f_ilum',            d.iluminacao_publica,     numBR);
+            setIfPresent('f_multa',           d.multa,                  numBR);
+            setIfPresent('f_juros',           d.juros,                  numBR);
+            setIfPresent('f_compensado_com',  d.consumo_compensado || d.compensado_kwh, numBR);
+            setIfPresent('f_nao_comp_com',    d.consumo_nao_comp   || d.nao_comp_kwh,   numBR);
+            setIfPresent('f_difci',           d.difci,                  numBR);
+            setIfPresent('f_ecnisenta',       d.ecnisenta,              numBR);
+            // Datas (extrator devolve em formato BR dd/mm/yyyy ou ISO yyyy-mm-dd)
+            setIfPresent('f_leit_ant',        d.data_leitura_anterior,  isoParaBR);
+            setIfPresent('f_leit_atual',      d.data_leitura_atual,     isoParaBR);
+            setIfPresent('f_prox_leit',       d.proxima_leitura,        isoParaBR);
+            setIfPresent('f_n_dias',          d.n_dias);
+
+            // ── Campos SCEE / Compensação Solar ──
+            // Nota: geracao_ciclo_kwh do PDF é ambíguo (pool de outros clientes).
+            // O valor REAL da geração vem da reconciliação (banco) ou é estimado.
+            setIfPresent('f_scee_ciclo_mes',     d.scee_ciclo_mes || d.ciclo_geracao_mes);
+            setIfPresent('f_scee_uc_geradora',   d.scee_uc_geradora);
+            setIfPresent('f_scee_pct_rateio',    d.scee_pct_rateio,        numBR);
+            setIfPresent('f_scee_excedente_kwh', d.excedente_recebido_kwh, numBR);
+            setIfPresent('f_scee_credito_kwh',   d.credito_recebido_kwh,   numBR);
+            setIfPresent('f_scee_saldo_kwh',     d.saldo_kwh,              numBR);
+            setIfPresent('f_scee_saldo_30d',     d.saldo_expirar_30d_kwh,  numBR);
+            setIfPresent('f_scee_saldo_60d',     d.saldo_expirar_60d_kwh,  numBR);
+
+            // ── Reconciliação SCEE ──
+            // 1) Guarda o pct impresso na fatura (vem do extrator)
+            window._sceeRecon.pct_impresso_pdf =
+                (typeof d.scee_pct_rateio === 'number') ? d.scee_pct_rateio : null;
+
+            // 2) Dados auxiliares do banco (geração real da usina, pct cadastrado)
+            const rec = d._scee_reconciliacao || {};
+            window._sceeRecon.geracao_real_usina = rec.geracao_real_usina;
+            window._sceeRecon.pct_cadastrado     = rec.pct_rateio_cadastrado;
+            window._sceeRecon.fonte_geracao      = rec.fonte_geracao;
+            window._sceeRecon.fonte_rateio       = rec.fonte_rateio;
+
+            // 3) Preenche o campo geração: prioriza banco > estimativa
+            const gerInput  = document.getElementById('f_scee_geracao_usina_kwh');
+            const gerFonte  = document.getElementById('scee_geracao_fonte');
+            if (rec.geracao_real_usina && rec.geracao_real_usina > 0) {
+                gerInput.value = rec.geracao_real_usina.toLocaleString('pt-BR',
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                gerFonte.innerHTML = '<i class="bi bi-database-fill-check text-success"></i> '
+                    + (rec.fonte_geracao || 'fatura da usina');
+            } else if (d.excedente_recebido_kwh > 0 && d.scee_pct_rateio > 0) {
+                // Estima por excedente ÷ pct impresso
+                const est = d.excedente_recebido_kwh / (d.scee_pct_rateio / 100);
+                gerInput.value = est.toLocaleString('pt-BR',
+                    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                gerFonte.innerHTML = '<i class="bi bi-magic text-warning"></i> '
+                    + 'estimada — para reconciliar, importe a fatura da usina';
+            } else {
+                gerInput.value = '';
+                gerFonte.innerHTML = '<i class="bi bi-dash-circle"></i> não disponível';
+            }
+
+            // Dispara o recálculo / reconciliação
+            sceeRecalc();
+
+            // Tipo de fornecimento — agora API ja normaliza, so matchar 3 primeiros
+            if (d.tipo_fornecimento) {
+                const sel = document.getElementById('f_tipo_forn');
+                if (sel) {
+                    const alvo = String(d.tipo_fornecimento).toLowerCase().slice(0, 3);
+                    for (const opt of sel.options) {
+                        if (opt.value.toLowerCase().startsWith(alvo)) {
+                            sel.value = opt.value;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Dispara recálculo
+            try { calcularPrevia(); } catch(_) {}
+            const origem = d._tarifa_origem === 'cadastrada'
+                ? ' (tarifa do cadastro do mês)'
+                : ' (tarifa lida do PDF)';
+            setMsg('✓ Dados preenchidos' + origem + '. Revise e clique em Gerar PDF.', '#198754');
+        } catch (e) {
+            setMsg('Erro de rede: ' + e.message, '#dc3545');
+        } finally {
+            btn.disabled = false;
+        }
+    });
+})();
+
+// ══════════════════════════════════════════════════════
+//  MODAL DE TARIFAS
+// ══════════════════════════════════════════════════════
+(function () {
+
+    // ── Formata número BR p/ exibição na tabela ──
+    function _fmtTar(v) {
+        if (v === undefined || v === null || v === '') return '—';
+        const n = parseFloat(v);
+        if (isNaN(n) || n === 0) return '—';
+        return n.toFixed(6).replace('.', ',');
+    }
+
+    // ── Mês do formulário principal ──
+    function _mesPrincipal() {
+        return (document.getElementById('f_mes_ref').value || '').trim();
+    }
+
+    // ── Hint inline abaixo do campo Mês ──
+    function _atualizarHintMes(tarifas) {
+        const el = document.getElementById('tarifa_mes_hint_inline');
+        if (!el) return;
+        const mes = _mesPrincipal();
+        if (!mes) { el.textContent = ''; return; }
+        const t = tarifas.find(x => x.mes === mes);
+        if (t) {
+            el.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> <span class="text-success">Tarifa cadastrada: ${_fmtTar(t.tarifa_sem)} R$/kWh</span>`;
+        } else {
+            el.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-warning"></i> <span class="text-warning">Sem tarifa p/ ${mes} — <a href="#" onclick="abrirModalTarifas();return false">cadastrar</a></span>`;
+        }
+    }
+
+    // ── Renderiza tabela ──
+    function _renderTabela(tarifas) {
+        const mes = _mesPrincipal();
+        if (!tarifas.length) {
+            document.getElementById('tm_tabela').innerHTML =
+                '<p class="text-muted text-center py-3">Nenhuma tarifa cadastrada ainda.</p>';
+            return;
+        }
+        const rows = tarifas.map(t => {
+            const destaque = t.mes === mes ? 'table-warning fw-bold' : '';
+            const tag      = t.mes === mes ? '<span class="badge bg-warning text-dark ms-1">atual</span>' : '';
+            return `<tr class="${destaque}">
+                <td>${t.mes}${tag}</td>
+                <td class="text-end font-monospace">${_fmtTar(t.tarifa_sem)}</td>
+                <td class="text-end font-monospace">${_fmtTar(t.bandeira_amarela)}</td>
+                <td class="text-end font-monospace">${_fmtTar(t.bandeira_vermelha)}</td>
+                <td class="text-end font-monospace">${_fmtTar(t.fio_b)}</td>
+                <td class="text-muted small">${t.observacao || ''}</td>
+                <td class="text-nowrap">
+                    <button class="btn btn-outline-primary btn-sm py-0 me-1"
+                            onclick="tmEditar(${JSON.stringify(t)})"
+                            title="Editar">
+                        <i class="bi bi-pencil-fill"></i>
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm py-0"
+                            onclick="tmRemover('${t.mes}')"
+                            title="Remover">
+                        <i class="bi bi-trash-fill"></i>
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+        document.getElementById('tm_tabela').innerHTML = `
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Mês</th>
+                        <th class="text-end">Tarifa Eq. (R$/kWh)</th>
+                        <th class="text-end">Band. Amar.</th>
+                        <th class="text-end">Band. Verm.</th>
+                        <th class="text-end">Fio B</th>
+                        <th>Observação</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>`;
+    }
+
+    // ── Banner de status do mês ──
+    function _renderBanner(tarifas) {
+        const mes = _mesPrincipal();
+        const el  = document.getElementById('tm_status_banner');
+        if (!mes) { el.classList.add('d-none'); return; }
+        const t = tarifas.find(x => x.mes === mes);
+        if (t) {
+            el.className = 'alert alert-success mb-3 py-2';
+            el.innerHTML = `<i class="bi bi-check-circle-fill me-1"></i><strong>${mes}</strong> — Tarifa cadastrada: ${_fmtTar(t.tarifa_sem)} R$/kWh`;
+        } else {
+            el.className = 'alert alert-warning mb-3 py-2';
+            el.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i><strong>${mes}</strong> — Tarifa ainda não cadastrada para este mês.`;
+        }
+        el.classList.remove('d-none');
+    }
+
+    // ── Carrega tarifas via API ──
+    async function _carregar() {
+        document.getElementById('tm_tabela').innerHTML =
+            '<div class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Carregando…</div>';
+        try {
+            const r = await fetch('/api/tarifas-json');
+            // Detecta erro HTTP — não confiar só no JSON
+            if (!r.ok) {
+                let detalhe = `HTTP ${r.status}`;
+                try {
+                    const errData = await r.json();
+                    if (errData.erro) detalhe = errData.erro;
+                } catch(_) {}
+                document.getElementById('tm_tabela').innerHTML =
+                    `<div class="alert alert-warning mb-0 mx-3 my-3">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        <strong>Não foi possível carregar as tarifas:</strong> ${detalhe}
+                        <br><small class="text-muted">Possível causa: servidor Flask precisa ser reiniciado para registrar a rota /api/tarifas-json</small>
+                    </div>`;
+                return [];
+            }
+            const data = await r.json();
+            const tarifas = data.tarifas || [];
+            _renderTabela(tarifas);
+            _renderBanner(tarifas);
+            _atualizarHintMes(tarifas);
+            return tarifas;
+        } catch (e) {
+            document.getElementById('tm_tabela').innerHTML =
+                `<div class="alert alert-danger mb-0 mx-3 my-3">
+                    <i class="bi bi-x-circle-fill me-1"></i>
+                    Erro de rede ao carregar tarifas: ${e.message}
+                </div>`;
+            return [];
+        }
+    }
+
+    // ── Abre modal ──
+    window.abrirModalTarifas = function () {
+        _carregar();
+        // Pré-preenche mês
+        const mes = _mesPrincipal();
+        if (mes) document.getElementById('tm_mes').value = mes;
+        const modal = new bootstrap.Modal(document.getElementById('modalTarifas'));
+        modal.show();
+    };
+
+    // ── Salvar (POST) ──
+    window.tmSalvar = async function () {
+        const msg  = document.getElementById('tm_msg');
+        const mes  = (document.getElementById('tm_mes').value || '').trim();
+        if (!mes || !/^\d{2}\/\d{4}$/.test(mes)) {
+            msg.innerHTML = '<span class="text-danger">Informe o mês no formato MM/AAAA.</span>';
+            return;
+        }
+        const body = {
+            mes,
+            mes_antigo: document.getElementById('tm_mes_antigo').value || '',
+            tarifa_sem:        document.getElementById('tm_tarifa_sem').value,
+            bandeira_amarela:  document.getElementById('tm_band_am').value,
+            bandeira_vermelha: document.getElementById('tm_band_vm').value,
+            fio_b:             document.getElementById('tm_fio_b').value,
+            observacao:        document.getElementById('tm_obs').value,
+        };
+        msg.innerHTML = '<span class="text-primary"><i class="bi bi-hourglass-split me-1"></i>Salvando…</span>';
+        try {
+            const r = await fetch('/api/tarifas-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const d = await r.json();
+            if (!r.ok || d.erro) {
+                msg.innerHTML = `<span class="text-danger">Erro: ${d.erro || r.status}</span>`;
+                return;
+            }
+            msg.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Tarifa ${mes} salva!</span>`;
+            tmLimparForm();
+            // Recarrega tabela e atualiza campo tarifa no formulário principal
+            const tarifas = await _carregar();
+            _preencherCamposTarifa(tarifas, mes);
+        } catch (e) {
+            msg.innerHTML = `<span class="text-danger">Erro de rede: ${e.message}</span>`;
+        }
+    };
+
+    // ── Editar — preenche formulário ──
+    window.tmEditar = function (t) {
+        document.getElementById('tm_form_titulo').textContent = `Editar tarifa — ${t.mes}`;
+        document.getElementById('tm_mes_antigo').value        = t.mes;
+        document.getElementById('tm_mes').value               = t.mes;
+        document.getElementById('tm_tarifa_sem').value        = _fmtTar(t.tarifa_sem);
+        document.getElementById('tm_band_am').value           = _fmtTar(t.bandeira_amarela);
+        document.getElementById('tm_band_vm').value           = _fmtTar(t.bandeira_vermelha);
+        document.getElementById('tm_fio_b').value             = _fmtTar(t.fio_b);
+        document.getElementById('tm_obs').value               = t.observacao || '';
+        document.getElementById('tm_msg').innerHTML = '';
+        document.getElementById('tm_mes').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        document.getElementById('tm_mes').focus();
+    };
+
+    // ── Remover (DELETE) ──
+    window.tmRemover = async function (mes) {
+        if (!confirm(`Remover tarifa de ${mes}?`)) return;
+        // Flask usa <path:mes_ref> — manter a barra literal (05/2026 → /api/.../05/2026)
+        const r = await fetch(`/api/tarifas-json/${mes}`, { method: 'DELETE' });
+        if (r.ok) { await _carregar(); }
+        else { alert('Erro ao remover tarifa.'); }
+    };
+
+    // ── Limpa formulário ──
+    window.tmLimparForm = function () {
+        document.getElementById('tm_form_titulo').textContent = 'Cadastrar nova tarifa';
+        document.getElementById('tm_mes_antigo').value        = '';
+        ['tm_mes', 'tm_tarifa_sem', 'tm_band_am', 'tm_band_vm', 'tm_fio_b', 'tm_obs'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        // Re-preenche mês com o do formulário principal
+        const mes = _mesPrincipal();
+        if (mes) document.getElementById('tm_mes').value = mes;
+        document.getElementById('tm_msg').innerHTML = '';
+    };
+
+    // ── Após salvar: preenche os campos de tarifa no formulário principal ──
+    function _preencherCamposTarifa(tarifas, mes) {
+        const t = tarifas.find(x => x.mes === mes);
+        if (!t) return;
+        function _set(id, v) {
+            const el = document.getElementById(id);
+            if (!el || !v) return;
+            el.value = parseFloat(v).toFixed(6).replace('.', ',');
+            el.dispatchEvent(new Event('input',  { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        _set('f_tarifa',  t.tarifa_sem);
+        _set('f_band_am', t.bandeira_amarela);
+        _set('f_band_vm', t.bandeira_vermelha);
+        try { calcularPrevia(); } catch (_) {}
+    }
+
+    // ── SCEE: helpers ──
+    function _parseBRlocal(v) {
+        if (v === null || v === undefined || v === '') return 0;
+        return parseFloat(String(v).replace(/\./g, '').replace(',', '.')) || 0;
+    }
+    function _fmtKWh(n) {
+        if (!n || isNaN(n)) return '—';
+        return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function _fmtPct(n) {
+        if (!n || isNaN(n)) return '—';
+        return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) + '%';
+    }
+
+    // Guarda valores auxiliares vindos da API (reconciliação)
+    window._sceeRecon = {
+        pct_impresso_pdf:    null,  // valor lido pela Equatorial (ex: 0.78)
+        pct_cadastrado:      null,  // de tb_cliente_usina (ex: 0.75 ou null)
+        geracao_real_usina:  null,  // de fatura da usina (ex: 14143.00 ou null)
+        fonte_geracao:       null,
+        fonte_rateio:        null,
+    };
+
+    // ── Estimativa: preenche geração com excedente ÷ pct impresso ──
+    window.sceeEstimarGeracao = function () {
+        const excedente = _parseBRlocal(document.getElementById('f_scee_excedente_kwh').value);
+        const pct       = _parseBRlocal(document.getElementById('f_scee_pct_rateio').value);
+        if (excedente > 0 && pct > 0) {
+            const estimada = excedente / (pct / 100);
+            document.getElementById('f_scee_geracao_usina_kwh').value =
+                estimada.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('scee_geracao_fonte').innerHTML =
+                '<i class="bi bi-magic"></i> estimada (excedente ÷ % impresso)';
+            sceeRecalc();
+        }
+    };
+
+    // ── Recalcula reconciliação SCEE ──
+    window.sceeRecalc = function () {
+        const excedente = _parseBRlocal(document.getElementById('f_scee_excedente_kwh').value);
+        const geracao   = _parseBRlocal(document.getElementById('f_scee_geracao_usina_kwh').value);
+        const pctField  = _parseBRlocal(document.getElementById('f_scee_pct_rateio').value);
+        const saldo     = _parseBRlocal(document.getElementById('f_scee_saldo_kwh').value);
+
+        // ── Badge saldo ──
+        const badge = document.getElementById('scee_saldo_badge');
+        if (badge) badge.className = saldo >= 0 ? 'badge bg-success' : 'badge bg-danger';
+
+        // ── Painel de reconciliação ──
+        const panel    = document.getElementById('scee_recon_panel');
+        const elImp    = document.getElementById('scee_pct_impresso');
+        const elCad    = document.getElementById('scee_pct_cadastrado');
+        const elCalc   = document.getElementById('scee_pct_calculado');
+        const elStatus = document.getElementById('scee_recon_status');
+        const elAlert  = document.getElementById('scee_recon_alerta');
+
+        // Mostra o painel quando temos pelo menos o pct impresso
+        const pctImpresso = window._sceeRecon.pct_impresso_pdf;
+        const pctCadast   = window._sceeRecon.pct_cadastrado;
+        const pctCalc     = (excedente > 0 && geracao > 0) ? (excedente / geracao * 100) : null;
+
+        if (pctImpresso !== null || pctCadast !== null || pctCalc !== null) {
+            panel.style.display = '';
+            elImp.textContent  = pctImpresso !== null ? _fmtPct(pctImpresso) : '—';
+            elCad.textContent  = pctCadast   !== null ? _fmtPct(pctCadast)   : '—';
+            elCalc.textContent = pctCalc     !== null ? _fmtPct(pctCalc)     : '— (informe geração)';
+
+            // ── Decide o veredito ──
+            // Se a geração veio do banco (fonte real), a comparação é confiável.
+            // Se foi estimada (excedente ÷ pct impresso), o pctCalc trivialmente
+            // bate com pctImpresso — não conta como confirmação.
+            const geracaoReal = !!window._sceeRecon.fonte_geracao;
+
+            if (pctCalc !== null) {
+                const tol = 0.02;  // tolerância em pontos percentuais
+                const okImp = pctImpresso !== null && Math.abs(pctImpresso - pctCalc) < tol;
+                const okCad = pctCadast   !== null && Math.abs(pctCadast   - pctCalc) < tol;
+
+                if (!geracaoReal && pctCadast === null) {
+                    // Geração estimada e sem cadastro pra cruzar — não dá pra reconciliar
+                    elStatus.className = 'badge bg-secondary';
+                    elStatus.textContent = '◌ aguardando geração real';
+                    elAlert.style.display = '';
+                    elAlert.innerHTML = '<i class="bi bi-info-circle text-secondary"></i> '
+                        + 'Geração da usina é estimativa. Para reconciliar, edite o campo "Geração total da usina" '
+                        + 'com o valor da fatura da própria usina.';
+                } else if (okImp && (pctCadast === null || okCad)) {
+                    elStatus.className = 'badge bg-success';
+                    elStatus.textContent = '✓ tudo bate';
+                    elAlert.style.display = 'none';
+                } else if (okCad && !okImp) {
+                    // Impresso errado, cadastrado certo
+                    elStatus.className = 'badge bg-warning text-dark';
+                    elStatus.textContent = '⚠ impresso divergente';
+                    elAlert.style.display = '';
+                    elAlert.innerHTML = '<i class="bi bi-info-circle-fill text-warning"></i> '
+                        + 'A Equatorial imprimiu <b>' + _fmtPct(pctImpresso) + '</b> mas a matemática mostra <b>'
+                        + _fmtPct(pctCalc) + '</b> (= cadastrado). Usando o cadastrado.';
+                    // Auto-corrige o campo pct_rateio
+                    document.getElementById('f_scee_pct_rateio').value =
+                        pctCadast.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+                } else if (!okImp && pctCadast === null) {
+                    // Sem cadastrado para comparar, mas impresso ≠ matemática
+                    elStatus.className = 'badge bg-warning text-dark';
+                    elStatus.textContent = '⚠ impresso divergente';
+                    elAlert.style.display = '';
+                    elAlert.innerHTML = '<i class="bi bi-info-circle-fill text-warning"></i> '
+                        + 'A Equatorial imprimiu <b>' + _fmtPct(pctImpresso) + '</b> mas a matemática mostra <b>'
+                        + _fmtPct(pctCalc) + '</b>. Recomenda-se usar o calculado.';
+                    // Auto-corrige usando o calculado (matemática)
+                    document.getElementById('f_scee_pct_rateio').value =
+                        pctCalc.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+                } else {
+                    elStatus.className = 'badge bg-danger';
+                    elStatus.textContent = '✗ inconsistente';
+                    elAlert.style.display = '';
+                    elAlert.innerHTML = '<i class="bi bi-x-circle-fill text-danger"></i> '
+                        + 'Impresso, cadastrado e calculado divergem. Revise os dados.';
+                }
+            } else {
+                elStatus.className = 'badge bg-secondary';
+                elStatus.textContent = 'informe geração para reconciliar';
+                elAlert.style.display = 'none';
+            }
+        } else {
+            panel.style.display = 'none';
+        }
+
+        // ── Caixa "Verificação" pequena ──
+        const checkEl = document.getElementById('scee_check_msg');
+        if (checkEl) {
+            if (pctCalc !== null) {
+                checkEl.innerHTML = '<i class="bi bi-check-circle-fill text-success"></i> ' + _fmtPct(pctCalc);
+            } else {
+                checkEl.innerHTML = '—';
+            }
+        }
+    };
+
+    // Dispara sceeRecalc nos campos relevantes
+    ['f_scee_excedente_kwh', 'f_scee_pct_rateio', 'f_scee_credito_kwh', 'f_scee_saldo_kwh',
+     'f_scee_geracao_usina_kwh'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.addEventListener('input', sceeRecalc); el.addEventListener('change', sceeRecalc); }
+    });
+
+    // ── Atualiza hint inline ao mudar o campo Mês ──
+    document.getElementById('f_mes_ref').addEventListener('change', async function () {
+        const mes = this.value.trim();
+        if (!mes || !/^\d{1,2}\/\d{4}$/.test(mes)) {
+            document.getElementById('tarifa_mes_hint_inline').innerHTML = '';
+            return;
+        }
+        try {
+            const r = await fetch('/api/tarifas-json');
+            const data = await r.json();
+            _atualizarHintMes(data.tarifas || []);
+        } catch (_) {}
+    });
+
+})();
 </script>
 {% endblock %}

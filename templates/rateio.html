@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Rateio — {{ usina.nome or uid }}{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Rateio</span><span class="sep">›</span><span class="here">{{ usina.nome or uid }}</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-pie-chart-fill me-2" style="color:var(--or)"></i>Rateio de Créditos</h1>
@@ -29,7 +30,7 @@
     <div class="col-md-3"><div class="card stat-card">
         <div class="stat-icon" style="background:rgba(245,166,35,0.1);color:var(--or)"><i class="bi bi-sun-fill"></i></div>
         <div class="stat-value" style="font-size:16px">{{ usina.nome or uid }}</div>
-        <div class="stat-label">UC: {{ usina.uc_geradora }}{% if data_leitura_usina %} · Leitura: {{ data_leitura_usina }}{% endif %}</div>
+        <div class="stat-label">UC: {{ usina.uc_geradora | fmt_uc15 }}{% if data_leitura_usina %} · Leitura: {{ data_leitura_usina }}{% endif %}</div>
     </div></div>
     <div class="col-md-3"><div class="card stat-card">
         <div class="stat-icon" style="background:{% if tem_geracao_real %}rgba(34,197,94,0.1);color:var(--green){% else %}rgba(234,179,8,0.1);color:#eab308{% endif %}">
@@ -107,7 +108,7 @@
                 <tbody>
                 {% for a in alocacoes %}
                 <tr style="{% if a.status == 'deficit' %}background:rgba(239,68,68,0.03){% elif a.status == 'excedente' %}background:rgba(34,197,94,0.03){% endif %}">
-                    <td><code>{{ a.uc_display or a.uc }}</code></td>
+                    <td><code>{{ a.uc_display or (a.uc | fmt_uc15) }}</code></td>
                     <td><strong>{{ a.nome[:22] }}</strong></td>
                     <td><input type="text" name="rateio_{{ a.uc }}" class="form-control form-control-sm text-center"
                         value="{{ "%.2f"|format(a.rateio_pct) }}" style="width:70px;font-size:11px"></td>
@@ -203,7 +204,7 @@
                 <tbody>
                 {% for s in sugestoes %}
                 <tr>
-                    <td><strong>{{ s.nome[:22] }}</strong> <code style="font-size:10px">{{ s.uc }}</code></td>
+                    <td><strong>{{ s.nome[:22] }}</strong> <code style="font-size:10px">{{ s.uc | fmt_uc15 }}</code></td>
                     <td class="text-center">{{ "%.2f"|format(s.pct_atual) }}%</td>
                     <td class="text-center"><strong style="color:var(--or)">{{ "%.2f"|format(s.pct_sugerido) }}%</strong></td>
                     <td class="text-center">
@@ -474,10 +475,10 @@
             <div class="modal-body">
                 <div class="mb-3 p-3 rounded" style="background:#f8f9fa;font-size:13px">
                     <div class="mb-1"><strong>Para:</strong> gd.goias@equatorialenergia.com.br</div>
-                    <div class="mb-1"><strong>Assunto:</strong> UC {{ usina.uc_geradora }} {{ now_str }}</div>
+                    <div class="mb-1"><strong>Assunto:</strong> UC {{ usina.uc_geradora | fmt_uc15 }} {{ now_str }}</div>
                     <div class="mt-2 text-muted" style="white-space:pre-line">Bom dia!
 
-Venho por meio deste solicitar atualização do rateio de geração distribuída da unidade {{ usina.uc_geradora }}.
+Venho por meio deste solicitar atualização do rateio de geração distribuída da unidade {{ usina.uc_geradora | fmt_uc15 }}.
 
 Segue anexo o formulário do rateio e documentos.
 

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if titular %}Editar{% else %}Novo{% endif %} Titular{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Titulares UC</span><span class="sep">›</span><span class="here">{% if titular %}Editar Titular{% else %}Novo Titular{% endif %}</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>

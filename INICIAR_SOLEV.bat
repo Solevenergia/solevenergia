@@ -31,7 +31,7 @@ echo.
 :: Inicia o servidor (le e grava direto no Supabase via db.py)
 echo ============================================================
 echo   Servidor iniciando...
-echo   Acesse no navegador: http://localhost:5000
+echo   Acesse no navegador: http://localhost:5001
 echo.
 echo   Banco: Supabase (PostgreSQL) - leitura/escrita direta.
 echo   Seu socio ve as alteracoes em tempo real (sem sync manual).

@@ -39,6 +39,47 @@ Clientes_*.xlsx
 *_clientes.xlsx
 *_clientes_*.xlsx
 
-# Logos e marca (adicionar quando tiver)
-LOGO_SOLEV*.png
-LOGO_SOLEV*.jpeg
+# Logos: SVGs e PNGs oficiais SAO commitados (identidade visual SoLev v1).
+# Se precisar ignorar variantes locais (ex: testes), liste-as explicitamente aqui.
+
+# PDFs de cobrança gerados (regeneráveis a partir do banco)
+*.pdf
+
+# Logs do servidor
+solev_flask.log
+solev_log.txt
+logs/
+
+# Excel temporário (template é regenerado pelo script)
+cadastro_usinas_template.xlsx
+
+# Scripts de teste e debug locais
+teste_*.ps1
+teste_*.vbs
+SOLEV_DEBUG.vbs
+
+# Material de design (entrega externa, pesado, não vai pro deploy)
+"Identidade visual Solev energia.zip"
+design_handoff_*/
+
+# Configs Claude / IDE
+.claude/
+
+# Diretório de fontes baixadas localmente (regeneradas pelo script)
+# Mantemos no repo pra produção ter as fontes — comentado pra incluir:
+# static/fonts/
+
+# Launchers Windows (não precisam em produção Linux)
+SOLEV.vbs
+INICIAR_SOLEV*.vbs
+iniciar_solev*.vbs
+iniciar_solev*.ps1
+_iniciar_flask_oculto.bat
+*.lnk
+
+# Arquivos temporários de extração / debug
+tmp_amostras_texto/
+
+# Arquivos pesados de design (identidade visual fica em logo_*.svg/png)
+"Identidade visual Solev energia.zip"
+LOGO_SOLEV.jpeg

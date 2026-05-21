@@ -1,4 +1,4 @@
-{%- from '_solev_brand.html' import solev_wordmark, solev_symbol -%}
+﻿{%- from '_solev_brand.html' import solev_wordmark, solev_symbol -%}
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -317,7 +317,7 @@
         'recebedor' in ep or
         'investidor' in ep
     ) %}
-    {% set in_gerar = ep in ['gerar', 'gerar_auto', 'gerar_manual', 'gerar_lote'] %}
+    {% set in_gerar = ep in ['gerar', 'gerar_auto', 'gerar_manual', 'gerar_lote', 'gerar_em_lote'] %}
 
     <nav class="sidebar-nav">
         <div class="side-section">Trabalho</div>
@@ -343,18 +343,7 @@
         <a href="/conciliacao"  class="{% if 'conciliacao' in ep %}active{% endif %}"><i class="bi bi-clipboard-check-fill"></i> Conciliacao</a>
         <a href="/tarifas"      class="{% if 'tarifa' in ep %}active{% endif %}"><i class="bi bi-tag-fill"></i> Tarifas</a>
 
-        <div class="nav-group {% if in_gerar %}open has-active{% endif %}">
-            <button type="button" class="nav-group-toggle" onclick="this.parentElement.classList.toggle('open')">
-                <i class="bi bi-lightning-charge-fill"></i> Gerar Cobrança
-                <i class="bi bi-chevron-down chevron"></i>
-            </button>
-            <div class="nav-group-items">
-                <a href="/gerar/auto"  class="{% if ep == 'gerar_auto' %}active{% endif %}"><i class="bi bi-lightning-charge-fill"></i> Automatico</a>
-                <a href="/gerar"       class="{% if ep == 'gerar' %}active{% endif %}"><i class="bi bi-file-earmark-pdf-fill"></i> Via Fatura Equatorial</a>
-                <a href="/gerar/manual" class="{% if ep == 'gerar_manual' %}active{% endif %}"><i class="bi bi-pencil-square"></i> Manual</a>
-                <a href="/lote"        class="{% if ep == 'gerar_lote' %}active{% endif %}"><i class="bi bi-files"></i> Em Lote</a>
-            </div>
-        </div>
+        <a href="/gerar/manual" class="{% if in_gerar %}active{% endif %}"><i class="bi bi-lightning-charge-fill"></i> Gerar Cobrança</a>
 
         <div class="side-section">Analise</div>
         <a href="/pagamento"   class="{% if ep == 'pagamento' %}active{% endif %}"><i class="bi bi-cash-coin"></i> Pagamentos</a>
@@ -419,8 +408,8 @@ document.addEventListener('DOMContentLoaded', function(){
     });
 
     function maskData(){ var v=this.value.replace(/\D/g,''); if(v.length>2)v=v.slice(0,2)+'/'+v.slice(2); if(v.length>5)v=v.slice(0,5)+'/'+v.slice(5); if(v.length>10)v=v.slice(0,10); this.value=v; }
-    porNome(['data','data_pagamento','data_pagamento_anterior','venc_contalev_anterior',
-             'anterior_leitura','data_leitura','proxima_leitura','vencimento_contalev',
+    porNome(['data','data_pagamento','data_pagamento_anterior','venc_solev_anterior',
+             'anterior_leitura','data_leitura','proxima_leitura','vencimento_solev',
              'venc_equatorial','data_adesao','dt_comissionamento','dt_nascimento_titular',
              'dt_dono_nascimento','dt_inicio','dt_fim','dt_proxima_leitura',
              'investidor_dia_pagamento'],

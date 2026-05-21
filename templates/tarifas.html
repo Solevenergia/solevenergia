@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Tarifas{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Tarifas</span>{% endblock %}
+{% block topbar_actions %}<a href="/tarifas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Nova Tarifa</a>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-tag-fill me-2" style="color:var(--or)"></i>Tarifas por Mês</h1>
-    <a href="/tarifas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Nova Tarifa</a>
 </div>
 <p class="text-muted mb-3" style="font-size:13px">
     Cadastre a tarifa e bandeiras da distribuidora por mês de referência.

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}WhatsApp — Alertas de Rateio{% endblock %}
+{% block topbar_breadcrumb %}<span>Config</span><span class="sep">›</span><span class="here">WhatsApp</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-whatsapp me-2" style="color:#25d366"></i>Alertas via WhatsApp</h1>
@@ -67,7 +68,7 @@
                     {% for a in alertas %}
                     <tr style="{% if a.status == 'atrasado' %}background:rgba(220,53,69,0.04){% elif a.status == 'urgente' %}background:rgba(255,193,7,0.06){% endif %}">
                         <td><strong>{{ a.nome[:22] }}</strong></td>
-                        <td><code style="font-size:11px">{{ a.uc_geradora }}</code></td>
+                        <td><code style="font-size:11px">{{ a.uc_geradora | fmt_uc15 }}</code></td>
                         <td>{{ a.proxima_leitura }}</td>
                         <td><strong>{{ a.data_rateio }}</strong></td>
                         <td class="text-center">
@@ -92,7 +93,7 @@
                 <div style="font-size:10px;color:#999;text-transform:uppercase;font-weight:600;margin-bottom:6px">Preview da mensagem</div>
                 <div class="p-3 rounded" style="background:#e5ddd5;border-radius:12px!important">
                     <div class="p-3 rounded" style="background:white;border-radius:8px!important;font-size:12px;white-space:pre-line;line-height:1.6;max-height:300px;overflow-y:auto">{% for a in alertas %}{% if a.status in ['atrasado', 'urgente', 'proximo'] %}{% if a.status == 'atrasado' %}&#128308;{% elif a.status == 'urgente' %}&#128993;{% else %}&#128994;{% endif %} *{{ a.nome }}*
-   UC: {{ a.uc_geradora }}
+   UC: {{ a.uc_geradora | fmt_uc15 }}
    Prox. Leitura: {{ a.proxima_leitura }}
    Rateio ate: {{ a.data_rateio }}{% if a.dias_restantes <= 0 %}
    &#9888;&#65039; ATRASADO {{ (-a.dias_restantes) }} dia(s){% else %}

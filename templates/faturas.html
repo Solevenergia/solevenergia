@@ -95,6 +95,7 @@
                 <th>Mês</th>
                 <th>SEM</th>
                 <th>COM</th>
+                <th>Valor Eq.</th>
                 <th>Economia</th>
                 <th>Venc. SOLEV</th>
                 <th>Venc. Equatorial</th>
@@ -118,6 +119,7 @@
                 <td>{{ item._mes_ref_br }}</td>
                 <td class="text-muted">{{ fmt(item.vlr_total_sem) }}</td>
                 <td><strong>{{ fmt(item.vlr_total_com) }}</strong></td>
+                <td style="color:#666;font-size:12px">{{ fmt(item.vlr_fatura_equatorial) if item.vlr_fatura_equatorial else '—' }}</td>
                 <td style="color:var(--green,#2e7d32);font-weight:700">{{ fmt(item.vlr_economia_mes) }}</td>
                 <td style="font-size:12px;white-space:nowrap">{{ item._venc_br or '-' }}</td>
                 <td style="font-size:12px;white-space:nowrap;color:#666">{{ item._venc_eq_br or '-' }}</td>
@@ -162,9 +164,21 @@
                         <a href="/download/{{ item._pdf_legado }}" class="btn btn-sm btn-db" title="Baixar PDF SOLEV">
                             <i class="bi bi-download"></i>
                         </a>
+                    {% endif %}
+                    {% if item.pdf_equatorial or item.pdf_equatorial_url %}
+                        <a href="/ver-equatorial/{{ item.id_fatura }}" target="_blank"
+                           class="btn btn-sm" style="background:#dc6817;color:white" title="Ver fatura Equatorial original">
+                            <i class="bi bi-lightning-fill"></i>
+                        </a>
+                    {% endif %}
+                    {% if item._pdf_legado %}
                         <a href="/whatsapp/{{ item._pdf_legado }}?id={{ item.id_fatura }}" target="_blank"
-                           class="btn btn-sm" style="background:#25D366;color:white" title="WhatsApp">
+                           class="btn btn-sm" style="background:#25D366;color:white" title="Enviar cobrança por WhatsApp">
                             <i class="bi bi-whatsapp"></i>
+                        </a>
+                        <a href="/whatsapp-pix/{{ item.id_fatura }}" target="_blank"
+                           class="btn btn-sm" style="background:#0e9b65;color:white" title="Enviar código PIX por WhatsApp (mensagem separada)">
+                            <i class="bi bi-qr-code"></i> PIX
                         </a>
                     {% endif %}
                     <a href="/fatura/excluir/{{ item.id_fatura }}" class="btn btn-sm btn-outline-danger" title="Excluir"

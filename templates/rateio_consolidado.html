@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Rateio Consolidado{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Rateio Consolidado</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-pie-chart-fill me-2" style="color:var(--or)"></i>Rateio — Visão Consolidada</h1>
@@ -109,7 +110,7 @@
                         <a href="/usinas/rateio/{{ r.uid }}?mes={{ mes_sel }}" class="text-decoration-none">
                             <strong style="color:var(--db)">{{ r.nome }}</strong>
                         </a>
-                        {% if r.uc_geradora %}<div class="text-muted" style="font-size:10px"><code>{{ r.uc_geradora }}</code></div>{% endif %}
+                        {% if r.uc_geradora %}<div class="text-muted" style="font-size:10px"><code>{{ r.uc_geradora | fmt_uc15 }}</code></div>{% endif %}
                     </td>
                     <td class="text-end">
                         <strong style="color:var(--or)">{{ "{:,.0f}".format(r.base_kwh).replace(",", ".") }}</strong>

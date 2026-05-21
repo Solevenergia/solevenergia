@@ -1,9 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Gerar Automático{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Cobranca</span><span class="sep">›</span><span class="here">Automatico</span>{% endblock %}
+{% block topbar_actions %}<a href="/gerar/manual" class="btn btn-db"><i class="bi bi-pencil-square me-1"></i> Modo Manual</a>{% endblock %}
 {% block content %}
 <div class="page-header">
   <h1><i class="bi bi-lightning-charge-fill me-2" style="color:var(--or)"></i>Gerar Automático</h1>
-  <a href="/gerar/manual" class="btn btn-db"><i class="bi bi-pencil-square me-1"></i> Modo Manual</a>
 </div>
 
 {# ─── FILTROS ─────────────────────────────────────────────────────────────── #}
@@ -148,7 +149,7 @@
             </td>
             <td>
               <div class="fw-semibold">{{ r.nome }}</div>
-              <code style="font-size:10px;color:#888">{{ r.uc_nova or r.uc }}</code>
+              <code style="font-size:10px;color:#888">{{ r.uc_nova or (r.uc | fmt_uc15) }}</code>
             </td>
             <td>
               {% if r.usina %}<span class="badge" style="background:var(--orl);color:var(--db);font-size:11px">{{ r.usina }}</span>

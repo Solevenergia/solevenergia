@@ -17,7 +17,7 @@
                         <select name="uc" class="form-select" required>
                             <option value="">Selecione o cliente...</option>
                             {% for uc, c in clientes.items() %}
-                            <option value="{{ uc }}">{{ c.nome }} (UC: {{ uc }})</option>
+                            <option value="{{ uc }}">{{ c.nome }} (UC: {{ uc | fmt_uc15 }})</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -67,11 +67,8 @@
                         </td>
                         <td>
                             <strong>{{ f._nome }}</strong>
-                            {% if f._cod_uc %}
-                            <br><code style="font-size:11px">UC: {{ f._cod_uc }}</code>
-                            {% endif %}
-                            {% if f._cod_uc_fmt %}
-                            <br><code style="font-size:11px;color:var(--or)">UC nova: {{ f._cod_uc_fmt }}</code>
+                            {% if f._cod_uc_fmt or f._cod_uc %}
+                            <br><code style="font-size:11px">UC: {{ f._cod_uc_fmt or (f._cod_uc | fmt_uc15) }}</code>
                             {% endif %}
                         </td>
                         <td><strong style="color:var(--db)">{{ fmt(f.vlr_total_com) }}</strong></td>

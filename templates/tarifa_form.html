@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{% if tarifa %}Editar Tarifa{% else %}Nova Tarifa{% endif %}{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span>Tarifas</span><span class="sep">›</span><span class="here">{% if tarifa %}Editar Tarifa{% else %}Nova Tarifa{% endif %}</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-tag-fill me-2" style="color:var(--or)"></i>{% if tarifa %}Editar Tarifa — {{ mes_ref }}{% else %}Nova Tarifa{% endif %}</h1>

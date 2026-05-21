@@ -108,9 +108,6 @@
             data-status="{{ 'ativo' if c.status else 'inativo' }}">
             <td>
                 <code style="font-size:13px">{{ (c.cod_uc | fmt_uc15) or c.cod_uc }}</code>
-                {% if c.cod_uc %}
-                <small class="text-muted d-block" style="font-size:10px">antiga: {{ c.cod_uc }}</small>
-                {% endif %}
             </td>
             <td>
                 <strong>{{ c.desc_nome }}</strong>

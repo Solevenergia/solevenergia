@@ -1,5 +1,5 @@
-"""
-CONTALEV - Camada de acesso ao banco de dados (Supabase/PostgreSQL)
+﻿"""
+SoLev - Camada de acesso ao banco de dados (Supabase/PostgreSQL)
 # versao: 2026-05-03
 =====================================================================
 Substitui o armazenamento em JSON local por chamadas diretas ao Supabase
@@ -78,10 +78,25 @@ class _SupabaseDB:
 
     @staticmethod
     def _carregar_config():
-        if not os.path.exists(SUPABASE_CONFIG_JSON):
-            raise RuntimeError(f"Arquivo nao encontrado: {SUPABASE_CONFIG_JSON}")
-        with open(SUPABASE_CONFIG_JSON, "r", encoding="utf-8") as f:
-            return json.load(f)
+        # PRIORIDADE 1: Variáveis de ambiente (produção — Railway, etc.)
+        env_url      = os.environ.get("SUPABASE_URL", "").strip()
+        env_anon     = os.environ.get("SUPABASE_ANON_KEY", "").strip()
+        env_service  = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+        if env_url and (env_anon or env_service):
+            return {
+                "url": env_url,
+                "anon_key": env_anon,
+                "service_role_key": env_service,
+            }
+        # PRIORIDADE 2: Arquivo JSON local (dev — PC do operador)
+        if os.path.exists(SUPABASE_CONFIG_JSON):
+            with open(SUPABASE_CONFIG_JSON, "r", encoding="utf-8") as f:
+                return json.load(f)
+        raise RuntimeError(
+            "Supabase nao configurado.\n"
+            "  - Produção: defina env vars SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY\n"
+            "  - Local: crie o arquivo supabase_config.json"
+        )
 
     # -- Operacoes basicas --------------------------------------
     def select(self, table, columns="*", filtros=None, order=None, raw_params=None):
@@ -344,10 +359,10 @@ def storage_signed_url(storage_path: str, expires_in: int = 3600) -> str:
 # ==================================================================
 # Colunas da tabela `clientes` no Supabase
 _COLS_CLIENTE = [
-    "uc", "nome", "cpf", "uc_alternativa", "telefone", "email",
+    "uc", "nome", "cpf", "cod_uc", "telefone", "email",
     "endereco", "endereco_linha1", "endereco_linha2", "endereco_linha3",
     "titular_fatura", "desconto_pct", "data_adesao",
-    "valor_cobranca_anterior", "venc_contalev_anterior", "data_pagamento_anterior",
+    "valor_cobranca_anterior", "venc_solev_anterior", "data_pagamento_anterior",
     "economia_acumulada_anterior", "codigo_barras", "linha_digitavel",
     "pix_payload", "usina_id", "rateio_pct", "saldo_kwh", "apelido",
     "tipo_fornecimento", "proxima_leitura", "modo_bandeira", "kwh_creditado_real",
@@ -400,10 +415,9 @@ def carregar_clientes() -> dict:
                 "tipo_fornecimento":           row.get("tp_fornecimento", "") or "",
                 "modo_bandeira":               row.get("tp_bandeira", "") or "",
                 "data_adesao":                 row.get("dt_adesao", "") or "",
-                "uc_alternativa":              row.get("cod_uc_alternativa", "") or "",
                 "status":                      row.get("STATUS", True) if row.get("STATUS") is not None else True,
                 "valor_cobranca_anterior":     row.get("vlr_cobranca_anterior", 0) or 0,
-                "venc_contalev_anterior":      row.get("dt_venc_anterior", "") or "",
+                "venc_solev_anterior":      row.get("dt_venc_anterior", "") or "",
                 "data_pagamento_anterior":     row.get("dt_ultimo_pagamento", "") or "",
                 "economia_acumulada_anterior": max(0, row.get("qtd_economia_acumulada", 0) or 0),
                 "saldo_kwh":                   row.get("saldo_kwh", 0) or 0,
@@ -435,11 +449,24 @@ def salvar_clientes(clientes: dict) -> None:
     # Campos a ignorar (internos ou sem equivalente na nova tabela)
     _IGNORAR = {"_fonte", "_id_cliente", "codigo_barras", "linha_digitavel", "pix_payload"}
 
+    def _to_iso(v) -> "Optional[str]":
+        """DD/MM/YYYY -> YYYY-MM-DD. Retorna None se invalido."""
+        if not v:
+            return None
+        s = str(v).strip()
+        if len(s) >= 10 and s[2] == "/" and s[5] == "/":
+            try:
+                d, m, y = s[:10].split("/")
+                return f"{y}-{m}-{d}"
+            except ValueError:
+                return None
+        return None
+
     def _mapear(uc: str, c: dict) -> dict:
         """Converte campos no formato legado para o formato de tb_clientes."""
         return {
             "cod_uc":                str(uc),
-            "cod_uc_alternativa":    c.get("uc_alternativa") or None,
+            "cod_uc":    c.get("cod_uc") or None,
             "desc_nome":             c.get("nome", ""),
             "desc_apelido":          c.get("apelido") or None,
             "desc_cpf":              c.get("cpf") or None,
@@ -449,10 +476,10 @@ def salvar_clientes(clientes: dict) -> None:
             "pct_desconto":          c.get("desconto_pct") or None,
             "tp_fornecimento":       c.get("tipo_fornecimento") or None,
             "tp_bandeira":           c.get("modo_bandeira") or None,
-            "dt_adesao":             c.get("data_adesao") or None,
+            "dt_adesao":             _to_iso(c.get("data_adesao")),
             "vlr_cobranca_anterior": c.get("valor_cobranca_anterior") or None,
-            "dt_venc_anterior":      c.get("venc_contalev_anterior") or None,
-            "dt_ultimo_pagamento":   c.get("data_pagamento_anterior") or None,
+            "dt_venc_anterior":      _to_iso(c.get("venc_solev_anterior")),
+            "dt_ultimo_pagamento":   _to_iso(c.get("data_pagamento_anterior")),
             "qtd_economia_acumulada":c.get("economia_acumulada_anterior") or None,
             "saldo_kwh":             c.get("saldo_kwh", 0) or 0,
             "proxima_leitura":       c.get("proxima_leitura", "") or "",
@@ -502,7 +529,7 @@ def tb_carregar_clientes_paginado(page: int = 1, per_page: int = 50, busca: str 
     params = {"select": "*", "order": "desc_nome.asc"}
     if busca and busca.strip():
         b = busca.strip().replace("'", "")  # evita injecao basica
-        params["or"] = f"(desc_nome.ilike.*{b}*,cod_uc.ilike.*{b}*,cod_uc_alternativa.ilike.*{b}*)"
+        params["or"] = f"(desc_nome.ilike.*{b}*,cod_uc.ilike.*{b}*,cod_uc.ilike.*{b}*)"
 
     headers = {
         **db.headers,
@@ -538,7 +565,7 @@ def tb_get_cliente_por_uc(cod_uc: str) -> Optional[dict]:
     if rows:
         return _limpar_nulos(rows[0])
     # Tenta pela UC alternativa (novo formato 15 digitos)
-    rows = _db().select("tb_clientes", filtros={"cod_uc_alternativa": str(cod_uc)})
+    rows = _db().select("tb_clientes", filtros={"cod_uc": str(cod_uc)})
     return _limpar_nulos(rows[0]) if rows else None
 
 
@@ -546,7 +573,7 @@ def tb_save_cliente(dados: dict) -> dict:
     """Insere ou atualiza um cliente em tb_clientes."""
     row = {}
     cols = [
-        "id_cliente", "cod_uc", "cod_uc_alternativa", "desc_nome", "desc_apelido",
+        "id_cliente", "cod_uc", "cod_uc", "desc_nome", "desc_apelido",
         "desc_cpf", "desc_telefone", "desc_email", "desc_titular_fatura",
         "tp_fornecimento", "tp_bandeira",
         "pct_desconto", "dt_adesao", "STATUS",
@@ -570,14 +597,56 @@ def tb_save_cliente(dados: dict) -> dict:
 
 
 def tb_writeback_pos_cobranca(id_cliente: int, total_com: float,
-                               venc_contalev: str, economia_acum: float) -> None:
-    """Atualiza campos pos-cobranca via PATCH (nao toca em outros campos)."""
+                               venc_solev: str, economia_acum: float) -> None:
+    """Atualiza campos pos-cobranca via PATCH (nao toca em outros campos).
+
+    NOTA: o parâmetro economia_acum é IGNORADO porque ele é recalculado
+    de forma idempotente a partir da soma das faturas em
+    recalcular_economia_acumulada(). Isso evita duplicação por re-submit."""
     _db().patch("tb_clientes", {"id_cliente": id_cliente}, {
         "vlr_cobranca_anterior":  round(total_com, 2),
-        "dt_venc_anterior":       venc_contalev,
+        "dt_venc_anterior":       venc_solev,
         "dt_ultimo_pagamento":    None,
-        "qtd_economia_acumulada": round(economia_acum, 2),
+        # qtd_economia_acumulada gerenciada por recalcular_economia_acumulada
     })
+
+
+def recalcular_economia_acumulada(id_cliente: int) -> float:
+    """Recalcula a economia acumulada do cliente como SOMA cronológica
+    das economias_mes de todas as faturas não-canceladas.
+
+    Idempotente: pode ser chamada N vezes que o resultado é sempre o mesmo.
+    Atualiza:
+      - vlr_economia_acum de cada fatura (saldo cumulativo até aquele mês)
+      - qtd_economia_acumulada do cliente (total geral)
+
+    Retorna o valor final acumulado.
+    """
+    if not id_cliente:
+        return 0.0
+    # Pega todas as faturas do cliente em ordem cronológica
+    fats = _db().select(
+        "tb_faturas",
+        filtros={"id_cliente": id_cliente},
+        order="ano_referencia.asc,mes_referencia.asc",
+        columns="id_fatura,ano_referencia,mes_referencia,vlr_economia_mes,vlr_economia_acum,status",
+    )
+    fats = [f for f in fats if (f.get("status") or "") != "cancelado"]
+
+    acum = 0.0
+    for f in fats:
+        eco_mes = float(f.get("vlr_economia_mes") or 0)
+        acum += eco_mes
+        eco_acum_existente = float(f.get("vlr_economia_acum") or 0)
+        if abs(eco_acum_existente - acum) > 0.01:
+            _db().patch("tb_faturas",
+                        {"id_fatura": f["id_fatura"]},
+                        {"vlr_economia_acum": round(acum, 2)})
+    # Atualiza o total no cliente
+    _db().patch("tb_clientes",
+                {"id_cliente": id_cliente},
+                {"qtd_economia_acumulada": round(acum, 2)})
+    return round(acum, 2)
 
 
 def tb_delete_cliente(id_cliente: int) -> None:
@@ -683,13 +752,13 @@ def tb_carregar_todas_vinculacoes() -> dict:
 
 
 def tb_mapa_uc_para_uc_nova() -> dict:
-    """Retorna {cod_uc: uc_alternativa} para exibir a UC nova (formatada) no historico."""
+    """Retorna {cod_uc: cod_uc} para exibir a UC nova (formatada) no historico."""
     try:
-        rows = _db().select("tb_clientes", columns="cod_uc,cod_uc_alternativa")
+        rows = _db().select("tb_clientes", columns="cod_uc,cod_uc")
         return {
-            str(r["cod_uc"]): str(r["cod_uc_alternativa"])
+            str(r["cod_uc"]): str(r["cod_uc"])
             for r in rows
-            if r.get("cod_uc") and r.get("cod_uc_alternativa")
+            if r.get("cod_uc") and r.get("cod_uc")
         }
     except Exception as _e:
         print(f"[DB] tb_mapa_uc_para_uc_nova falhou: {_e}")
@@ -1260,8 +1329,8 @@ def carregar_faturas() -> list:
         e["consumo_kwh"]       = e.get("qtd_consumo_kwh") or 0
         e["compensado_kwh"]    = e.get("qtd_compensado_kwh") or 0
         e["compensacao_dic"]   = e.get("vlr_compensacao_dic") or 0
-        e["pdf"]               = e.get("pdf_contalev") or ""
-        e["pdf_url"]           = e.get("pdf_contalev_url") or ""
+        e["pdf"]               = e.get("pdf_solev") or ""
+        e["pdf_url"]           = e.get("pdf_solev_url") or ""
         e["pdf_equatorial"]    = e.get("pdf_equatorial") or ""
         e["pdf_equatorial_url"]= e.get("pdf_equatorial_url") or ""
 
@@ -1281,7 +1350,7 @@ def carregar_faturas() -> list:
             e["data"] = ""
 
         # ISO DATE -> "dd/mm/aaaa"
-        for src, dst in (("dt_venc_contalev",   "vencimento"),
+        for src, dst in (("dt_venc_solev",   "vencimento"),
                          ("dt_venc_equatorial", "venc_equatorial"),
                          ("dt_leitura_atual",   "data_leitura_atual")):
             iso = e.get(src)
@@ -1308,6 +1377,79 @@ def carregar_faturas() -> list:
 
         out.append(e)
     return out
+
+
+def salvar_historico_consumo(id_cliente: int, mes_ref_atual: str,
+                              historico_meses: list, origem: str = "") -> int:
+    """Salva histórico de consumo de 12+ meses extraído da fatura.
+
+    Parâmetros:
+      id_cliente       — ID do cliente em tb_clientes
+      mes_ref_atual    — "MM/AAAA" (mês da fatura — posição 0 do histórico)
+      historico_meses  — lista do extrator. Pode ser de dicts ou dataclasses;
+                         posição 0 = mes_ref_atual, posição N = mes_ref - N meses
+      origem           — texto identificando a fonte (ex: "fatura_05_2026")
+
+    A tabela tb_historico_consumo deve ter:
+      id_historico BIGSERIAL PK, id_cliente, ano_referencia, mes_referencia,
+      qtd_consumo_kwh, vlr_total, qtd_dias, desc_status, origem, atualizado_em
+      UNIQUE (id_cliente, ano_referencia, mes_referencia)
+
+    Retorna o número de meses gravados (0 se nada foi salvo).
+    """
+    import re as _re_hc
+    if not id_cliente or not mes_ref_atual or not historico_meses:
+        return 0
+    m = _re_hc.match(r"^(\d{1,2})/(\d{4})$", str(mes_ref_atual).strip())
+    if not m:
+        return 0
+    mes_base, ano_base = int(m.group(1)), int(m.group(2))
+
+    rows = []
+    for i, h in enumerate(historico_meses):
+        # Aceita dict ou dataclass
+        consumo = (h.get("consumo_kwh") if isinstance(h, dict) else getattr(h, "consumo_kwh", 0)) or 0
+        valor   = (h.get("valor_rs")    if isinstance(h, dict) else getattr(h, "valor_rs", 0))    or 0
+        dias    = (h.get("dias")        if isinstance(h, dict) else getattr(h, "dias", 0))        or 0
+        status  = (h.get("status")      if isinstance(h, dict) else getattr(h, "status", ""))     or ""
+        # Pula meses completamente vazios
+        if float(consumo) <= 0 and float(valor) <= 0 and int(dias) <= 0:
+            continue
+        mes_i = mes_base - i
+        ano_i = ano_base
+        while mes_i < 1:
+            mes_i += 12
+            ano_i -= 1
+        rows.append({
+            "id_cliente":      id_cliente,
+            "ano_referencia":  ano_i,
+            "mes_referencia":  mes_i,
+            "qtd_consumo_kwh": round(float(consumo), 2),
+            "vlr_total":       round(float(valor), 2),
+            "qtd_dias":        int(dias),
+            "desc_status":     str(status),
+            "origem":          origem,
+        })
+    if not rows:
+        return 0
+    try:
+        _db().upsert("tb_historico_consumo", rows,
+                     on_conflict="id_cliente,ano_referencia,mes_referencia")
+        return len(rows)
+    except Exception as _e:
+        print(f"  [DB] salvar_historico_consumo falhou: {_e}")
+        return 0
+
+
+def carregar_historico_consumo(id_cliente: int, meses: int = 12) -> list:
+    """Retorna histórico de consumo dos últimos N meses para um cliente.
+    Lista ordenada do mais recente pro mais antigo."""
+    rows = _db().select(
+        "tb_historico_consumo",
+        filtros={"id_cliente": id_cliente},
+        order="ano_referencia.desc,mes_referencia.desc",
+    )
+    return rows[:meses] if rows else []
 
 
 def inserir_fatura(
@@ -1338,13 +1480,22 @@ def inserir_fatura(
     ilum_publica: float = 0,
     band_amar_equatorial: float = 0,
     band_verm_equatorial: float = 0,
-    band_amar_contalev:   float = 0,
-    band_verm_contalev:   float = 0,
+    band_amar_solev:   float = 0,
+    band_verm_solev:   float = 0,
     ajuste_valor:         float = 0,
     difci:                float = 0,
     ecnisenta:            float = 0,
     anterior_leitura:     str = "",
     n_dias:               int = 0,
+    # SCEE — dados da geração solar
+    scee_ciclo_mes:         str   = "",   # ex: "04/2026"
+    scee_uc_geradora:       str   = "",   # UC da usina geradora
+    scee_pct_rateio:          float = 0,    # % rateio deste cliente
+    scee_geracao_usina_kwh:   float = 0,    # geração total da usina (calculada: excedente ÷ % rateio)
+    scee_excedente_kwh:       float = 0,    # kWh destinados a esta UC pelo rateio
+    scee_credito_kwh:       float = 0,    # crédito recebido
+    scee_saldo_exp_30d_kwh: float = 0,    # saldo a expirar em 30 dias
+    scee_saldo_exp_60d_kwh: float = 0,    # saldo a expirar em 60 dias
 ) -> None:
     """Insere ou ATUALIZA uma fatura em tb_faturas.
 
@@ -1397,10 +1548,10 @@ def inserir_fatura(
             compensacao_dic=compensacao_dic,
             consumo_kwh=consumo_kwh, compensado_kwh=compensado_kwh,
             saldo_kwh=saldo_kwh,
-            venc_contalev=venc, venc_equatorial=venc_equatorial,
+            venc_solev=venc, venc_equatorial=venc_equatorial,
             data_leitura_atual=data_leitura_atual,
             existing_status=existing_status,
-            pdf_contalev=pdf_path, pdf_contalev_url=pdf_url,
+            pdf_solev=pdf_path, pdf_solev_url=pdf_url,
             pdf_equatorial=pdf_equatorial, pdf_equatorial_url=pdf_equatorial_url,
             multa_equatorial=multa_equatorial, juros_equatorial=juros_equatorial,
             multa_mes=multa_mes, juros_mes=juros_mes,
@@ -1408,13 +1559,21 @@ def inserir_fatura(
             ilum_publica=ilum_publica,
             band_amar_equatorial=band_amar_equatorial,
             band_verm_equatorial=band_verm_equatorial,
-            band_amar_contalev=band_amar_contalev,
-            band_verm_contalev=band_verm_contalev,
+            band_amar_solev=band_amar_solev,
+            band_verm_solev=band_verm_solev,
             ajuste_valor=ajuste_valor,
             difci=difci,
             ecnisenta=ecnisenta,
             anterior_leitura=anterior_leitura,
             n_dias=n_dias,
+            scee_ciclo_mes=scee_ciclo_mes,
+            scee_uc_geradora=scee_uc_geradora,
+            scee_pct_rateio=scee_pct_rateio,
+            scee_geracao_usina_kwh=scee_geracao_usina_kwh,
+            scee_excedente_kwh=scee_excedente_kwh,
+            scee_credito_kwh=scee_credito_kwh,
+            scee_saldo_exp_30d_kwh=scee_saldo_exp_30d_kwh,
+            scee_saldo_exp_60d_kwh=scee_saldo_exp_60d_kwh,
         )
     except Exception as e:
         print(f"  [DB] ERRO ao inserir em tb_faturas: {e}")
@@ -1422,14 +1581,14 @@ def inserir_fatura(
 
 
 def _resolver_id_cliente_por_uc(uc: str) -> Optional[int]:
-    """Busca id_cliente em tb_clientes por cod_uc ou cod_uc_alternativa
+    """Busca id_cliente em tb_clientes por cod_uc ou cod_uc
     (com ou sem zeros a esquerda). Retorna None se nao achar."""
     import re as _re
     digits = _re.sub(r"\D", "", str(uc or ""))
     if not digits:
         return None
     db = _db()
-    for col in ("cod_uc", "cod_uc_alternativa"):
+    for col in ("cod_uc", "cod_uc"):
         for valor in (digits, digits.lstrip("0") or digits):
             try:
                 rows = db.select("tb_clientes", columns="id_cliente",
@@ -1461,20 +1620,28 @@ def _upsert_tb_faturas(
     economia_mes: float, economia_acum: float,
     compensacao_dic: float,
     consumo_kwh: float, compensado_kwh: float, saldo_kwh: float,
-    venc_contalev: str, venc_equatorial: str, data_leitura_atual: str,
+    venc_solev: str, venc_equatorial: str, data_leitura_atual: str,
     existing_status: str,
-    pdf_contalev: str, pdf_contalev_url: str,
+    pdf_solev: str, pdf_solev_url: str,
     pdf_equatorial: str, pdf_equatorial_url: str,
     multa_equatorial: float = 0, juros_equatorial: float = 0,
     multa_mes: float = 0, juros_mes: float = 0,
     fatura_equatorial: float = 0, fio_b: float = 0, ilum_publica: float = 0,
     band_amar_equatorial: float = 0, band_verm_equatorial: float = 0,
-    band_amar_contalev:   float = 0, band_verm_contalev:   float = 0,
+    band_amar_solev:   float = 0, band_verm_solev:   float = 0,
     ajuste_valor:         float = 0,
     difci:                float = 0,
     ecnisenta:            float = 0,
     anterior_leitura:     str = "",
     n_dias:               int = 0,
+    scee_ciclo_mes:         str   = "",
+    scee_uc_geradora:       str   = "",
+    scee_pct_rateio:          float = 0,
+    scee_geracao_usina_kwh:   float = 0,
+    scee_excedente_kwh:       float = 0,
+    scee_credito_kwh:       float = 0,
+    scee_saldo_exp_30d_kwh: float = 0,
+    scee_saldo_exp_60d_kwh: float = 0,
 ) -> None:
     """Faz upsert em tb_faturas a partir dos mesmos dados que vao para historico.
 
@@ -1533,8 +1700,8 @@ def _upsert_tb_faturas(
         # Bandeira tarifaria — 2 fontes (Equatorial via PDF + CONTALEV calculado)
         "vlr_band_amar_equatorial": round(float(band_amar_equatorial or 0), 2),
         "vlr_band_verm_equatorial": round(float(band_verm_equatorial or 0), 2),
-        "vlr_band_amar_contalev":   round(float(band_amar_contalev   or 0), 2),
-        "vlr_band_verm_contalev":   round(float(band_verm_contalev   or 0), 2),
+        "vlr_band_amar_solev":   round(float(band_amar_solev   or 0), 2),
+        "vlr_band_verm_solev":   round(float(band_verm_solev   or 0), 2),
 
         "ajuste_valor":             round(float(ajuste_valor or 0), 2),
         "difci":                    round(float(difci or 0), 2),
@@ -1546,12 +1713,22 @@ def _upsert_tb_faturas(
         "qtd_compensado_kwh":  round(float(compensado_kwh or 0), 2),
         "qtd_saldo_kwh":       round(float(saldo_kwh or 0), 2),
 
+        # SCEE — dados da geração solar deste mês
+        "desc_ciclo_geracao":       str(scee_ciclo_mes or ""),
+        "cod_uc_usina":             str(scee_uc_geradora or ""),
+        "pct_rateio_scee":          round(float(scee_pct_rateio or 0), 4),
+        "qtd_geracao_usina_kwh":    round(float(scee_geracao_usina_kwh or 0), 2),
+        "qtd_excedente_kwh":        round(float(scee_excedente_kwh or 0), 2),
+        "qtd_credito_kwh":          round(float(scee_credito_kwh or 0), 2),
+        "qtd_saldo_exp_30d_kwh":    round(float(scee_saldo_exp_30d_kwh or 0), 2),
+        "qtd_saldo_exp_60d_kwh":    round(float(scee_saldo_exp_60d_kwh or 0), 2),
+
         "dt_geracao":          _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
         "status":              status_enum,
     }
     # Datas opcionais (so envia se conseguir parsear)
     for chave_dest, valor_origem in (
-        ("dt_venc_contalev",   venc_contalev),
+        ("dt_venc_solev",   venc_solev),
         ("dt_venc_equatorial", venc_equatorial),
         ("dt_leitura_atual",   data_leitura_atual),
     ):
@@ -1561,10 +1738,10 @@ def _upsert_tb_faturas(
     if dt_pgto:
         reg["dt_pagamento"] = dt_pgto
 
-    if pdf_contalev:
-        reg["pdf_contalev"] = _os.path.basename(pdf_contalev)
-    if pdf_contalev_url:
-        reg["pdf_contalev_url"] = pdf_contalev_url
+    if pdf_solev:
+        reg["pdf_solev"] = _os.path.basename(pdf_solev)
+    if pdf_solev_url:
+        reg["pdf_solev_url"] = pdf_solev_url
     if pdf_equatorial:
         reg["pdf_equatorial"] = _os.path.basename(pdf_equatorial)
     if pdf_equatorial_url:
@@ -1574,6 +1751,14 @@ def _upsert_tb_faturas(
                  on_conflict="id_cliente,ano_referencia,mes_referencia")
     print(f"  [DB] tb_faturas upsert cliente={id_cliente} {mes:02d}/{ano} "
           f"status={status_enum} total_com=R${reg['vlr_total_com']:.2f}")
+
+    # Recalcula economia_acumulada do cliente de forma idempotente.
+    # Garante consistência mesmo em caso de re-submit ou múltiplas chamadas.
+    try:
+        novo_acum = recalcular_economia_acumulada(id_cliente)
+        print(f"  [DB] economia_acum recalculada: R${novo_acum:.2f}")
+    except Exception as _e:
+        print(f"  [DB] AVISO: falha ao recalcular economia_acum: {_e}")
 
 
 # ==================================================================
@@ -1874,8 +2059,7 @@ def migrar_tudo_do_json() -> None:
 #  TB_FATURAS — leitura (estrutura nova normalizada)
 # ==================================================================
 _FATURA_COLS_EMBED = (
-    "*,tb_clientes(id_cliente,desc_nome,desc_apelido,"
-    "cod_uc,cod_uc_alternativa)"
+    "*,tb_clientes(id_cliente,desc_nome,desc_apelido,cod_uc)"
 )
 
 
@@ -1886,16 +2070,15 @@ def _enriquecer_fatura(row: dict) -> dict:
     row["_nome"]              = cliente.get("desc_nome", "") or ""
     row["_apelido"]           = cliente.get("desc_apelido", "") or ""
     row["_cod_uc"]            = cliente.get("cod_uc", "") or ""
-    row["_cod_uc_alternativa"]= cliente.get("cod_uc_alternativa", "") or ""
 
     mes = row.get("mes_referencia") or 0
     ano = row.get("ano_referencia") or 0
     row["_mes_ref_br"] = f"{int(mes):02d}/{int(ano)}" if mes and ano else ""
 
     from datetime import date as _date
-    if row.get("status") == "pendente" and row.get("dt_venc_contalev"):
+    if row.get("status") == "pendente" and row.get("dt_venc_solev"):
         try:
-            dv = _date.fromisoformat(row["dt_venc_contalev"])
+            dv = _date.fromisoformat(row["dt_venc_solev"])
             row["_vencido"] = dv < _date.today()
         except (ValueError, TypeError):
             row["_vencido"] = False
@@ -1954,14 +2137,14 @@ def tb_get_faturas_paginado(
     elif status == "vencido":
         from datetime import date as _date
         params["status"]            = "eq.pendente"
-        params["dt_venc_contalev"]  = f"lt.{_date.today().isoformat()}"
+        params["dt_venc_solev"]  = f"lt.{_date.today().isoformat()}"
 
     if busca and busca.strip():
         b = busca.strip().replace("'", "")
         params["tb_clientes.or"] = (
             f"(desc_nome.ilike.*{b}*,"
             f"cod_uc.ilike.*{b}*,"
-            f"cod_uc_alternativa.ilike.*{b}*)"
+            f"cod_uc.ilike.*{b}*)"
         )
 
     headers = {
@@ -1991,7 +2174,7 @@ def tb_get_faturas_pendentes_ordenadas() -> list:
     rows = _db().select("tb_faturas",
                         columns=_FATURA_COLS_EMBED,
                         filtros={"status": "pendente"},
-                        order="dt_venc_contalev.asc.nullslast")
+                        order="dt_venc_solev.asc.nullslast")
     return [_enriquecer_fatura(r) for r in rows]
 
 

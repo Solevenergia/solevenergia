@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Investidores{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Investidores</span>{% endblock %}
 {% block content %}
 <div class="page-header"><h1><i class="bi bi-briefcase-fill me-2" style="color:var(--or)"></i>Investidores</h1></div>
 
@@ -15,7 +16,7 @@
     </div>
     <div style="font-size:13px" class="mb-3">
         <div class="text-muted mb-1"><i class="bi bi-sun me-1"></i>Usina: <strong>{{ u.nome or uid }}</strong></div>
-        <div class="text-muted mb-1"><i class="bi bi-lightning-charge me-1"></i>UC: <strong>{{ u.uc_geradora }}</strong></div>
+        <div class="text-muted mb-1"><i class="bi bi-lightning-charge me-1"></i>UC: <strong>{{ u.uc_geradora | fmt_uc15 }}</strong></div>
         <div class="text-muted mb-1"><i class="bi bi-calendar me-1"></i>Pagamento: <strong>{{ u.investidor_dia_pagamento or 'Não definido' }}</strong></div>
         <div class="text-muted"><i class="bi bi-bank me-1"></i>PIX: {{ u.investidor_pix or u.investidor_banco or 'Não cadastrado' }}</div>
     </div>

@@ -1,4 +1,4 @@
-"""
+﻿"""
 =============================================================
   CONTALEV — Gerador Automatico de Cobranca v3
 =============================================================
@@ -72,7 +72,7 @@ def adicionar_fatura(uc, nome, mes_ref, total_sem, total_com,
                      multa_mes=0, juros_mes=0,
                      fatura_equatorial=0, fio_b=0, ilum_publica=0,
                      band_amar_equatorial=0, band_verm_equatorial=0,
-                     band_amar_contalev=0,   band_verm_contalev=0,
+                     band_amar_solev=0,   band_verm_solev=0,
                      ajuste_valor=0,
                      difci=0, ecnisenta=0,
                      anterior_leitura="", n_dias=0):
@@ -98,8 +98,8 @@ def adicionar_fatura(uc, nome, mes_ref, total_sem, total_com,
         ilum_publica=ilum_publica,
         band_amar_equatorial=band_amar_equatorial,
         band_verm_equatorial=band_verm_equatorial,
-        band_amar_contalev=band_amar_contalev,
-        band_verm_contalev=band_verm_contalev,
+        band_amar_solev=band_amar_solev,
+        band_verm_solev=band_verm_solev,
         ajuste_valor=ajuste_valor,
         difci=difci,
         ecnisenta=ecnisenta,
@@ -342,7 +342,7 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
         "tarifa_sem":         tarifa_val,
         "modo_bandeira":      modo,
         "valor_cobranca_anterior":      cliente.get("valor_cobranca_anterior", 0.0) or 0,
-        "venc_contalev_anterior":       cliente.get("venc_contalev_anterior", ""),
+        "venc_solev_anterior":       cliente.get("venc_solev_anterior", ""),
         "data_pagamento_anterior":      cliente.get("data_pagamento_anterior", ""),
         "economia_acumulada_anterior":  cliente.get("economia_acumulada_anterior", 0.0) or 0,
 
@@ -408,8 +408,8 @@ def atualizar_cliente_pos_geracao(chave_uc, clientes, dados_calculados):
         return
     clientes[chave_uc]["valor_cobranca_anterior"] = round(
         dados_calculados.get("_total_com", 0), 2)
-    clientes[chave_uc]["venc_contalev_anterior"] = dados_calculados.get(
-        "venc_contalev", "")
+    clientes[chave_uc]["venc_solev_anterior"] = dados_calculados.get(
+        "venc_solev", "")
     clientes[chave_uc]["data_pagamento_anterior"] = ""
     clientes[chave_uc]["economia_acumulada_anterior"] = round(
         dados_calculados.get("_economia_acum", 0), 2)
@@ -461,7 +461,7 @@ def gerar_cobranca_auto(pdf_equatorial, uc_override=None):
     print(f"   Desconto: {desc_pct:.0f}%")
     if cliente.get("valor_cobranca_anterior", 0) > 0:
         print(f"   Cobranca anterior: {_fmt_brl(cliente['valor_cobranca_anterior'])}")
-        print(f"   Venc. anterior: {cliente.get('venc_contalev_anterior', '-')}")
+        print(f"   Venc. anterior: {cliente.get('venc_solev_anterior', '-')}")
         pgto = cliente.get('data_pagamento_anterior', '')
         print(f"   Pagamento anterior: {pgto or '(em dia)'}")
     print(f"   Economia acumulada: {_fmt_brl(cliente.get('economia_acumulada_anterior', 0))}")
@@ -525,7 +525,7 @@ def gerar_cobranca_auto(pdf_equatorial, uc_override=None):
         round(dados_calc.get("_total_com", 0), 2),
         round(dados_calc.get("_economia_mes", 0), 2),
         round(dados_calc.get("_economia_acum", 0), 2),
-        dados_calc.get("venc_contalev", ""),
+        dados_calc.get("venc_solev", ""),
         dados_calc.get("output_path", ""),
         consumo_kwh=equatorial.get("consumo_kwh", 0),
         compensado_kwh=equatorial.get("compensado_kwh", 0),
@@ -540,8 +540,8 @@ def gerar_cobranca_auto(pdf_equatorial, uc_override=None):
         ilum_publica=equatorial.get("iluminacao_publica", 0),
         band_amar_equatorial=dados_calc.get("_band_amar_equatorial", 0),
         band_verm_equatorial=dados_calc.get("_band_verm_equatorial", 0),
-        band_amar_contalev=dados_calc.get("_band_amar_contalev", 0),
-        band_verm_contalev=dados_calc.get("_band_verm_contalev", 0),
+        band_amar_solev=dados_calc.get("_band_amar_solev", 0),
+        band_verm_solev=dados_calc.get("_band_verm_solev", 0),
         difci=dados_calc.get("difci", 0),
         ecnisenta=dados_calc.get("ecnisenta", 0),
         anterior_leitura=equatorial.get("data_leitura_anterior", ""),
@@ -551,7 +551,7 @@ def gerar_cobranca_auto(pdf_equatorial, uc_override=None):
     print()
     print("📋 RESUMO POS-GERACAO:")
     print(f"   Total COM CONTALEV: {dados_calc.get('total_com_fmt', _fmt_brl(total_com))}")
-    print(f"   Venc. CONTALEV: {dados_calc.get('venc_contalev', '')}")
+    print(f"   Venc. CONTALEV: {dados_calc.get('venc_solev', '')}")
     print(f"   Economia mes: {dados_calc.get('economia_mes_fmt', '')}")
     print(f"   Economia acumulada: {dados_calc.get('economia_acum_fmt', '')}")
     print(f"   (Banco atualizado para proximo mes)")
@@ -578,13 +578,13 @@ def registrar_pagamento(uc, data_pagamento):
     print(f"   UC: {chave_real}")
     print(f"   Data pagamento: {data_pagamento}")
     print(f"   Valor: {_fmt_brl(cliente.get('valor_cobranca_anterior', 0))}")
-    print(f"   Vencimento era: {cliente.get('venc_contalev_anterior', '-')}")
+    print(f"   Vencimento era: {cliente.get('venc_solev_anterior', '-')}")
 
     # Calcula atraso
-    if cliente.get("venc_contalev_anterior"):
+    if cliente.get("venc_solev_anterior"):
         _dfmt = "%d/%m/%Y"
         try:
-            dt_venc = datetime.strptime(cliente["venc_contalev_anterior"], _dfmt)
+            dt_venc = datetime.strptime(cliente["venc_solev_anterior"], _dfmt)
             dt_pgto = datetime.strptime(data_pagamento, _dfmt)
             dias = (dt_pgto - dt_venc).days
             if dias > 0:
@@ -703,7 +703,7 @@ def cadastrar_cliente():
         "modo_bandeira": modo,
         "usina": usina,
         "valor_cobranca_anterior": cobr_ant,
-        "venc_contalev_anterior": venc_ant,
+        "venc_solev_anterior": venc_ant,
         "data_pagamento_anterior": pgto_ant,
         "economia_acumulada_anterior": eco_acum,
     }
@@ -752,7 +752,7 @@ def ver_cliente(uc):
     print(f"  ──────────────────────────────────────")
     cobr = cliente.get('valor_cobranca_anterior', 0)
     print(f"  Cobr. anterior: {_fmt_brl(cobr)}")
-    print(f"  Venc. anterior: {cliente.get('venc_contalev_anterior', '') or '—'}")
+    print(f"  Venc. anterior: {cliente.get('venc_solev_anterior', '') or '—'}")
     print(f"  Pgto. anterior: {cliente.get('data_pagamento_anterior', '') or '(aguardando)'}")
     print(f"  Eco. acumulada: {_fmt_brl(cliente.get('economia_acumulada_anterior', 0))}")
     print()
@@ -782,7 +782,7 @@ def editar_cliente(uc):
         ("modo_bandeira",               "Modo bandeira",            "str"),
         ("usina",                       "Usina",                    "str"),
         ("valor_cobranca_anterior",     "Cobr. anterior (R$)",      "float"),
-        ("venc_contalev_anterior",      "Venc. anterior",           "str"),
+        ("venc_solev_anterior",      "Venc. anterior",           "str"),
         ("data_pagamento_anterior",     "Pgto. anterior",           "str"),
         ("economia_acumulada_anterior", "Eco. acumulada (R$)",      "float"),
     ]

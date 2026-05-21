@@ -1,4 +1,4 @@
-"""
+﻿"""
 =============================================================
   SOLEV — Aplicativo Web v2
 =============================================================
@@ -123,6 +123,28 @@ _DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# ─────────────────────────────────────────────────────────────────────
+# CUSTO DE DISPONIBILIDADE (ANEEL / Equatorial)
+# ─────────────────────────────────────────────────────────────────────
+# Mínimo de kWh que a concessionária cobra/não-compensa por tipo de
+# ligação. Esses kWh aparecem como "consumo não compensado" mesmo quando
+# o cliente tem saldo SCEE disponível. Usado para calcular a necessidade
+# real de rateio: necessidade = max(0, previsão − CD − saldo).
+CUSTO_DISPONIBILIDADE_KWH = {
+    "MONOFASICO": 25,
+    "BIFASICO":   45,
+    "TRIFASICO":  80,
+}
+def _cd_kwh(tp_fornecimento: str) -> int:
+    """Retorna o custo de disponibilidade (kWh) baseado no tipo. Default: bifásico."""
+    if not tp_fornecimento:
+        return CUSTO_DISPONIBILIDADE_KWH["BIFASICO"]
+    t = str(tp_fornecimento).upper().strip()
+    # Aceita variações: "Monofásico", "MONOFASICO", "Mono", etc.
+    if t.startswith("MONO"): return CUSTO_DISPONIBILIDADE_KWH["MONOFASICO"]
+    if t.startswith("TRI"):  return CUSTO_DISPONIBILIDADE_KWH["TRIFASICO"]
+    return CUSTO_DISPONIBILIDADE_KWH["BIFASICO"]  # default + casos "BIF" / "BI"
+
 try:
     from contalev_cobranca_v2_padrao import _preparar_logos
     _preparar_logos()
@@ -184,12 +206,12 @@ def _adicionar_aliases_legados(f):
     f["id"]               = str(f.get("id_fatura") or "")
     f["nome"]             = f.get("_nome") or f.get("nome") or ""
     f["uc"]               = f.get("_cod_uc") or f.get("uc") or ""
-    f["_uc_nova"]         = f.get("_cod_uc_alternativa") or f.get("_uc_nova") or ""
+    f["_uc_nova"]         = f.get("_cod_uc") or f.get("_uc_nova") or ""
     f["mes_referencia"]   = f.get("_mes_ref_br") or f.get("mes_referencia") or ""
     f["total_com"]        = f.get("vlr_total_com") or f.get("total_com") or 0
     f["total_sem"]        = f.get("vlr_total_sem") or f.get("total_sem") or 0
     f["economia_mes"]     = f.get("vlr_economia_mes") or f.get("economia_mes") or 0
-    v = f.get("dt_venc_contalev")
+    v = f.get("dt_venc_solev")
     if v and "vencimento" not in f:
         try:
             from datetime import date as _d
@@ -198,8 +220,8 @@ def _adicionar_aliases_legados(f):
             f["vencimento"] = str(v)
     elif "vencimento" not in f:
         f["vencimento"] = ""
-    f["pdf"]      = f.get("pdf_contalev") or f.get("pdf") or ""
-    f["pdf_url"]  = f.get("pdf_contalev_url") or f.get("pdf_url") or ""
+    f["pdf"]      = f.get("pdf_solev") or f.get("pdf") or ""
+    f["pdf_url"]  = f.get("pdf_solev_url") or f.get("pdf_url") or ""
     return f
 
 
@@ -236,7 +258,7 @@ def _buscar_fatura_compat(code_or_id):
 
 
 def _buscar_fatura_por_pdf(filename):
-    """Busca fatura em tb_faturas pelo nome do PDF (pdf_contalev).
+    """Busca fatura em tb_faturas pelo nome do PDF (pdf_solev).
     Retorna dict com aliases legados. None se nao achar."""
     from db import _db as _get_db, _FATURA_COLS_EMBED, _enriquecer_fatura
     if not filename:
@@ -245,7 +267,7 @@ def _buscar_fatura_por_pdf(filename):
     try:
         rows = _get_db().select("tb_faturas",
                                 columns=_FATURA_COLS_EMBED,
-                                filtros={"pdf_contalev": fname})
+                                filtros={"pdf_solev": fname})
         if rows:
             return _adicionar_aliases_legados(_enriquecer_fatura(rows[0]))
     except Exception as e:
@@ -321,13 +343,13 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
             "desconto_pct": cliente["desconto_pct"],
             "tarifa_sem": tarifa_mes["tarifa_sem"],
             "valor_cobranca_anterior": cliente.get("valor_cobranca_anterior", 0) or 0,
-            "venc_contalev_anterior": cliente.get("venc_contalev_anterior", ""),
+            "venc_solev_anterior": cliente.get("venc_solev_anterior", ""),
             "data_pagamento_anterior": cliente.get("data_pagamento_anterior", ""),
             "economia_acumulada_anterior": max(0, cliente.get("economia_acumulada_anterior", 0) or 0),
             "codigo_barras": cliente.get("codigo_barras", "CODIGO DE BARRA EM DESENVOLVIMENTO"),
             "linha_digitavel": cliente.get("linha_digitavel", "XXXX.XXXX  XXXXX.XXXXX  XXXXX.XXXXX  X  XXXXXXXXXXXXXX"),
             "pix_payload": cliente.get("pix_payload", ""),
-            "unidade_consumidora": cliente.get("uc_alternativa") or equatorial["uc"],
+            "unidade_consumidora": cliente.get("cod_uc") or equatorial["uc"],
             "tipo_fornecimento": equatorial["tipo_fornecimento"],
             "mes_referencia": mes_ref,
             "anterior_leitura": equatorial["data_leitura_anterior"],
@@ -413,15 +435,15 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
                 "cod_uc":                chave_real,
                 "id_cliente":            cliente.get("_id_cliente"),
                 "vlr_cobranca_anterior": round(dados_calc["_total_com"], 2),
-                "dt_venc_anterior":      dados_calc.get("venc_contalev", ""),
-                "dt_ultimo_pagamento":   "",
+                "dt_venc_anterior":      _parse_data_br_iso(dados_calc.get("venc_solev", "")),
+                "dt_ultimo_pagamento":   None,
                 "qtd_economia_acumulada":round(dados_calc["_economia_acum"], 2),
             })
         else:
             clientes_wb = carregar_clientes()
             if chave_real in clientes_wb:
                 clientes_wb[chave_real]["valor_cobranca_anterior"]    = round(dados_calc["_total_com"], 2)
-                clientes_wb[chave_real]["venc_contalev_anterior"]      = dados_calc["venc_contalev"]
+                clientes_wb[chave_real]["venc_solev_anterior"]      = dados_calc["venc_solev"]
                 clientes_wb[chave_real]["data_pagamento_anterior"]     = ""
                 clientes_wb[chave_real]["economia_acumulada_anterior"] = round(dados_calc["_economia_acum"], 2)
                 if _pl:    clientes_wb[chave_real]["proxima_leitura"] = _pl
@@ -451,7 +473,7 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
             total_com=round(dados_calc["_total_com"], 2),
             economia_mes=round(dados_calc["_economia_mes"], 2),
             economia_acum=round(dados_calc["_economia_acum"], 2),
-            venc=dados_calc["venc_contalev"],
+            venc=dados_calc["venc_solev"],
             pdf_path=_output_path,
             consumo_kwh=equatorial.get("consumo_kwh", 0),
             compensado_kwh=equatorial.get("compensado_kwh", 0),
@@ -470,8 +492,8 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
             ilum_publica=equatorial.get("iluminacao_publica", 0),
             band_amar_equatorial=dados_calc.get("_band_amar_equatorial", 0),
             band_verm_equatorial=dados_calc.get("_band_verm_equatorial", 0),
-            band_amar_contalev=dados_calc.get("_band_amar_contalev", 0),
-            band_verm_contalev=dados_calc.get("_band_verm_contalev", 0),
+            band_amar_solev=dados_calc.get("_band_amar_solev", 0),
+            band_verm_solev=dados_calc.get("_band_verm_solev", 0),
             ajuste_valor=dados_calc.get("ajuste_valor", 0),
             difci=dados_calc.get("difci", 0),
             ecnisenta=dados_calc.get("ecnisenta", 0),
@@ -547,13 +569,13 @@ def _montar_dados_de_pdf(pdf_path, uc_override=None):
             "desconto_pct": cliente["desconto_pct"],
             "tarifa_sem": tarifa_mes["tarifa_sem"],
             "valor_cobranca_anterior": cliente.get("valor_cobranca_anterior", 0) or 0,
-            "venc_contalev_anterior": cliente.get("venc_contalev_anterior", ""),
+            "venc_solev_anterior": cliente.get("venc_solev_anterior", ""),
             "data_pagamento_anterior": cliente.get("data_pagamento_anterior", ""),
             "economia_acumulada_anterior": max(0, cliente.get("economia_acumulada_anterior", 0) or 0),
             "codigo_barras": cliente.get("codigo_barras", "CODIGO DE BARRA EM DESENVOLVIMENTO"),
             "linha_digitavel": cliente.get("linha_digitavel", "XXXX.XXXX  XXXXX.XXXXX  XXXXX.XXXXX  X  XXXXXXXXXXXXXX"),
             "pix_payload": cliente.get("pix_payload", ""),
-            "unidade_consumidora": cliente.get("uc_alternativa") or equatorial["uc"],
+            "unidade_consumidora": cliente.get("cod_uc") or equatorial["uc"],
             "tipo_fornecimento": equatorial["tipo_fornecimento"],
             "mes_referencia": mes_ref,
             "anterior_leitura": equatorial["data_leitura_anterior"],
@@ -586,6 +608,144 @@ def _montar_dados_de_pdf(pdf_path, uc_override=None):
 
 
 # ── ROTAS ────────────────────────────────────────────────────
+
+@app.route("/ping")
+def ping():
+    """Health check ultra-rápido (sem queries no DB).
+    Usado pelo launcher SOLEV.vbs pra detectar se o servidor está vivo."""
+    return "pong", 200, {"Cache-Control": "no-cache"}
+
+
+# ── PORTAL DO CLIENTE ───────────────────────────────────────
+@app.route("/c/<token>")
+def portal_cliente(token):
+    """Portal do cliente — acesso via token UUID único por fatura.
+
+    Mostra: valor, vencimento, economia, PIX copia-e-cola, botões pra
+    abrir app do banco, PDF da fatura, histórico do cliente.
+
+    Segurança:
+      - Token é UUID v4 (128 bits — impossível adivinhar)
+      - Sem login: token == permissão de acesso AQUELA fatura
+      - Cliente vê apenas suas próprias faturas (do mesmo id_cliente)
+      - Apenas LEITURA (sem edição de dados sensíveis)
+    """
+    from db import _db, storage_signed_url, tb_get_pix_da_usina, tb_get_usinas_do_cliente
+    from datetime import datetime, date
+
+    # 1) Valida token e carrega fatura
+    fats = _db().select("tb_faturas", filtros={"token_acesso": token})
+    if not fats:
+        return render_template("portal_cliente_erro.html",
+                               erro="Link inválido ou expirado."), 404
+    fatura = fats[0]
+
+    # 2) Carrega cliente
+    cli_rows = _db().select("tb_clientes", filtros={"id_cliente": fatura.get("id_cliente")})
+    if not cli_rows:
+        return render_template("portal_cliente_erro.html",
+                               erro="Cliente não encontrado."), 404
+    cliente = cli_rows[0]
+
+    # 3) PIX da usina vinculada (se houver)
+    pix_chave = ""
+    pix_nome  = "SOLEV ENERGIA"
+    pix_chave_display = ""
+    try:
+        vinculos = tb_get_usinas_do_cliente(cliente["id_cliente"])
+        if vinculos:
+            rec = tb_get_pix_da_usina(vinculos[0]["id_usina"])
+            if rec:
+                pix_chave = rec.get("desc_pix", "")
+                pix_nome  = rec.get("desc_nome_pix") or rec.get("desc_nome", "SOLEV")
+                pix_chave_display = _formatar_chave_pix_display(pix_chave)
+    except Exception as e:
+        app.logger.warning(f"[portal] PIX lookup falhou: {e}")
+
+    # 4) URL temporária do PDF (1 hora)
+    pdf_signed_url = ""
+    pdf_storage_path = fatura.get("pdf_solev_url") or ""
+    if pdf_storage_path and not pdf_storage_path.startswith("http"):
+        # E formato 'faturas/arquivo.pdf'
+        try:
+            pdf_signed_url = storage_signed_url(pdf_storage_path, expires_in=3600)
+        except Exception as e:
+            app.logger.warning(f"[portal] signed URL falhou: {e}")
+    elif pdf_storage_path.startswith("http"):
+        pdf_signed_url = pdf_storage_path
+
+    # 5) Status visual da fatura
+    status = fatura.get("status") or "pendente"
+    dt_venc = fatura.get("dt_venc_solev")
+    dias_p_vencimento = None
+    venc_status = "ok"
+    if dt_venc:
+        try:
+            dt_v = datetime.strptime(str(dt_venc)[:10], "%Y-%m-%d").date()
+            hoje = date.today()
+            dias_p_vencimento = (dt_v - hoje).days
+            if status == "pago":
+                venc_status = "pago"
+            elif dias_p_vencimento < 0:
+                venc_status = "atrasado"
+            elif dias_p_vencimento <= 3:
+                venc_status = "urgente"
+            else:
+                venc_status = "ok"
+            dt_venc_br = dt_v.strftime("%d/%m/%Y")
+        except Exception:
+            dt_venc_br = str(dt_venc)
+    else:
+        dt_venc_br = "—"
+
+    # 6) Formatadores
+    def _brl(v): return f"R$ {float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    # 7) Histórico do cliente (últimas 6 faturas — pelo id_cliente, não pelo token)
+    historico = []
+    try:
+        fats_cli = _db().select(
+            "tb_faturas",
+            filtros={"id_cliente": cliente["id_cliente"]},
+            order="ano_referencia.desc,mes_referencia.desc",
+            columns="id_fatura,ano_referencia,mes_referencia,vlr_total_com,vlr_economia_mes,status,token_acesso",
+        )
+        for f in fats_cli[:6]:
+            historico.append({
+                "mes":    f"{f.get('mes_referencia',0):02d}/{f.get('ano_referencia',0)}",
+                "total":  _brl(f.get("vlr_total_com")),
+                "economia": _brl(f.get("vlr_economia_mes")),
+                "status": f.get("status") or "pendente",
+                "token":  f.get("token_acesso") or "",
+                "is_atual": f.get("id_fatura") == fatura.get("id_fatura"),
+            })
+    except Exception as e:
+        app.logger.warning(f"[portal] historico falhou: {e}")
+
+    return render_template("portal_cliente.html",
+        # Cliente
+        nome_cliente=cliente.get("desc_nome", ""),
+        apelido=cliente.get("desc_apelido", ""),
+        # Fatura
+        mes_ref=f"{fatura.get('mes_referencia',0):02d}/{fatura.get('ano_referencia',0)}",
+        valor_total=_brl(fatura.get("vlr_total_com")),
+        valor_total_num=float(fatura.get("vlr_total_com") or 0),
+        economia_mes=_brl(fatura.get("vlr_economia_mes")),
+        economia_acum=_brl(fatura.get("vlr_economia_acum")),
+        venc_br=dt_venc_br,
+        dias_p_vencimento=dias_p_vencimento,
+        venc_status=venc_status,
+        status=status,
+        # PIX
+        pix_chave=pix_chave,
+        pix_nome=pix_nome,
+        pix_chave_display=pix_chave_display,
+        # PDF
+        pdf_signed_url=pdf_signed_url,
+        # Histórico
+        historico=historico,
+    )
+
 
 @app.route("/logo/<filename>")
 def serve_logo(filename):
@@ -646,7 +806,7 @@ def dashboard():
     for item in historico:
         if item.get("status") in ("pago", "cancelado"):
             continue
-        venc_iso = item.get("dt_venc_contalev")
+        venc_iso = item.get("dt_venc_solev")
         if not venc_iso:
             continue
         try:
@@ -772,7 +932,7 @@ def cliente_novo():
         logger.info(f"[CLIENTE_NOVO] Tentativa de cadastro do cliente: {nome_cliente}")
         try:
             import re as _re_uc
-            uc_nova_raw = request.form.get("cod_uc_alternativa", "").strip()  # UC principal (formato visual)
+            uc_nova_raw = request.form.get("cod_uc", "").strip()  # UC principal (formato visual)
             uc_nova     = _re_uc.sub(r'\D', '', uc_nova_raw)                  # somente digitos (banco)
             uc_antiga   = request.form.get("uc", "").strip()                  # UC Antiga (formato legado)
             if not uc_nova and not uc_antiga:
@@ -786,7 +946,7 @@ def cliente_novo():
             # Salva cliente
             cliente = tb_save_cliente({
                 "cod_uc":              cod_uc,
-                "cod_uc_alternativa":  uc_nova,
+                "cod_uc":  uc_nova,
                 "desc_nome":           nome_cliente,
                 "desc_apelido":        request.form.get("desc_apelido", "").strip() or None,
                 "desc_cpf":            request.form.get("desc_cpf", "").strip(),
@@ -867,7 +1027,7 @@ def cliente_editar(uc):
         logger.info(f"[CLIENTE_EDITAR] Atualizacao do cliente ID: {id_cliente}, UC: {uc}, Nome: {nome_cliente}")
         try:
             import re as _re_uc_edit
-            nova_uc_nova_raw = request.form.get("cod_uc_alternativa", "").strip()
+            nova_uc_nova_raw = request.form.get("cod_uc", "").strip()
             nova_uc_nova     = _re_uc_edit.sub(r'\D', '', nova_uc_nova_raw)  # somente digitos (banco)
             nova_uc_antiga   = request.form.get("uc", "").strip()
             if not nova_uc_nova and not nova_uc_antiga:
@@ -882,7 +1042,7 @@ def cliente_editar(uc):
             tb_save_cliente({
                 "id_cliente":          id_cliente,
                 "cod_uc":              novo_cod_uc,
-                "cod_uc_alternativa":  nova_uc_nova,
+                "cod_uc":  nova_uc_nova,
                 "desc_nome":           nome_cliente,
                 "desc_apelido":        request.form.get("desc_apelido", "").strip() or None,
                 "desc_cpf":            request.form.get("desc_cpf", "").strip(),
@@ -1049,10 +1209,269 @@ def api_cliente(uc):
         logger.error(f"[API_CLIENTE] Erro ao buscar cliente UC {uc}: {str(e)}\n{traceback.format_exc()}")
         return jsonify({"erro": f"Erro ao buscar cliente: {e}"}), 500
 
+# ── API: Reconciliação SCEE ─────────────────────────────────
+@app.route("/api/scee-reconciliacao")
+def api_scee_reconciliacao():
+    """Busca dados de reconciliação SCEE para uma combinação
+    (UC cliente + UC usina + ciclo). Retorna o que o banco já tem:
+
+    - geracao_real_usina: kWh totais da usina naquele ciclo
+      (de tb_faturas onde a usina é o cliente, ou tb_geracao_mensal)
+    - pct_rateio_cadastrado: % cadastrado em tb_cliente_usina
+
+    A "verdade matemática" (excedente ÷ geração) é calculada no front-end.
+    """
+    uc_cliente = (request.args.get("uc_cliente") or "").strip()
+    uc_usina   = (request.args.get("uc_usina")   or "").strip()
+    ciclo      = (request.args.get("ciclo")      or "").strip()  # "MM/AAAA"
+
+    resultado = {
+        "geracao_real_usina":      None,
+        "pct_rateio_cadastrado":   None,
+        "fonte_geracao":           None,
+        "fonte_rateio":            None,
+        "uc_cliente":              uc_cliente,
+        "uc_usina":                uc_usina,
+        "ciclo":                   ciclo,
+    }
+
+    # 1) Buscar geração real da usina — múltiplas fontes em ordem de prioridade:
+    #    a) tb_usinas (cadastro da usina, campo qtd_geracao_media_mensal)
+    #    b) tb_faturas (fatura registrada da própria usina, qtd_geracao_usina_kwh)
+    if uc_usina and ciclo and "/" in ciclo:
+        try:
+            from db import _resolver_id_cliente_por_uc, _db as _dbf
+            import re as _re_norm
+            # Normalização: remove pontos/hífens e zeros à esquerda pra comparação
+            def _norm_uc(s):
+                return _re_norm.sub(r"\D", "", str(s or "")).lstrip("0")
+            alvo_uc = _norm_uc(uc_usina)
+
+            # a) Busca em tb_usinas — fonte mais confiável (cadastro humano)
+            usinas = _dbf().select("tb_usinas",
+                                   columns="id_usina,desc_nome,cod_uc_geradora,qtd_geracao_media_mensal")
+            for u in usinas:
+                if _norm_uc(u.get("cod_uc_geradora")) == alvo_uc:
+                    ger = u.get("qtd_geracao_media_mensal") or 0
+                    if ger and float(ger) > 0:
+                        resultado["geracao_real_usina"] = float(ger)
+                        resultado["fonte_geracao"] = f"cadastro usina '{u.get('desc_nome','')}' (id={u.get('id_usina')})"
+                        # Guarda também o id_usina pra próxima etapa do rateio
+                        resultado["_id_usina_match"] = u.get("id_usina")
+                    break
+
+            # b) Fallback: fatura da própria usina em tb_faturas (caso seja cadastrada como cliente)
+            if not resultado["geracao_real_usina"]:
+                id_cli_usina = _resolver_id_cliente_por_uc(uc_usina)
+                if id_cli_usina:
+                    m, y = ciclo.split("/")
+                    mes_int, ano_int = int(m), int(y)
+                    rows = _dbf().select("tb_faturas", filtros={
+                        "id_cliente":     id_cli_usina,
+                        "ano_referencia": ano_int,
+                        "mes_referencia": mes_int,
+                    })
+                    if rows:
+                        f0 = rows[0]
+                        ger = (f0.get("qtd_geracao_usina_kwh") or 0)
+                        if ger and float(ger) > 0:
+                            resultado["geracao_real_usina"] = float(ger)
+                            resultado["fonte_geracao"] = f"fatura usina (id_fatura={f0.get('id_fatura')})"
+        except Exception as _e:
+            app.logger.warning(f"[scee-reconciliacao] geração: {_e}")
+
+    # 2) Buscar pct_rateio cadastrado em tb_cliente_usina
+    if uc_cliente and uc_usina:
+        try:
+            from db import (_resolver_id_cliente_por_uc, _db as _dbf,
+                            tb_get_usinas_do_cliente)
+            id_cli = _resolver_id_cliente_por_uc(uc_cliente)
+            if id_cli:
+                vincs = tb_get_usinas_do_cliente(id_cli)
+                # Cruza id_usina → tb_usinas.cod_uc para casar com uc_usina
+                if vincs:
+                    import re as _re
+                    digits_alvo = _re.sub(r"\D", "", uc_usina).lstrip("0")
+                    for v in vincs:
+                        id_u = v.get("id_usina")
+                        if not id_u: continue
+                        uros = _dbf().select("tb_usinas",
+                                             filtros={"id_usina": id_u},
+                                             columns="cod_uc")
+                        if uros:
+                            cod_u = _re.sub(r"\D", "", str(uros[0].get("cod_uc") or "")).lstrip("0")
+                            if cod_u and cod_u == digits_alvo:
+                                pct = v.get("pct_rateio")
+                                if pct is not None:
+                                    resultado["pct_rateio_cadastrado"] = float(pct)
+                                    resultado["fonte_rateio"] = "tb_cliente_usina"
+                                    break
+        except Exception as _e:
+            app.logger.warning(f"[scee-reconciliacao] rateio: {_e}")
+
+    return jsonify(resultado)
+
+
 # ── API: Busca clientes por UC (antiga ou nova) ou nome ─────
+@app.route("/api/extrair-fatura-equatorial", methods=["POST"])
+def api_extrair_fatura_equatorial():
+    """Recebe PDF da fatura Equatorial e retorna os dados extraidos
+    com pos-processamento: padroniza mes_referencia, sobrescreve tarifa
+    pela cadastrada quando consumo totalmente compensado, normaliza datas."""
+    if "pdf" not in request.files:
+        return jsonify({"erro": "PDF nao enviado"}), 400
+    f = request.files["pdf"]
+    if not f or not f.filename:
+        return jsonify({"erro": "Arquivo invalido"}), 400
+    if not f.filename.lower().endswith(".pdf"):
+        return jsonify({"erro": "Envie um arquivo PDF"}), 400
+
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False, prefix="extracao_")
+    try:
+        f.save(tmp.name)
+        tmp.close()
+        from extrair_equatorial import extrair_equatorial
+        dados = extrair_equatorial(tmp.name)
+
+        # ── Pos-processamento ────────────────────────────────────────────
+        # 1) Padroniza mes_referencia para MM/AAAA (extrator pode devolver "5/2026")
+        mes_ref = (dados.get("mes_referencia") or "").strip()
+        if "/" in mes_ref:
+            partes = mes_ref.split("/")
+            if len(partes) == 2 and partes[0].isdigit() and partes[1].isdigit():
+                mes_ref = f"{int(partes[0]):02d}/{partes[1]}"
+                dados["mes_referencia"] = mes_ref
+
+        # 2) Tarifa Equatorial cadastrada — sobrescreve quando consumo
+        #    totalmente compensado (caso em que a fatura Equatorial mostra
+        #    tarifa SCEE reduzida, que nao deve ser usada para SEM SOLEV)
+        consumo   = float(dados.get("consumo_kwh") or 0)
+        compensado = float(dados.get("compensado_kwh") or 0)
+        nao_comp  = float(dados.get("nao_comp_kwh") or 0)
+        totalmente_compensado = (consumo > 0 and abs(consumo - compensado) < 0.5 and nao_comp < 0.5)
+
+        cadastrada = None
+        if mes_ref:
+            try:
+                from utils import obter_tarifa_mes
+                cadastrada = obter_tarifa_mes(mes_ref)
+            except Exception as _e:
+                app.logger.warning(f"[api_extrair_fatura] obter_tarifa_mes falhou: {_e}")
+
+        if cadastrada:
+            # Sempre devolve a tarifa cadastrada (cliente espera ver a tarifa cheia
+            # da Equatorial no SEM SOLEV, mesmo quando parcialmente compensado).
+            # Override apenas se cadastrada > 0; senao mantem o extraido.
+            if float(cadastrada.get("tarifa_sem") or 0) > 0:
+                dados["tarifa_sem"]  = cadastrada["tarifa_sem"]
+                dados["tarifa_scee"] = cadastrada["tarifa_sem"]
+            # Bandeiras: extrator nao retorna por kWh, so o valor R$ pago;
+            # cadastrada tem a tarifa R$/kWh — sempre usar a cadastrada
+            if "bandeira_amarela" in cadastrada:
+                dados["bandeira_amarela"] = cadastrada["bandeira_amarela"]
+            if "bandeira_vermelha" in cadastrada:
+                dados["bandeira_vermelha"] = cadastrada["bandeira_vermelha"]
+            dados["_tarifa_origem"] = "cadastrada"
+        else:
+            dados["_tarifa_origem"] = "extraida_fatura"
+
+        # 3) Datas: garantir que aliases apontem para as DATAS, nao para
+        #    o numero do medidor (extrair_equatorial.py:40 tem alias errado)
+        if dados.get("data_leitura_anterior"):
+            dados["anterior_leitura"] = dados["data_leitura_anterior"]
+        if dados.get("data_leitura_atual"):
+            dados["data_leitura"] = dados["data_leitura_atual"]
+
+        # 4) Tipo de fornecimento: limpa encoding ruim (ex.: MONOF�SICO)
+        tf = (dados.get("tipo_fornecimento") or "").upper()
+        if tf.startswith("MONO"):
+            dados["tipo_fornecimento"] = "Monofásico"
+        elif tf.startswith("BIF") or tf.startswith("BI"):
+            dados["tipo_fornecimento"] = "Bifásico"
+        elif tf.startswith("TRI"):
+            dados["tipo_fornecimento"] = "Trifásico"
+
+        dados["_totalmente_compensado"] = totalmente_compensado
+
+        # ── Reconciliação SCEE (busca dados auxiliares do banco) ──
+        try:
+            uc_cli   = (dados.get("uc") or dados.get("unidade_consumidora") or "").strip()
+            uc_usina = (dados.get("scee_uc_geradora") or "").strip()
+            ciclo    = (dados.get("scee_ciclo_mes")   or dados.get("ciclo_geracao_mes") or "").strip()
+            if uc_usina and ciclo:
+                from db import _resolver_id_cliente_por_uc, _db as _dbf, tb_get_usinas_do_cliente
+                import re as _re_norm2
+                def _norm_uc(s):
+                    return _re_norm2.sub(r"\D", "", str(s or "")).lstrip("0")
+                alvo_uc = _norm_uc(uc_usina)
+
+                rec = {"geracao_real_usina": None, "pct_rateio_cadastrado": None,
+                       "fonte_geracao": None, "fonte_rateio": None}
+
+                # 1a) Geração real da usina — busca em tb_usinas (cadastro humano)
+                usinas_db = _dbf().select("tb_usinas",
+                                          columns="id_usina,desc_nome,cod_uc_geradora,qtd_geracao_media_mensal")
+                for u in usinas_db:
+                    if _norm_uc(u.get("cod_uc_geradora")) == alvo_uc:
+                        ger = u.get("qtd_geracao_media_mensal") or 0
+                        if ger and float(ger) > 0:
+                            rec["geracao_real_usina"] = float(ger)
+                            rec["fonte_geracao"] = f"cadastro usina '{u.get('desc_nome','')}'"
+                        break
+
+                # 1b) Fallback: fatura da própria usina em tb_faturas
+                if not rec["geracao_real_usina"]:
+                    id_cli_us = _resolver_id_cliente_por_uc(uc_usina)
+                    if id_cli_us and "/" in ciclo:
+                        m, y = ciclo.split("/"); mes_int, ano_int = int(m), int(y)
+                        rows_u = _dbf().select("tb_faturas", filtros={
+                            "id_cliente": id_cli_us,
+                            "ano_referencia": ano_int,
+                            "mes_referencia": mes_int,
+                        })
+                        if rows_u:
+                            ger = rows_u[0].get("qtd_geracao_usina_kwh") or 0
+                            if ger and float(ger) > 0:
+                                rec["geracao_real_usina"] = float(ger)
+                                rec["fonte_geracao"] = f"fatura usina id={rows_u[0].get('id_fatura')}"
+                # 2) Rateio cadastrado (cliente x usina)
+                if uc_cli:
+                    id_cli = _resolver_id_cliente_por_uc(uc_cli)
+                    if id_cli:
+                        vincs = tb_get_usinas_do_cliente(id_cli)
+                        import re as _re_rec
+                        digits_alvo = _re_rec.sub(r"\D", "", uc_usina).lstrip("0")
+                        for v in vincs:
+                            id_u = v.get("id_usina")
+                            if not id_u: continue
+                            uros = _dbf().select("tb_usinas",
+                                                 filtros={"id_usina": id_u},
+                                                 columns="cod_uc")
+                            if uros:
+                                cod_u = _re_rec.sub(r"\D", "", str(uros[0].get("cod_uc") or "")).lstrip("0")
+                                if cod_u == digits_alvo:
+                                    pct = v.get("pct_rateio")
+                                    if pct is not None:
+                                        rec["pct_rateio_cadastrado"] = float(pct)
+                                        rec["fonte_rateio"] = "tb_cliente_usina"
+                                    break
+                dados["_scee_reconciliacao"] = rec
+        except Exception as _e:
+            app.logger.warning(f"[api_extrair_fatura] reconciliacao: {_e}")
+
+        return jsonify(dados)
+    except Exception as e:
+        app.logger.warning(f"[api_extrair_fatura] Falha: {e}")
+        return jsonify({"erro": f"Falha na extracao: {e}"}), 500
+    finally:
+        try: os.unlink(tmp.name)
+        except Exception: pass
+
+
 @app.route("/api/clientes/busca")
 def api_clientes_busca():
-    """Autocomplete: casa por nome, UC antiga (cod_uc) E UC nova (cod_uc_alternativa).
+    """Autocomplete: casa por nome, UC antiga (cod_uc) E UC nova (cod_uc).
     Normaliza pontos/hifens para que '2026.034.798.403-00' bata com '202603479840300'."""
     try:
         import re as _re_b
@@ -1079,7 +1498,7 @@ def api_clientes_busca():
 
         for c in tb_carregar_clientes():
             uc     = (c.get("cod_uc") or "").strip()
-            uc_alt = (c.get("cod_uc_alternativa") or "").strip()
+            uc_alt = (c.get("cod_uc") or "").strip()
             nome   = (c.get("desc_nome") or "").strip()
             if q in nome.lower() or _matches_uc(uc) or _matches_uc(uc_alt):
                 resultados.append({
@@ -1095,7 +1514,7 @@ def api_clientes_busca():
         for uc, c in carregar_clientes().items():
             if uc in seen:
                 continue
-            uc_alt = (c.get("uc_alternativa") or "").strip()
+            uc_alt = (c.get("cod_uc") or "").strip()
             nome   = (c.get("nome") or "").strip()
             if q in nome.lower() or _matches_uc(uc) or _matches_uc(uc_alt):
                 resultados.append({
@@ -1176,21 +1595,39 @@ def gerar_manual():
             chave_real = chave_real or uc
 
             def _p(field, default=0):
-                v = request.form.get(field, str(default)).replace(",", ".")
+                v = request.form.get(field, str(default)).strip()
+                if not v: return default
+                # BR-aware:
+                #  - "14.143,00"  → ambos: "." milhar, "," decimal
+                #  - "0,75"       → só ",":  decimal BR
+                #  - "1.135823"   → só "." com >3 dígitos após: decimal US (tarifa)
+                #  - "14.143"     → só "." com exatamente 3 dígitos após: milhar BR
+                #  - "100.000.50" → vários ".": todos milhar (não acontece normalmente)
+                if "." in v and "," in v:
+                    v = v.replace(".", "").replace(",", ".")
+                elif "," in v:
+                    v = v.replace(",", ".")
+                elif "." in v:
+                    partes = v.split(".")
+                    # Múltiplos pontos OU 1 ponto seguido de exatamente 3 dígitos → milhar BR
+                    if len(partes) > 2 or (len(partes) == 2 and len(partes[1]) == 3 and partes[0]):
+                        v = v.replace(".", "")
                 try: return float(v)
                 except: return default
 
             consumo = _p("consumo_kwh")
             tarifa = _p("tarifa")
-            compensado = _p("consumo_compensado", consumo)
-            nao_comp = _p("consumo_nao_comp", 0)
+            # COM SOLEV: split entre compensado/nao-comp vem dos campos *_com do formulario
+            # Fallback: campos antigos sem sufixo (para retrocompat com gerar_auto / API)
+            compensado = _p("consumo_compensado_com", _p("consumo_compensado", consumo))
+            nao_comp   = _p("consumo_nao_comp_com",   _p("consumo_nao_comp", 0))
             ilum = _p("iluminacao_publica")
             multa = _p("multa")
             juros = _p("juros")
             band_am = _p("bandeira_amarela")
             band_vm = _p("bandeira_vermelha")
             mes_ref = request.form.get("mes_referencia", "").strip()
-            venc_contalev = request.form.get("vencimento_contalev", "").strip()
+            venc_solev = request.form.get("vencimento_solev", "").strip()
 
             # ── Novos campos manuais (COM SOLEV) ──
             multa_com_manual     = _p("multa_com", 0)
@@ -1201,8 +1638,21 @@ def gerar_manual():
             correcao_ipca_manual = _p("correcao_ipca", 0)
             economia_acum_manual = request.form.get("economia_acumulada", "").strip()
 
-            if not mes_ref or not venc_contalev:
-                flash("Mes de referencia e Vencimento sao obrigatorios!", "danger")
+            # ── Campos SCEE (geração solar) ──
+            scee_ciclo_mes     = request.form.get("scee_ciclo_mes", "").strip()
+            scee_uc_geradora   = request.form.get("scee_uc_geradora", "").strip()
+            scee_pct_rateio         = _p("scee_pct_rateio", 0)
+            scee_geracao_usina_kwh  = _p("scee_geracao_usina_kwh", 0)   # calculado pelo JS (excedente ÷ % rateio)
+            scee_excedente_kwh      = _p("scee_excedente_kwh", 0)
+            scee_credito_kwh   = _p("scee_credito_kwh", 0)
+            scee_saldo_30d     = _p("scee_saldo_exp_30d", 0)
+            scee_saldo_60d     = _p("scee_saldo_exp_60d", 0)
+
+            if not mes_ref or not venc_solev:
+                faltando = []
+                if not mes_ref:    faltando.append("Mes de referencia")
+                if not venc_solev: faltando.append("Vencimento SOLEV")
+                flash(f"Obrigatorio: {', '.join(faltando)}", "danger")
                 return redirect(url_for("gerar_manual"))
 
             # Se tarifa nao informada, busca do cadastro
@@ -1264,13 +1714,13 @@ def gerar_manual():
                 "tarifa_sem": tarifa,
                 "modo_bandeira": cliente.get("modo_bandeira", "com_bandeira"),
                 "valor_cobranca_anterior": cliente.get("valor_cobranca_anterior", 0) or 0,
-                "venc_contalev_anterior": cliente.get("venc_contalev_anterior", ""),
+                "venc_solev_anterior": cliente.get("venc_solev_anterior", ""),
                 "data_pagamento_anterior": cliente.get("data_pagamento_anterior", ""),
                 "economia_acumulada_anterior": eco_acum_anterior,
                 "codigo_barras": cliente.get("codigo_barras", "CODIGO DE BARRA EM DESENVOLVIMENTO"),
                 "linha_digitavel": cliente.get("linha_digitavel", "XXXX.XXXX  XXXXX.XXXXX  XXXXX.XXXXX  X  XXXXXXXXXXXXXX"),
                 "pix_payload": cliente.get("pix_payload", ""),
-                "unidade_consumidora": cliente.get("uc_alternativa") or chave_real,
+                "unidade_consumidora": cliente.get("cod_uc") or chave_real,
                 "tipo_fornecimento": request.form.get("tipo_fornecimento", "Bifasico"),
                 "mes_referencia": mes_ref,
                 "anterior_leitura": request.form.get("anterior_leitura", ""),
@@ -1292,7 +1742,7 @@ def gerar_manual():
                 "adc_bandeira_amarela":   0,  # manual: nao tem ADC do PDF
                 "adc_bandeira_vermelha":  0,
                 "modo_bandeira":          cliente.get("modo_bandeira", "com_bandeira"),
-                "vencimento_contalev": venc_contalev,
+                "vencimento_solev": venc_solev,
                 "equatorial_pdf": equatorial_pdf_path,
                 # ── Overrides manuais para COM SOLEV ──
                 "multa_com_override": multa_com_manual,
@@ -1365,13 +1815,22 @@ def gerar_manual():
             _eco_acum   = round(dados_calc.get("_economia_acum", eco_acum_anterior), 2)
             if cliente.get("_fonte") == "tb_clientes" and cliente.get("_id_cliente"):
                 from db import tb_writeback_pos_cobranca
+                # Converte DD/MM/YYYY para YYYY-MM-DD antes de gravar no Supabase
+                _venc_db = venc_solev
+                if venc_solev and "/" in venc_solev:
+                    try:
+                        _p = venc_solev.split("/")
+                        if len(_p) == 3:
+                            _venc_db = f"{_p[2]}-{_p[1]}-{_p[0]}"
+                    except Exception:
+                        pass
                 tb_writeback_pos_cobranca(cliente["_id_cliente"], _total_com,
-                                          venc_contalev, _eco_acum)
+                                          _venc_db, _eco_acum)
             else:
                 clientes = carregar_clientes()
                 if chave_real in clientes:
                     clientes[chave_real]["valor_cobranca_anterior"]    = _total_com
-                    clientes[chave_real]["venc_contalev_anterior"]      = venc_contalev
+                    clientes[chave_real]["venc_solev_anterior"]      = venc_solev
                     clientes[chave_real]["data_pagamento_anterior"]     = ""
                     clientes[chave_real]["economia_acumulada_anterior"] = _eco_acum
                     salvar_clientes(clientes)
@@ -1398,6 +1857,7 @@ def gerar_manual():
             _total_eq_m = 0
             _fio_b_m    = 0
             _ilum_m     = 0
+            _eq_m_scee = {}   # dados SCEE extraídos do PDF (se houver)
             if equatorial_pdf_path:
                 try:
                     from extrair_equatorial import extrair_equatorial as _extr
@@ -1409,8 +1869,18 @@ def gerar_manual():
                     _total_eq_m = _eq_m.get("total_fatura", 0)
                     _fio_b_m    = _eq_m.get("valor_parc_injet", 0)
                     _ilum_m     = _eq_m.get("iluminacao_publica", 0)
+                    _eq_m_scee  = _eq_m   # guarda para fallback SCEE
                 except Exception:
                     pass
+
+            # SCEE: prioriza form (digitado/corrigido pelo operador), depois extrator
+            def _scee_val(form_key, extr_key, default=0):
+                v = request.form.get(form_key, "").strip()
+                if v:
+                    try: return float(v.replace(",", "."))
+                    except ValueError: pass
+                return _eq_m_scee.get(extr_key, default) or default
+
             _inserir_hist_m(
                 uc=chave_real,
                 nome=cliente["nome"],
@@ -1419,7 +1889,7 @@ def gerar_manual():
                 total_com=round(dados_calc.get("_total_com", 0), 2),
                 economia_mes=round(dados_calc.get("_economia_mes", 0), 2),
                 economia_acum=round(dados_calc.get("_economia_acum", 0), 2),
-                venc=venc_contalev,
+                venc=venc_solev,
                 pdf_path=_output_path_m,
                 consumo_kwh=consumo,
                 compensado_kwh=compensado,
@@ -1438,14 +1908,45 @@ def gerar_manual():
                 ilum_publica=_ilum_m,
                 band_amar_equatorial=dados_calc.get("_band_amar_equatorial", 0),
                 band_verm_equatorial=dados_calc.get("_band_verm_equatorial", 0),
-                band_amar_contalev=dados_calc.get("_band_amar_contalev", 0),
-                band_verm_contalev=dados_calc.get("_band_verm_contalev", 0),
+                band_amar_solev=dados_calc.get("_band_amar_solev", 0),
+                band_verm_solev=dados_calc.get("_band_verm_solev", 0),
                 ajuste_valor=dados_calc.get("ajuste_valor", 0),
                 difci=dados_calc.get("difci", 0),
                 ecnisenta=dados_calc.get("ecnisenta", 0),
                 anterior_leitura=request.form.get("anterior_leitura", ""),
                 n_dias=int(request.form.get("n_dias", 0) or 0),
+                # SCEE
+                scee_ciclo_mes   = scee_ciclo_mes   or _eq_m_scee.get("scee_ciclo_mes", "") or _eq_m_scee.get("ciclo_geracao_mes", ""),
+                scee_uc_geradora = scee_uc_geradora or _eq_m_scee.get("scee_uc_geradora", ""),
+                scee_pct_rateio        = scee_pct_rateio or _scee_val("scee_pct_rateio", "scee_pct_rateio"),
+                # Geração da usina: valor enviado pelo JS (excedente ÷ pct),
+                # fallback: calcular aqui também se tiver os dados
+                scee_geracao_usina_kwh = scee_geracao_usina_kwh or (
+                    round(_scee_val("scee_excedente_kwh", "excedente_recebido_kwh") /
+                          ((_scee_val("scee_pct_rateio", "scee_pct_rateio") or scee_pct_rateio) / 100), 2)
+                    if (_scee_val("scee_excedente_kwh", "excedente_recebido_kwh") > 0 and
+                        (_scee_val("scee_pct_rateio", "scee_pct_rateio") or scee_pct_rateio) > 0)
+                    else 0
+                ),
+                scee_excedente_kwh     = scee_excedente_kwh or _scee_val("scee_excedente_kwh", "excedente_recebido_kwh"),
+                scee_credito_kwh       = scee_credito_kwh   or _scee_val("scee_credito_kwh",   "credito_recebido_kwh"),
+                scee_saldo_exp_30d_kwh = scee_saldo_30d     or _scee_val("scee_saldo_exp_30d", "saldo_expirar_30d_kwh"),
+                scee_saldo_exp_60d_kwh = scee_saldo_60d     or _scee_val("scee_saldo_exp_60d", "saldo_expirar_60d_kwh"),
             )
+
+            # ── Salva histórico de consumo (12 meses) para futuras predições de rateio ──
+            try:
+                from db import salvar_historico_consumo, _resolver_id_cliente_por_uc
+                _hist = (_eq_m_scee or {}).get("historico_meses") or []
+                if _hist:
+                    _idc = _resolver_id_cliente_por_uc(chave_real)
+                    if _idc:
+                        n = salvar_historico_consumo(_idc, mes_ref, _hist,
+                                                     origem=f"fatura_{mes_ref.replace('/','_')}")
+                        if n > 0:
+                            app.logger.info(f"[gerar_manual] {n} meses de histórico salvos para cliente {_idc}")
+            except Exception as _he:
+                app.logger.warning(f"[gerar_manual] histórico de consumo: {_he}")
 
             flash(f"Cobranca manual gerada para {cliente['nome']}!", "success")
             if dados_calc.get("output_path"):
@@ -1493,7 +1994,7 @@ def gerar_auto():
             c = clientes_all.get(uc, {})
             nome = c.get("nome", uc)
             nome_camel = _camel_case(_primeiro_ultimo(nome))
-            uc_nova = c.get("uc_alternativa") or uc
+            uc_nova = c.get("cod_uc") or uc
             # buscar usina via vinculos (ja importados no escopo local)
             from db import tb_carregar_todas_vinculacoes, carregar_usinas as _usinasDB
             vinculos = tb_carregar_todas_vinculacoes()
@@ -1553,7 +2054,7 @@ def gerar_auto():
     for uc, c in clientes_all.items():
         nome      = c.get("nome", uc)
         nome_camel = _camel_case(_primeiro_ultimo(nome))
-        uc_nova   = c.get("uc_alternativa") or uc
+        uc_nova   = c.get("cod_uc") or uc
         titular   = c.get("titular_fatura", "")
         id_cli    = c.get("_id_cliente")
 
@@ -1629,7 +2130,7 @@ def gerar_auto():
         titulares_opts = titulares_opts,
         total         = len(rows),
         com_equatorial = sum(1 for r in rows if r["eq_ok"]),
-        com_contalev  = sum(1 for r in rows if r["co_ok"]),
+        com_solev  = sum(1 for r in rows if r["co_ok"]),
     )
 
 
@@ -1796,7 +2297,7 @@ def gerar_auto_gerar_job():
                 c    = clientes_all.get(uc, {})
                 nome = c.get("nome", uc)
                 nome_camel = _camel_case(_primeiro_ultimo(nome))
-                uc_nova    = c.get("uc_alternativa") or uc
+                uc_nova    = c.get("cod_uc") or uc
                 id_cli     = c.get("_id_cliente")
                 nome_usina = ""
                 if id_cli and vinculos.get(id_cli):
@@ -1926,15 +2427,15 @@ def ver_equatorial(item_id):
                 return send_file(os.path.join(root, fname), mimetype="application/pdf")
     # 3. Fallback: busca PDF da Equatorial na pasta do cliente (qualquer PDF que nao seja SOLEV)
     #    Usa o nome do PDF SOLEV para localizar a pasta do cliente no OneDrive
-    pdf_contalev = item.get("pdf", "")
-    if pdf_contalev and os.path.exists(BASE_USINAS_PATH):
+    pdf_solev = item.get("pdf", "")
+    if pdf_solev and os.path.exists(BASE_USINAS_PATH):
         for root, dirs, files in os.walk(BASE_USINAS_PATH):
-            if pdf_contalev in files:
+            if pdf_solev in files:
                 # Encontrou a pasta — pega o primeiro PDF que nao seja SOLEV nem de investidor
                 pdfs_eq = [
                     f for f in files
                     if f.lower().endswith(".pdf")
-                    and "contalev" not in f.lower()
+                    and "solev" not in f.lower()
                     and "contrato" not in f.lower()
                 ]
                 if pdfs_eq:
@@ -2151,40 +2652,35 @@ def enviar_whatsapp(filename):
     except Exception as _e:
         app.logger.warning(f"[whatsapp] Falha ao verificar PIX: {_e}")
 
-    # 3. Monta mensagem com simbolos BMP universais (qualquer fonte renderiza)
-    # Emojis 4-byte foram substituidos porque a fonte padrao do WhatsApp Web/desktop
-    # de muitos clientes nao tem glyphs para eles (aparecem como losango vazio).
-    # \u escape sequences evitam tambem problemas de encoding cp1252 no Windows.
-    BULLET   = "\u25b8"   # triangulo preto pequeno apontando direita
-    ARROW    = "\u2192"   # seta pra direita
-    EM_DASH  = "\u2014"   # travessao
+    # 3. Monta mensagem
+    BULLET  = "\u25b8"       # \u25b8
+    SORRISO = "\U0001F60A"   # \ud83d\ude0a
+    RAIO    = "\u26a1"       # \u26a1
 
     nome_curto = nome.split()[0] if nome else "Cliente"
-    base_url = request.host_url.rstrip("/")
-    # Codigo curto base62 (6 chars) para URLs amigaveis
-    short_code = _id_to_short_code(item_id) if item_id else ""
-    code_url = short_code or item_id  # fallback: usa id completo se algo falhar
 
-    # Acentos em \u escape para nao violar a skill no-accents (.py sem acentos)
+    # Acentos em \u escape para evitar problemas de encoding cp1252 no Windows
     linhas = [
-        f"Ol\u00e1, *{nome_curto}*!",
+        f"Ol\u00e1! *{nome_curto}* {SORRISO}",
         "",
-        f"{BULLET} *Fatura SOLEV* - {mes}",
+        "Passando para lembrar da sua cobran\u00e7a e tamb\u00e9m compartilhar "
+        f"uma novidade: agora somos *SOLEV ENERGIA* {RAIO}",
+        "",
+        "Nossa marca evoluiu para acompanhar nosso crescimento e continuar "
+        "oferecendo o melhor atendimento e solu\u00e7\u00f5es em energia.",
+        "",
+        "Seguimos \u00e0 disposi\u00e7\u00e3o!",
+        "",
         f"{BULLET} Valor: *{_fmt_brl(valor)}*",
     ]
     if venc:
         linhas.append(f"{BULLET} Vencimento: {venc}")
 
-    # Link unico - pagina unificada com fatura + PIX
     linhas.append("")
-    linhas.append(f"{ARROW} Acesse sua fatura e pague:")
-    linhas.append(f"{base_url}/soleconomia/{code_url}")
+    linhas.append("Enviarei em seguida o PDF da cobranca e a *chave PIX* "
+                  "para pagamento (basta tocar e segurar na chave, copiar, "
+                  "colar no app do banco em PIX > Chave Aleatoria e digitar o valor).")
 
-    linhas.append("")
-    linhas.append(
-        f"*SoLev* {EM_DASH} um grupo exclusivo movido por "
-        f"intelig\u00eancia energ\u00e9tica"
-    )
     msg = "\n".join(linhas)
 
     # 4. URL wa.me - quote com encoding UTF-8 explicito para garantir emojis
@@ -2194,6 +2690,49 @@ def enviar_whatsapp(filename):
     else:
         url = f"https://wa.me/?text={msg_quoted}"
     return redirect(url)
+
+
+# ENVIAR CHAVE PIX POR WHATSAPP (mensagem separada — facil de copiar, nao expira)
+@app.route("/whatsapp-pix/<int:id_fatura>")
+def enviar_whatsapp_pix(id_fatura):
+    """Abre WhatsApp pre-preenchido apenas com a chave PIX (UUID).
+
+    Por que so a chave (e nao BRCode com valor):
+    - A chave PIX nao expira (so deixa de funcionar se o titular deletar)
+    - Alguns bancos tem timeout interno no BRCode, gerando reclamacao apos dias
+    - Cliente cola na opcao "Chave Aleatoria" do banco e digita o valor
+    """
+    item = _buscar_fatura_compat(id_fatura)
+    if not item:
+        flash("Fatura nao encontrada.", "danger")
+        return redirect(url_for("faturas"))
+
+    uc = item.get("uc", "") or item.get("_cod_uc", "")
+
+    # Telefone do cliente
+    telefone_digits = ""
+    try:
+        from db import tb_get_cliente_por_uc
+        c_tb = tb_get_cliente_por_uc(uc)
+        if c_tb:
+            tel_raw = (c_tb.get("desc_telefone") or "").strip()
+            telefone_digits = "".join(filter(str.isdigit, tel_raw))
+            if telefone_digits and not telefone_digits.startswith("55"):
+                telefone_digits = "55" + telefone_digits
+    except Exception as _e:
+        app.logger.warning(f"[whatsapp-pix] Falha ao buscar telefone: {_e}")
+
+    # Chave PIX temporaria — trocar quando tiver PIX definitivo no cadastro
+    PIX_CHAVE_TEMP = "f6189239-d8ae-4edb-9d62-99299de54fc3"
+
+    # Mensagem com APENAS a chave PIX — long-press > Copy copia exatamente isto
+    msg_quoted = urllib.parse.quote(PIX_CHAVE_TEMP, safe="", encoding="utf-8")
+    if telefone_digits:
+        url = f"https://wa.me/{telefone_digits}?text={msg_quoted}"
+    else:
+        url = f"https://wa.me/?text={msg_quoted}"
+    return redirect(url)
+
 
 # PAGAMENTO
 @app.route("/pagamento", methods=["GET", "POST"])
@@ -2231,13 +2770,13 @@ def pagamento():
             rows = _get_db().select(
                 "tb_faturas",
                 filtros={"id_cliente": id_cliente, "status": "pendente"},
-                order="dt_venc_contalev.asc.nullslast",
+                order="dt_venc_solev.asc.nullslast",
             )
             if rows:
                 fatura    = rows[0]
                 fatura_id = fatura.get("id_fatura")
                 valor     = float(fatura.get("vlr_total_com") or 0)
-                venc_iso  = fatura.get("dt_venc_contalev")
+                venc_iso  = fatura.get("dt_venc_solev")
 
         multa_proxima = 0.0; juros_proxima = 0.0; dias_atraso = 0
         if venc_iso and valor > 0:
@@ -2285,15 +2824,15 @@ def pagamento():
 
     faturas_pendentes = tb_get_faturas_pendentes_ordenadas()
     for f in faturas_pendentes:
-        if f.get("dt_venc_contalev"):
+        if f.get("dt_venc_solev"):
             try:
                 f["_venc_br"] = datetime.strptime(
-                    f["dt_venc_contalev"], "%Y-%m-%d").strftime("%d/%m/%Y")
+                    f["dt_venc_solev"], "%Y-%m-%d").strftime("%d/%m/%Y")
             except ValueError:
-                f["_venc_br"] = f["dt_venc_contalev"]
+                f["_venc_br"] = f["dt_venc_solev"]
         else:
             f["_venc_br"] = ""
-        f["_uc_alternativa_fmt"] = _fmt_uc15(f.get("_cod_uc_alternativa") or "")
+        f["_cod_uc_fmt"] = _fmt_uc15(f.get("_cod_uc") or "")
 
     clientes = carregar_clientes()
     return render_template("pagamento.html",
@@ -2361,7 +2900,7 @@ def faturas():
             r["_status_classe"] = "aguardando"
 
         for chave_iso, chave_br in (("dt_geracao", "_data_br"),
-                                    ("dt_venc_contalev", "_venc_br"),
+                                    ("dt_venc_solev", "_venc_br"),
                                     ("dt_venc_equatorial", "_venc_eq_br"),
                                     ("dt_pagamento", "_pgto_br")):
             v = r.get(chave_iso)
@@ -2379,8 +2918,8 @@ def faturas():
                 r[chave_br] = ""
 
         r["_usina"] = mapa_usina.get(str(r.get("_cod_uc") or ""), "") or \
-                      mapa_usina.get(str(r.get("_cod_uc_alternativa") or ""), "")
-        r["_pdf_legado"] = r.get("pdf_contalev") or ""
+                      mapa_usina.get(str(r.get("_cod_uc") or ""), "")
+        r["_pdf_legado"] = r.get("pdf_solev") or ""
 
     return render_template("faturas.html",
         faturas=rows, total=total,
@@ -2414,7 +2953,7 @@ def fatura_baixa(id_fatura):
         return redirect(url_for("faturas"))
 
     valor    = float(fatura.get("vlr_total_com") or 0)
-    venc_iso = fatura.get("dt_venc_contalev")
+    venc_iso = fatura.get("dt_venc_solev")
     multa_proxima = juros_proxima = 0.0; dias = 0
     if venc_iso and valor > 0:
         try:
@@ -2475,7 +3014,7 @@ def fatura_excluir(id_fatura):
     uc       = fatura.get("_cod_uc") or ""
     eco_mes  = float(fatura.get("vlr_economia_mes") or 0)
 
-    pdf = fatura.get("pdf_contalev") or ""
+    pdf = fatura.get("pdf_solev") or ""
     if pdf:
         pdf_path = os.path.join(_DIR, pdf)
         if os.path.exists(pdf_path):
@@ -2702,6 +3241,18 @@ def usina_nova():
                 "qtd_geracao_prevista_diaria": float(request.form.get("qtd_geracao_prevista_diaria", "0").replace(",", ".") or "0"),
                 "desc_observacoes": request.form.get("desc_observacoes", "").strip(),
             }
+            # Ciclo de leitura — habitual + próxima exata
+            _dia_leit = request.form.get("qtd_dia_leitura", "").strip()
+            if _dia_leit:
+                try:
+                    d = int(_dia_leit)
+                    if 1 <= d <= 31:
+                        usina_dados["qtd_dia_leitura"] = d
+                except ValueError:
+                    pass
+            _prox_leit = _data_br_para_iso(request.form.get("dt_proxima_leitura", "").strip())
+            if _prox_leit:
+                usina_dados["dt_proxima_leitura"] = _prox_leit
             if id_investidor:
                 usina_dados["id_investidor"] = id_investidor
             if id_dono:
@@ -2829,6 +3380,18 @@ def usina_editar(id_usina):
                 "qtd_geracao_prevista_diaria": float(request.form.get("qtd_geracao_prevista_diaria", "0").replace(",", ".") or "0"),
                 "desc_observacoes": request.form.get("desc_observacoes", "").strip(),
             }
+            # Ciclo de leitura — habitual + próxima exata
+            _dia_leit = request.form.get("qtd_dia_leitura", "").strip()
+            if _dia_leit:
+                try:
+                    d = int(_dia_leit)
+                    if 1 <= d <= 31:
+                        usina_dados["qtd_dia_leitura"] = d
+                except ValueError:
+                    pass
+            _prox_leit = _data_br_para_iso(request.form.get("dt_proxima_leitura", "").strip())
+            if _prox_leit:
+                usina_dados["dt_proxima_leitura"] = _prox_leit
             if id_investidor:
                 usina_dados["id_investidor"] = id_investidor
             if id_dono:
@@ -3048,7 +3611,7 @@ def usina_ver(uid):
         uc   = c_tb.get("cod_uc", "")
         if uc:
             pct = v.get("pct_rateio", 0) or 0
-            uc_alt = c_tb.get("cod_uc_alternativa", "") or ""
+            uc_alt = c_tb.get("cod_uc", "") or ""
             vinculados[uc] = {
                 "nome":            c_tb.get("desc_nome", uc),
                 "rateio_pct":      round(pct, 2),
@@ -3059,7 +3622,7 @@ def usina_ver(uid):
 
     # Nao vinculados — usa legado para compatibilidade com route /vincular
     clientes_leg  = carregar_clientes()
-    _uc_alt_map = {c["cod_uc"]: _fmt_uc15(c.get("cod_uc_alternativa") or "") for c in todos_clientes}
+    _uc_alt_map = {c["cod_uc"]: _fmt_uc15(c.get("cod_uc") or "") for c in todos_clientes}
     nao_vinculados = {
         uc: {**c, "uc_display": _uc_alt_map.get(uc) or uc}
         for uc, c in clientes_leg.items()
@@ -3998,10 +4561,44 @@ def rateio_planejar(uid):
     uid_leg = next((u for u, d in usinas_leg.items()
                     if d.get("nome") == usina_tb.get("desc_nome")), uid)
     usina = {
+        "id_usina":             usina_tb.get("id_usina"),
         "nome":                 usina_tb.get("desc_nome", usinas_leg.get(uid_leg, {}).get("nome", "")),
         "uc_geradora":          usina_tb.get("cod_uc_geradora", usinas_leg.get(uid_leg, {}).get("uc_geradora", "")),
         "geracao_media_mensal": usina_tb.get("qtd_geracao_media_mensal") or usinas_leg.get(uid_leg, {}).get("geracao_media_mensal", 0) or 0,
+        "qtd_dia_leitura":      usina_tb.get("qtd_dia_leitura"),
+        "dt_proxima_leitura":   usina_tb.get("dt_proxima_leitura"),
     }
+
+    # ── Calcula deadline (D-7 antes da próxima leitura) ──
+    from datetime import date as _date_t, timedelta as _td_t
+    _hoje = _date_t.today()
+    dt_prox_leitura_obj = None
+    if usina["dt_proxima_leitura"]:
+        try:
+            dt_prox_leitura_obj = _date_t.fromisoformat(str(usina["dt_proxima_leitura"])[:10])
+        except (ValueError, TypeError):
+            pass
+    if not dt_prox_leitura_obj and usina.get("qtd_dia_leitura"):
+        # Fallback: usa qtd_dia_leitura do mês corrente ou próximo
+        try:
+            dia = int(usina["qtd_dia_leitura"])
+            ano_t, mes_t = _hoje.year, _hoje.month
+            try:
+                cand = _date_t(ano_t, mes_t, dia)
+                if cand < _hoje:
+                    # passou — vai pro próximo mês
+                    if mes_t == 12: ano_t += 1; mes_t = 1
+                    else: mes_t += 1
+                    cand = _date_t(ano_t, mes_t, dia)
+                dt_prox_leitura_obj = cand
+            except ValueError:
+                pass
+        except (ValueError, TypeError):
+            pass
+    dt_deadline_obj = dt_prox_leitura_obj - _td_t(days=7) if dt_prox_leitura_obj else None
+    dias_para_deadline = (dt_deadline_obj - _hoje).days if dt_deadline_obj else None
+    dt_proxima_leitura_br = dt_prox_leitura_obj.strftime("%d/%m/%Y") if dt_prox_leitura_obj else None
+    dt_deadline_br        = dt_deadline_obj.strftime("%d/%m/%Y") if dt_deadline_obj else None
 
     # Mes alvo (default: proximo mes)
     def _prox_mes(m):
@@ -4054,9 +4651,34 @@ def rateio_planejar(uid):
     # Historico de todos os clientes
     historico = carregar_historico()
 
+    # ── Saldo mais recente por cliente (de tb_faturas) ──
+    # Fonte primária: última fatura do cliente naquela usina/uc.
+    # Fallback: tb_cliente_usina.qtd_saldo_kwh (manual).
+    saldo_recente_por_id = {}
+    try:
+        from db import _db as _dbf
+        ids_clientes_vinc = [v.get("id_cliente") for v in vinculos_lista if v.get("id_cliente")]
+        if ids_clientes_vinc:
+            # Busca faturas dos clientes vinculados (apenas as colunas necessárias)
+            for id_c_v in ids_clientes_vinc:
+                fats = _dbf().select(
+                    "tb_faturas",
+                    filtros={"id_cliente": id_c_v},
+                    order="ano_referencia.desc,mes_referencia.desc",
+                    columns="id_fatura,ano_referencia,mes_referencia,qtd_saldo_kwh",
+                )
+                if fats:
+                    saldo_recente_por_id[id_c_v] = {
+                        "saldo": float(fats[0].get("qtd_saldo_kwh") or 0),
+                        "mes":   f"{fats[0].get('mes_referencia',0):02d}/{fats[0].get('ano_referencia',0)}",
+                    }
+    except Exception as _e:
+        app.logger.warning(f"[rateio_planejar] saldo recente: {_e}")
+
     # Monta linha por cliente
     clientes = []
     soma_previsao = 0.0
+    soma_necessidade = 0.0
     for v in vinculos_lista:
         id_c = v.get("id_cliente")
         c_tb = clientes_id_map.get(id_c, {})
@@ -4065,25 +4687,66 @@ def rateio_planejar(uid):
             continue
         consumos = _historico_consumo_cliente(cod_uc, historico, n_meses=6)
         prev = _prever_consumo(consumos, modo=algo, n_std=n_std, margem_pct=margem)
-        clientes.append({
-            "uc":           cod_uc,
-            "uc_display":   _fmt_uc15(c_tb.get("cod_uc_alternativa") or "") or cod_uc,
-            "nome":         c_tb.get("desc_nome", cod_uc),
-            "pct_atual":    round(v.get("pct_rateio", 0) or 0, 2),
-            "saldo_kwh":    round(v.get("qtd_saldo_kwh", 0) or 0, 1),
-            "consumos":     consumos,
-            "previsao":     prev["previsao"],
-            "previsao_base": prev["base"],
-            "media":        prev["media"],
-            "maximo":       prev["maximo"],
-            "std":          prev["std"],
-            "qtd_meses":    prev["qtd_meses"],
-        })
-        soma_previsao += prev["previsao"]
 
-    # Calcula % sugerido (previsao / soma) e alocado kWh e saldo projetado
+        # Saldo: prioriza fatura mais recente, fallback tb_cliente_usina
+        _saldo_fat = saldo_recente_por_id.get(id_c)
+        saldo_kwh   = _saldo_fat["saldo"] if _saldo_fat else round(v.get("qtd_saldo_kwh", 0) or 0, 1)
+        saldo_fonte = ("fatura " + _saldo_fat["mes"]) if _saldo_fat else "conferência manual"
+
+        # ── Custo de disponibilidade (kWh sempre não-compensáveis) ──
+        tp_forn   = c_tb.get("tp_fornecimento") or ""
+        cd_kwh    = _cd_kwh(tp_forn)
+        # Parte da previsão que PODE ser compensada por crédito SCEE
+        parte_compensavel = max(0.0, prev["previsao"] - cd_kwh)
+        # Necessidade líquida = (parte_compensavel) − saldo, mínimo 0
+        # Saldo cobre primeiro a parte compensável; se sobra saldo, vira excesso ocioso
+        necessidade = max(0.0, parte_compensavel - saldo_kwh)
+
+        # Próxima leitura do cliente + proximidade da leitura da usina
+        prox_leit_cli = c_tb.get("proxima_leitura") or ""
+        proximidade_dias = None
+        prox_leit_cli_br = ""
+        if prox_leit_cli and dt_prox_leitura_obj:
+            try:
+                pl_obj = _date_t.fromisoformat(str(prox_leit_cli)[:10])
+                proximidade_dias = abs((pl_obj - dt_prox_leitura_obj).days)
+                prox_leit_cli_br = pl_obj.strftime("%d/%m/%Y")
+            except (ValueError, TypeError):
+                pass
+
+        clientes.append({
+            "id_cliente":      id_c,
+            "uc":              cod_uc,
+            "uc_display":      _fmt_uc15(c_tb.get("cod_uc") or "") or cod_uc,
+            "nome":            c_tb.get("desc_nome", cod_uc),
+            "pct_atual":       round(v.get("pct_rateio", 0) or 0, 2),
+            "saldo_kwh":       round(saldo_kwh, 1),
+            "saldo_fonte":     saldo_fonte,
+            "tp_fornecimento": tp_forn or "—",
+            "cd_kwh":          cd_kwh,
+            "parte_compensavel": round(parte_compensavel, 1),
+            "necessidade":     round(necessidade, 1),
+            "consumos":        consumos,
+            "previsao":        prev["previsao"],
+            "previsao_base":   prev["base"],
+            "media":           prev["media"],
+            "maximo":          prev["maximo"],
+            "std":             prev["std"],
+            "qtd_meses":       prev["qtd_meses"],
+            "prox_leitura_cli_br": prox_leit_cli_br,
+            "proximidade_dias":    proximidade_dias,
+        })
+        soma_previsao    += prev["previsao"]
+        soma_necessidade += necessidade
+
+    # Calcula % sugerido:
+    # 1) Se soma_necessidade > 0 — usa necessidade líquida (já considera saldo)
+    # 2) Fallback: usa previsão pura (caso todos tenham saldo suficiente)
+    base_para_sugestao = "necessidade" if soma_necessidade > 0 else "previsao"
     for c in clientes:
-        if soma_previsao > 0 and c["previsao"] > 0:
+        if base_para_sugestao == "necessidade" and soma_necessidade > 0:
+            c["pct_sugerido"] = round((c["necessidade"] / soma_necessidade) * 100, 2) if c["necessidade"] > 0 else 0.0
+        elif soma_previsao > 0 and c["previsao"] > 0:
             c["pct_sugerido"] = round((c["previsao"] / soma_previsao) * 100, 2)
         else:
             c["pct_sugerido"] = 0.0
@@ -4104,8 +4767,13 @@ def rateio_planejar(uid):
         geracao_default=round(ger_default, 1),
         clientes=clientes,
         soma_previsao=round(soma_previsao, 1),
+        soma_necessidade=round(soma_necessidade, 1),
+        base_para_sugestao=base_para_sugestao,
         soma_pct_sugerido=soma_pct_sugerido,
         soma_pct_atual=soma_pct_atual,
+        dt_proxima_leitura_br=dt_proxima_leitura_br,
+        dt_deadline_br=dt_deadline_br,
+        dias_para_deadline=dias_para_deadline,
     )
 
 
@@ -4222,7 +4890,7 @@ def rateio_dashboard(uid):
         uc   = c_tb.get("cod_uc", "")
         if uc:
             pct = v.get("pct_rateio", 0) or 0
-            uc_alt = c_tb.get("cod_uc_alternativa", "") or ""
+            uc_alt = c_tb.get("cod_uc", "") or ""
             vinculados[uc] = {
                 "nome":              c_tb.get("desc_nome", uc),
                 "rateio_pct":        round(pct, 2),
@@ -4235,7 +4903,7 @@ def rateio_dashboard(uid):
 
     # Nao vinculados — legado para compatibilidade com form /vincular
     clientes_leg  = carregar_clientes()
-    _uc_alt_map = {c["cod_uc"]: _fmt_uc15(c.get("cod_uc_alternativa") or "") for c in todos_clientes}
+    _uc_alt_map = {c["cod_uc"]: _fmt_uc15(c.get("cod_uc") or "") for c in todos_clientes}
     nao_vinculados = {
         uc: {**c, "uc_display": _uc_alt_map.get(uc) or uc}
         for uc, c in clientes_leg.items()
@@ -4612,7 +5280,7 @@ def rateio_gerar_pdf(uid):
                 c_tb   = tb_cli_map.get(v.get("id_cliente")) or {}
                 pct    = v.get("pct_rateio", 0) or 0
                 uc     = c_tb.get("cod_uc", str(v.get("id_cliente", "")))
-                uc_alt = c_tb.get("cod_uc_alternativa", "") or ""
+                uc_alt = c_tb.get("cod_uc", "") or ""
                 vinculados.append((
                     uc,
                     {"nome": c_tb.get("desc_nome", ""), "rateio_pct": round(pct, 2),
@@ -4711,7 +5379,7 @@ def rateio_enviar_email(uid):
             c_tb   = tb_cli_map.get(v.get("id_cliente")) or {}
             pct    = v.get("pct_rateio", 0) or 0
             uc     = c_tb.get("cod_uc", str(v.get("id_cliente", "")))
-            uc_alt = c_tb.get("cod_uc_alternativa", "") or ""
+            uc_alt = c_tb.get("cod_uc", "") or ""
             vinculados.append((uc, {"nome": c_tb.get("desc_nome", ""), "rateio_pct": round(pct, 2),
                                     "uc_display": _fmt_uc15(uc_alt) if uc_alt else uc}))
         vinculados.sort(key=lambda x: -(x[1].get("rateio_pct", 0) or 0))
@@ -4988,9 +5656,11 @@ if __name__ == "__main__":
     else:
         logger.warning("✗ Aviso: Token Supabase nao encontrado no .env")
 
+    import os as _os
+    _port = int(_os.environ.get("PORT", "5001"))
     logger.info("=" * 50)
-    logger.info("SOLEV — Sistema de Cobranca v2")
-    logger.info("http://localhost:5000")
+    logger.info("SOLEV — Sistema de Cobranca")
+    logger.info(f"http://localhost:{_port}")
     logger.info("=" * 50)
     logger.info("Servidor Flask iniciando...")
-    app.run(debug=False, port=5000, threaded=True)
+    app.run(debug=False, port=_port, threaded=True)
