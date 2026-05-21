@@ -884,6 +884,7 @@ def clientes_lista():
 
     page  = max(1, int(request.args.get("page", 1)))
     busca = request.args.get("q", "").strip()
+    filtro_usina = request.args.get("filtro_usina", "").strip()
     try:
         per_page = int(request.args.get("per_page", _PER_PAGE_CLIENTES_DEF))
         if per_page not in _PER_PAGE_CLIENTES_OPTS:
@@ -916,10 +917,17 @@ def clientes_lista():
         st = c.get("STATUS")
         c["status"] = True if st is None else bool(st)
 
+    # Filtrar por usina se especificado
+    if filtro_usina:
+        if filtro_usina == "__sem__":
+            clientes = [c for c in clientes if not c["_usinas"]]
+        else:
+            clientes = [c for c in clientes if any(u["id_usina"] == int(filtro_usina) for u in c["_usinas"])]
+
     return render_template("clientes.html",
         clientes=clientes, usinas=usinas,
         page=page, total_pages=total_pages, total=total,
-        busca=busca, per_page=per_page,
+        busca=busca, filtro_usina=filtro_usina, per_page=per_page,
         per_page_opts=_PER_PAGE_CLIENTES_OPTS,
         fmt=_fmt_brl)
 
@@ -1462,7 +1470,9 @@ def api_extrair_fatura_equatorial():
 
         return jsonify(dados)
     except Exception as e:
-        app.logger.warning(f"[api_extrair_fatura] Falha: {e}")
+        import traceback
+        app.logger.error(f"[api_extrair_fatura] Falha: {e}")
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"erro": f"Falha na extracao: {e}"}), 500
     finally:
         try: os.unlink(tmp.name)
@@ -2722,11 +2732,32 @@ def enviar_whatsapp_pix(id_fatura):
     except Exception as _e:
         app.logger.warning(f"[whatsapp-pix] Falha ao buscar telefone: {_e}")
 
-    # Chave PIX temporaria — trocar quando tiver PIX definitivo no cadastro
-    PIX_CHAVE_TEMP = "f6189239-d8ae-4edb-9d62-99299de54fc3"
+    # Buscar chave PIX dinamicamente do banco por usina
+    pix_chave = "f6189239-d8ae-4edb-9d62-99299de54fc3"  # fallback padrão
+    try:
+        from db import tb_get_pix_da_usina
+        id_cliente = item.get("id_cliente")
+        if id_cliente:
+            # Buscar primeira usina ativa do cliente
+            from db import _db as _get_db
+            vinc_rows = _get_db().select(
+                "tb_cliente_usina",
+                columns="id_usina",
+                filtros={"id_cliente": id_cliente},
+                raw_params={"dt_fim": "is.null"},
+                limit=1
+            )
+            if vinc_rows:
+                id_usina = vinc_rows[0].get("id_usina")
+                pix_data = tb_get_pix_da_usina(id_usina)
+                if pix_data and pix_data.get("desc_pix"):
+                    pix_chave = pix_data["desc_pix"]
+                    app.logger.info(f"[whatsapp-pix] Usina {id_usina} PIX: {pix_chave[:4]}...")
+    except Exception as _e:
+        app.logger.warning(f"[whatsapp-pix] Falha ao buscar PIX da usina: {_e}")
 
     # Mensagem com APENAS a chave PIX — long-press > Copy copia exatamente isto
-    msg_quoted = urllib.parse.quote(PIX_CHAVE_TEMP, safe="", encoding="utf-8")
+    msg_quoted = urllib.parse.quote(pix_chave, safe="", encoding="utf-8")
     if telefone_digits:
         url = f"https://wa.me/{telefone_digits}?text={msg_quoted}"
     else:
@@ -3225,9 +3256,13 @@ def usina_nova():
                     id_titular = titular_salvo.get("id_titular")
 
             # Usina
+            # cod_uc_geradora: constraint tb_usinas_uc_15_digito exige exatos 15 dígitos sem formatação
+            import re as _re_uc
+            _uc_raw = request.form.get("cod_uc_geradora", "").strip()
+            _uc_digitos = _re_uc.sub(r"\D", "", _uc_raw)
             usina_dados = {
                 "desc_nome": request.form.get("desc_nome", "").strip(),
-                "cod_uc_geradora": request.form.get("cod_uc_geradora", "").strip(),
+                "cod_uc_geradora": _uc_digitos,
                 "desc_classe": request.form.get("desc_classe", "").strip() or None,
                 "qtd_potencia_kwp": float(request.form.get("qtd_potencia_kwp", "0").replace(",", ".") or "0"),
                 "desc_modulos_tipo": request.form.get("desc_modulos_tipo", "").strip(),
@@ -3363,10 +3398,14 @@ def usina_editar(id_usina):
                     id_titular = titular_salvo.get("id_titular")
 
             # Usina
+            # cod_uc_geradora: constraint tb_usinas_uc_15_digito exige exatos 15 dígitos sem formatação
+            import re as _re_uc
+            _uc_raw = request.form.get("cod_uc_geradora", "").strip()
+            _uc_digitos = _re_uc.sub(r"\D", "", _uc_raw)
             usina_dados = {
                 "id_usina": id_usina,
                 "desc_nome": request.form.get("desc_nome", "").strip(),
-                "cod_uc_geradora": request.form.get("cod_uc_geradora", "").strip(),
+                "cod_uc_geradora": _uc_digitos,
                 "desc_classe": request.form.get("desc_classe", "").strip() or None,
                 "qtd_potencia_kwp": float(request.form.get("qtd_potencia_kwp", "0").replace(",", ".") or "0"),
                 "desc_modulos_tipo": request.form.get("desc_modulos_tipo", "").strip(),
@@ -3866,6 +3905,14 @@ def registrar_geracao_mensal(uid):
 
         # Salva proxima leitura e saldo — legado e nova tabela
         _prox_ext = extraido.get("proxima_leitura", "")
+        _prox_ext_iso = None
+        if _prox_ext:
+            # Converte para ISO se vem em DD/MM/YYYY do PDF
+            try:
+                _prox_ext_iso = _data_br_para_iso(_prox_ext)
+            except Exception:
+                _prox_ext_iso = _prox_ext  # fallback: tenta usar como esta
+
         if uid in usinas:
             if _prox_ext:
                 usinas[uid]["proxima_leitura"] = _prox_ext
@@ -3883,8 +3930,8 @@ def registrar_geracao_mensal(uid):
                 except: pass
             if _tb_u:
                 _upd = {"id_usina": _tb_u["id_usina"], "qtd_saldo_kwh": saldo_kwh}
-                if _prox_ext:
-                    _upd["dt_proxima_leitura"] = _prox_ext
+                if _prox_ext_iso:
+                    _upd["dt_proxima_leitura"] = _prox_ext_iso
                 tb_save_usina(_upd)
         except Exception as _e:
             app.logger.warning(f"[geracao_mensal] Falha ao salvar tb_usinas: {_e}")
@@ -5663,4 +5710,4 @@ if __name__ == "__main__":
     logger.info(f"http://localhost:{_port}")
     logger.info("=" * 50)
     logger.info("Servidor Flask iniciando...")
-    app.run(debug=False, port=_port, threaded=True)
+    app.run(debug=False, host='0.0.0.0', port=_port, threaded=True)
