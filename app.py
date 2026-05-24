@@ -59,6 +59,12 @@ app = Flask(__name__)
 app.secret_key = "contalev-2026-secret"
 app.config["TEMPLATES_AUTO_RELOAD"] = True   # recarrega templates sem reiniciar
 
+# Atrás de proxy (Railway, Nginx, Cloudflare): respeita X-Forwarded-Proto/Host
+# para que url_for(_external=True) gere URLs HTTPS corretas (não HTTP).
+# Sem isso, og:image vira http:// e WhatsApp/Telegram bloqueiam o preview.
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
 from routes.tarifas import bp as bp_tarifas
 from routes.recebedores import bp as bp_recebedores
 from routes.donos import bp as bp_donos
