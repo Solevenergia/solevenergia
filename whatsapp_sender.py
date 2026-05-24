@@ -12,9 +12,17 @@ from datetime import datetime
 
 
 # ─── CONFIGURACAO ───────────────────────────────────────────────────────────
-EVOLUTION_API_URL = "http://localhost:8080"   # URL da sua Evolution API
-EVOLUTION_API_KEY = "SUA_API_KEY_AQUI"        # API Key configurada
-INSTANCE_NAME    = "contalev"                  # Nome da instancia no Evolution
+# Credenciais lidas de variaveis de ambiente (.env local ou Railway em prod).
+# Fallback para defaults antigos so para nao quebrar imports em ambientes sem .env.
+EVOLUTION_API_URL = os.environ.get("EVOLUTION_API_URL", "http://localhost:8080").rstrip("/")
+EVOLUTION_API_KEY = os.environ.get("EVOLUTION_API_KEY", "")
+INSTANCE_NAME     = os.environ.get("EVOLUTION_INSTANCE", "solev")
+
+
+def evolution_configurada() -> bool:
+    """True se as 3 credenciais minimas estao no ambiente.
+    Use antes de tentar enviar pra dar erro amigavel se faltar config."""
+    return bool(EVOLUTION_API_URL) and bool(EVOLUTION_API_KEY) and "AQUI" not in EVOLUTION_API_KEY
 
 
 # ─── HEADERS PADRAO ─────────────────────────────────────────────────────────

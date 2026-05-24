@@ -32,6 +32,10 @@ __pycache__/
 .env
 .claude/settings.local.json
 .env
+logs_screenshots/
+logs_download/
+teste_*.log
+qr_solev.png
 
 # Planilhas privadas (dados de clientes)
 ClientesSolevenergia.xlsx
