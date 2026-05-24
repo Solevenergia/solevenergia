@@ -124,6 +124,11 @@ class Fatura:
     # Rateio — percentual deste consumidor na(s) geradora(s)
     rateio: List[RateioItem] = field(default_factory=list)
 
+    # Lista detalhada de usinas geradoras que contribuiram com kWh nesta UC.
+    # Cada item: {"uc": str, "geracao_kwh": float, "excedente_kwh": float}
+    # Cliente pode receber credito de N usinas; campos escalares acima sao SOMAS.
+    usinas_geradoras: List[dict] = field(default_factory=list)
+
     # Historico 12 meses
     historico_meses: List[HistoricoMes] = field(default_factory=list)
 

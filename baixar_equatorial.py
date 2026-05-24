@@ -1201,6 +1201,7 @@ def gerar_cobranca_cliente(
                 scee_credito_kwh=equatorial.get("credito_recebido_kwh", 0) or 0,
                 scee_saldo_exp_30d_kwh=equatorial.get("saldo_expirar_30d_kwh", 0) or 0,
                 scee_saldo_exp_60d_kwh=equatorial.get("saldo_expirar_60d_kwh", 0) or 0,
+                usinas_geradoras=equatorial.get("usinas_geradoras", []) or [],
             )
             print(f"  📋 Historico registrado: {cliente['nome']} — {equatorial.get('mes_referencia', '')}")
         except Exception as e:

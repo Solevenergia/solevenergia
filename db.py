@@ -1549,6 +1549,7 @@ def inserir_fatura(
     scee_credito_kwh:       float = 0,    # crédito recebido
     scee_saldo_exp_30d_kwh: float = 0,    # saldo a expirar em 30 dias
     scee_saldo_exp_60d_kwh: float = 0,    # saldo a expirar em 60 dias
+    usinas_geradoras:       list = None,  # NOVO — lista de {uc, geracao_kwh, excedente_kwh}
 ) -> None:
     """Insere ou ATUALIZA uma fatura em tb_faturas.
 
@@ -1628,6 +1629,7 @@ def inserir_fatura(
             scee_credito_kwh=scee_credito_kwh,
             scee_saldo_exp_30d_kwh=scee_saldo_exp_30d_kwh,
             scee_saldo_exp_60d_kwh=scee_saldo_exp_60d_kwh,
+            usinas_geradoras=usinas_geradoras,
         )
     except Exception as e:
         print(f"  [DB] ERRO ao inserir em tb_faturas: {e}")
@@ -1713,6 +1715,7 @@ def _upsert_tb_faturas(
     scee_credito_kwh:       float = 0,
     scee_saldo_exp_30d_kwh: float = 0,
     scee_saldo_exp_60d_kwh: float = 0,
+    usinas_geradoras:       list = None,
 ) -> None:
     """Faz upsert em tb_faturas a partir dos mesmos dados que vao para historico.
 
@@ -1793,6 +1796,9 @@ def _upsert_tb_faturas(
         "qtd_credito_kwh":          round(float(scee_credito_kwh or 0), 2),
         "qtd_saldo_exp_30d_kwh":    round(float(scee_saldo_exp_30d_kwh or 0), 2),
         "qtd_saldo_exp_60d_kwh":    round(float(scee_saldo_exp_60d_kwh or 0), 2),
+
+        # Lista detalhada de usinas geradoras (multi-usina por UC)
+        "usinas_geradoras":   usinas_geradoras or [],
 
         "dt_geracao":          _dt.now().strftime("%Y-%m-%d %H:%M:%S"),
         "status":              status_enum,

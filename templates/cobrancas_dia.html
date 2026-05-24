@@ -156,35 +156,57 @@
             <span><i class="bi bi-info-circle me-1"></i>Esses valores alimentam o rateio. Não recalculam o PDF da cobrança.</span>
           </div>
 
-          <!-- BLOCO 1 — Usina Geradora -->
+          <!-- BLOCO 1 — Usinas Geradoras (suporta múltiplas) -->
           <div class="p-3 rounded mb-3" style="background:rgba(25,135,84,.06); border:1px solid rgba(25,135,84,.18)">
-            <div class="mb-2 fw-bold text-uppercase text-success" style="font-size:11px; letter-spacing:.8px">
-              <i class="bi bi-lightning-charge-fill me-1"></i>Usina Geradora
-            </div>
-            <div class="row g-2">
-              <div class="col-md-4">
-                <label class="form-label small mb-1">UC da Usina</label>
-                <input type="text" name="cod_uc_usina" class="form-control form-control-sm font-monospace" placeholder="000435543201270">
+            <div class="mb-2 d-flex justify-content-between align-items-center">
+              <div class="fw-bold text-uppercase text-success" style="font-size:11px; letter-spacing:.8px">
+                <i class="bi bi-lightning-charge-fill me-1"></i>Usinas Geradoras
+                <span id="sceeUsinasCount" class="badge bg-success ms-1" style="font-size:9px">0</span>
               </div>
-              <div class="col-md-2">
-                <label class="form-label small mb-1">Ciclo de Geração</label>
-                <input type="text" name="desc_ciclo_geracao" class="form-control form-control-sm text-center" placeholder="MM/AAAA" maxlength="7">
-              </div>
-              <div class="col-md-2">
-                <label class="form-label small mb-1">Rateio desta UC</label>
-                <div class="input-group input-group-sm">
-                  <input type="text" name="pct_rateio_scee" class="form-control text-center" placeholder="3,00">
-                  <span class="input-group-text">%</span>
+              <div class="d-flex gap-2 align-items-center">
+                <div class="input-group input-group-sm" style="width:120px">
+                  <span class="input-group-text" style="font-size:10px">Ciclo</span>
+                  <input type="text" name="desc_ciclo_geracao" class="form-control form-control-sm text-center" placeholder="MM/AAAA" maxlength="7">
                 </div>
-              </div>
-              <div class="col-md-4">
-                <label class="form-label small mb-1"><i class="bi bi-lightning-fill me-1 text-success"></i>Geração total da usina</label>
-                <div class="input-group input-group-sm">
-                  <input type="text" name="qtd_geracao_usina_kwh" class="form-control text-end fw-bold" style="color:#198754" placeholder="14.143,00">
-                  <span class="input-group-text" style="font-size:10px">kWh</span>
-                </div>
+                <button type="button" class="btn btn-sm btn-outline-success" id="sceeAddUsina">
+                  <i class="bi bi-plus-lg"></i> Adicionar
+                </button>
               </div>
             </div>
+
+            <!-- Tabela dinâmica de usinas -->
+            <div class="table-responsive">
+              <table class="table table-sm mb-0" style="font-size:12px">
+                <thead style="background:rgba(25,135,84,.10)">
+                  <tr>
+                    <th style="width:42%">UC da Usina</th>
+                    <th class="text-end" style="width:24%"><i class="bi bi-lightning-fill text-success"></i> Geração (kWh)</th>
+                    <th class="text-end" style="width:24%">Excedente recebido (kWh)</th>
+                    <th style="width:40px"></th>
+                  </tr>
+                </thead>
+                <tbody id="sceeUsinasLista">
+                  <!-- linhas inseridas via JS -->
+                </tbody>
+                <tfoot>
+                  <tr style="background:rgba(25,135,84,.04); font-weight:600">
+                    <td class="text-end pe-2"><small class="text-muted">TOTAL</small></td>
+                    <td class="text-end" id="sceeUsinasTotalGer" style="color:#198754">0,00</td>
+                    <td class="text-end" id="sceeUsinasTotalExc" style="color:#198754">0,00</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <small class="text-muted mt-1 d-block" style="font-size:10px">
+              <i class="bi bi-info-circle"></i>
+              UC principal (cod_uc_usina): a com maior geração. Os totais são recalculados ao salvar.
+            </small>
+
+            <!-- Hidden fields legacy (preenchidos automaticamente ao salvar) -->
+            <input type="hidden" name="cod_uc_usina">
+            <input type="hidden" name="pct_rateio_scee">
+            <input type="hidden" name="qtd_geracao_usina_kwh">
           </div>
 
           <!-- BLOCO 2 — Compensação desta UC -->
@@ -306,6 +328,46 @@
         else { msg.textContent = `Δ ${dif.toFixed(2)} kWh`; msg.style.color = '#dc3545'; }
     }
 
+    // ── Tabela dinâmica de usinas geradoras ──
+    const tbodyUsinas = document.getElementById('sceeUsinasLista');
+    const countBadge  = document.getElementById('sceeUsinasCount');
+    const totalGerEl  = document.getElementById('sceeUsinasTotalGer');
+    const totalExcEl  = document.getElementById('sceeUsinasTotalExc');
+
+    function _toNum(s) {
+        if (s === null || s === undefined) return 0;
+        const v = String(s).trim().replace(/\./g,'').replace(',', '.');
+        const n = parseFloat(v);
+        return isNaN(n) ? 0 : n;
+    }
+    function recalcTotaisUsinas() {
+        let g = 0, e = 0, n = 0;
+        tbodyUsinas.querySelectorAll('tr').forEach(tr => {
+            const uc = tr.querySelector('input[name="usina_uc[]"]')?.value.trim();
+            if (!uc) return;
+            n++;
+            g += _toNum(tr.querySelector('input[name="usina_ger[]"]')?.value);
+            e += _toNum(tr.querySelector('input[name="usina_exc[]"]')?.value);
+        });
+        countBadge.textContent = n;
+        totalGerEl.textContent = fmtNum(g);
+        totalExcEl.textContent = fmtNum(e);
+    }
+    function addUsinaRow(uc, ger, exc) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="text" name="usina_uc[]" class="form-control form-control-sm font-monospace" placeholder="000XXXXXXXXXXXX" value="${(uc||'').toString().replace(/"/g,'&quot;')}"></td>
+          <td><input type="text" name="usina_ger[]" class="form-control form-control-sm text-end" placeholder="0,00" value="${ger ? fmtNum(ger) : ''}"></td>
+          <td><input type="text" name="usina_exc[]" class="form-control form-control-sm text-end" placeholder="0,00" value="${exc ? fmtNum(exc) : ''}"></td>
+          <td class="text-center"><button type="button" class="btn btn-sm btn-link text-danger p-0 btn-rm-usina" title="Remover">
+            <i class="bi bi-x-lg"></i></button></td>`;
+        tbodyUsinas.appendChild(tr);
+        tr.querySelector('.btn-rm-usina').addEventListener('click', () => { tr.remove(); recalcTotaisUsinas(); });
+        tr.querySelectorAll('input').forEach(el => el.addEventListener('input', recalcTotaisUsinas));
+        recalcTotaisUsinas();
+    }
+    document.getElementById('sceeAddUsina')?.addEventListener('click', () => addUsinaRow('', '', ''));
+
     document.querySelectorAll('.btn-scee').forEach(btn => {
         btn.addEventListener('click', async function() {
             idFaturaAtual = this.dataset.idFatura;
@@ -315,21 +377,33 @@
             aviso.style.display = 'none';
             // Limpa form
             Array.from(formScee.elements).forEach(el => { if (el.name) el.value = ''; });
+            tbodyUsinas.innerHTML = '';
+            recalcTotaisUsinas();
             modal.show();
             // Busca dados
             try {
                 const r = await fetch(`/cobrancas/dia/scee/${idFaturaAtual}`);
                 if (!r.ok) throw new Error('Erro ao buscar SCEE');
                 const d = await r.json();
-                formScee.cod_uc_usina.value         = d.cod_uc_usina || '';
                 formScee.desc_ciclo_geracao.value   = d.desc_ciclo_geracao || '';
-                formScee.pct_rateio_scee.value      = fmtNum(d.pct_rateio_scee);
-                formScee.qtd_geracao_usina_kwh.value= fmtNum(d.qtd_geracao_usina_kwh);
                 formScee.qtd_excedente_kwh.value    = fmtNum(d.qtd_excedente_kwh);
                 formScee.qtd_credito_kwh.value      = fmtNum(d.qtd_credito_kwh);
                 formScee.qtd_saldo_kwh.value        = fmtNum(d.qtd_saldo_kwh);
                 formScee.qtd_saldo_exp_30d_kwh.value= fmtNum(d.qtd_saldo_exp_30d_kwh);
                 formScee.qtd_saldo_exp_60d_kwh.value= fmtNum(d.qtd_saldo_exp_60d_kwh);
+                // Hidden legacy
+                formScee.cod_uc_usina.value          = d.cod_uc_usina || '';
+                formScee.pct_rateio_scee.value       = d.pct_rateio_scee || '';
+                formScee.qtd_geracao_usina_kwh.value = d.qtd_geracao_usina_kwh || '';
+                // Popula tabela de usinas
+                const lista = Array.isArray(d.usinas_geradoras) ? d.usinas_geradoras : [];
+                if (lista.length === 0 && d.cod_uc_usina) {
+                    // Fallback: fatura antiga sem JSON — usa o escalar como 1 usina
+                    addUsinaRow(d.cod_uc_usina, d.qtd_geracao_usina_kwh, d.qtd_excedente_kwh);
+                } else {
+                    lista.forEach(u => addUsinaRow(u.uc, u.geracao_kwh, u.excedente_kwh));
+                }
+                if (tbodyUsinas.children.length === 0) addUsinaRow('', '', '');
                 preencheCheckVerificacao();
             } catch (e) {
                 aviso.textContent = 'Erro ao carregar dados: ' + e.message;

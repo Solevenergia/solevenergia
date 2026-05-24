@@ -1595,6 +1595,12 @@ def cobrancas_dia_scee(id_fatura):
         if not rows:
             return {"erro": "Fatura nao encontrada"}, 404
         f = rows[0]
+        # usinas_geradoras pode vir como string JSON ou lista (depende do driver)
+        ug = f.get("usinas_geradoras") or []
+        if isinstance(ug, str):
+            import json as _json
+            try: ug = _json.loads(ug)
+            except Exception: ug = []
         return {
             "id_fatura":              id_fatura,
             "id_cliente":             f.get("id_cliente"),
@@ -1609,6 +1615,7 @@ def cobrancas_dia_scee(id_fatura):
             "qtd_saldo_kwh":         f.get("qtd_saldo_kwh") or 0,
             "qtd_saldo_exp_30d_kwh": f.get("qtd_saldo_exp_30d_kwh") or 0,
             "qtd_saldo_exp_60d_kwh": f.get("qtd_saldo_exp_60d_kwh") or 0,
+            "usinas_geradoras":      ug,
         }
     # POST: atualiza os campos SCEE
     def _f(name):
@@ -1617,6 +1624,27 @@ def cobrancas_dia_scee(id_fatura):
             return float(v) if v else 0
         except ValueError:
             return 0
+
+    def _num_str(s):
+        s = (s or "").strip().replace(".", "").replace(",", ".")
+        try:    return float(s) if s else 0.0
+        except: return 0.0
+
+    # Lista de usinas geradoras vinda como arrays paralelos (uc[], ger[], exc[])
+    ucs_list  = request.form.getlist("usina_uc[]")
+    gers_list = request.form.getlist("usina_ger[]")
+    excs_list = request.form.getlist("usina_exc[]")
+    usinas_lista = []
+    soma_ger = soma_exc = 0.0
+    for i, uc in enumerate(ucs_list):
+        uc_clean = (uc or "").strip()
+        if not uc_clean:
+            continue  # ignora linhas com UC em branco
+        ger = _num_str(gers_list[i]) if i < len(gers_list) else 0.0
+        exc = _num_str(excs_list[i]) if i < len(excs_list) else 0.0
+        usinas_lista.append({"uc": uc_clean, "geracao_kwh": ger, "excedente_kwh": exc})
+        soma_ger += ger; soma_exc += exc
+
     dados = {
         "cod_uc_usina":          (request.form.get("cod_uc_usina") or "").strip() or None,
         "desc_ciclo_geracao":   (request.form.get("desc_ciclo_geracao") or "").strip() or None,
@@ -1628,9 +1656,17 @@ def cobrancas_dia_scee(id_fatura):
         "qtd_saldo_exp_30d_kwh":_f("qtd_saldo_exp_30d_kwh"),
         "qtd_saldo_exp_60d_kwh":_f("qtd_saldo_exp_60d_kwh"),
     }
+    # Se enviou lista de usinas, grava + sobrescreve somas (qtd_geracao_usina_kwh, qtd_excedente_kwh)
+    # e UC principal = a com maior geração
+    if usinas_lista:
+        dados["usinas_geradoras"]      = usinas_lista
+        dados["qtd_geracao_usina_kwh"] = round(soma_ger, 2)
+        dados["qtd_excedente_kwh"]     = round(soma_exc, 2)
+        principal = max(usinas_lista, key=lambda u: u.get("geracao_kwh", 0))
+        dados["cod_uc_usina"] = principal["uc"]
     try:
         _db().patch("tb_faturas", {"id_fatura": id_fatura}, dados)
-        return {"ok": True, "msg": "Campos SCEE salvos."}
+        return {"ok": True, "msg": f"Salvo. {len(usinas_lista)} usina(s) geradora(s)." if usinas_lista else "Salvo."}
     except Exception as e:
         logger.error(f"[COBRANCAS_DIA_SCEE] Erro salvando fatura {id_fatura}: {e}")
         return {"erro": str(e)}, 500
