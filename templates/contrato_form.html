@@ -246,10 +246,14 @@
   </div>
 
   <!-- ── SUBMIT ─────────────────────────────────────────── -->
+  <input type="hidden" name="uc_cliente" value="{{ uc_cliente or '' }}">
   <div class="col-12 d-flex justify-content-end gap-3 pb-4">
-    <a href="/clientes" class="btn btn-outline-secondary px-4">Cancelar</a>
-    <button type="submit" class="btn btn-cta px-5">
-      <i class="bi bi-file-earmark-pdf-fill me-2"></i>Gerar Contrato
+    <a href="{{ '/clientes/ver/' + uc_cliente if uc_cliente else '/clientes' }}" class="btn btn-outline-secondary px-4">Cancelar</a>
+    <button type="submit" class="btn btn-cta px-5" formaction="/contrato/visualizar" formtarget="_blank">
+      <i class="bi bi-eye me-2"></i>Visualizar
+    </button>
+    <button type="submit" class="btn btn-success px-5" formaction="/contrato/gerar_pdf">
+      <i class="bi bi-save me-2"></i>Salvar PDF no Sistema
     </button>
   </div>
 

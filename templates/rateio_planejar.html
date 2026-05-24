@@ -196,12 +196,24 @@
                         </th>
                         <th class="text-end" style="font-size:11px">Δ</th>
                         <th class="text-center" style="font-size:11px; min-width:130px">Novo % rateio</th>
+                        <th class="text-end" style="font-size:11px; background:rgba(13,110,253,.06)">
+                            Alocado (kWh)
+                            <i class="bi bi-question-circle text-muted ms-1"
+                               title="% digitado × geração prevista. Atualiza em tempo real conforme você ajusta o %."
+                               style="cursor:help"></i>
+                        </th>
+                        <th class="text-end" style="font-size:11px; background:rgba(13,110,253,.06)">
+                            Saldo pós-ciclo
+                            <i class="bi bi-question-circle text-muted ms-1"
+                               title="Simulação: saldo atual + alocado − previsão. Verde = cliente fica com crédito; Vermelho = ainda terá débito."
+                               style="cursor:help"></i>
+                        </th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for c in clientes %}
                     {% set delta = c.pct_sugerido - c.pct_atual %}
-                    <tr>
+                    <tr data-saldo="{{ c.saldo_kwh }}" data-previsao="{{ c.previsao }}">
                         <td>
                             <strong>{{ c.nome[:28] }}</strong>
                             <br><code style="font-size:10px">{{ c.uc_display }}</code>
@@ -282,6 +294,8 @@
                                 <span class="input-group-text">%</span>
                             </div>
                         </td>
+                        <td class="text-end td-alocado" style="background:rgba(13,110,253,.04); font-weight:600; color:#0d6efd">—</td>
+                        <td class="text-end td-saldo-pos" style="background:rgba(13,110,253,.04)">—</td>
                     </tr>
                     {% else %}
                     <tr>
@@ -295,6 +309,28 @@
             </table>
             </div>
             {% if clientes %}
+            {# ── Barra de simulação ── #}
+            <div class="px-3 py-2" style="background:rgba(13,110,253,.06); border-top:1px solid rgba(13,110,253,.15); font-size:12px">
+                <div class="row g-2 align-items-center">
+                    <div class="col-auto text-muted fw-bold">
+                        <i class="bi bi-lightning-charge-fill text-primary me-1"></i>Simulação:
+                    </div>
+                    <div class="col-auto">
+                        Geração prevista: <strong>{{ "{:,.0f}".format(geracao_prevista).replace(",","X").replace(".",",").replace("X",".") }} kWh</strong>
+                    </div>
+                    <div class="col-auto">
+                        Total alocado: <strong id="sim_total_alocado" class="text-primary">0 kWh</strong>
+                    </div>
+                    <div class="col-auto">
+                        Sobra/Falta: <strong id="sim_sobra" class="text-muted">—</strong>
+                    </div>
+                    <div class="col-auto ms-auto text-muted" style="font-size:11px">
+                        <i class="bi bi-circle-fill me-1" style="color:#198754;font-size:8px"></i>crédito
+                        <i class="bi bi-circle-fill ms-2 me-1" style="color:#dc3545;font-size:8px"></i>débito
+                        <i class="bi bi-circle-fill ms-2 me-1" style="color:#6c757d;font-size:8px"></i>neutro
+                    </div>
+                </div>
+            </div>
             <div class="card-footer d-flex gap-2 justify-content-between align-items-center" style="background:#f8f9fa">
                 <button type="button" class="btn btn-outline-success btn-sm" onclick="aplicarSugestoes()">
                     <i class="bi bi-magic me-1"></i>Aplicar % sugeridos em todos
@@ -336,6 +372,12 @@
 </div>
 
 <script>
+const GERACAO_PREVISTA = {{ geracao_prevista }};
+
+function fmt(n) {
+    return n.toLocaleString('pt-BR', {maximumFractionDigits: 0});
+}
+
 function recalcSoma() {
     let soma = 0;
     document.querySelectorAll('.input-pct').forEach(el => {
@@ -356,16 +398,69 @@ function recalcSoma() {
         alerta.innerHTML = '<i class="bi bi-exclamation-circle-fill text-warning"></i> <100%';
     }
 }
-document.querySelectorAll('.input-pct').forEach(el => el.addEventListener('input', recalcSoma));
+
+function recalcSimulacao() {
+    let totalAlocado = 0;
+
+    document.querySelectorAll('tbody tr[data-saldo]').forEach(tr => {
+        const pctInput = tr.querySelector('.input-pct');
+        if (!pctInput) return;
+
+        const pct      = parseFloat(pctInput.value.replace(',', '.')) || 0;
+        const saldo    = parseFloat(tr.dataset.saldo)    || 0;
+        const previsao = parseFloat(tr.dataset.previsao) || 0;
+        const alocado  = (pct / 100) * GERACAO_PREVISTA;
+        const saldoPos = saldo + alocado - previsao;
+
+        totalAlocado += alocado;
+
+        const tdAlocado  = tr.querySelector('.td-alocado');
+        const tdSaldoPos = tr.querySelector('.td-saldo-pos');
+
+        if (tdAlocado) {
+            tdAlocado.textContent = fmt(alocado) + ' kWh';
+        }
+        if (tdSaldoPos) {
+            if (saldoPos > 1) {
+                tdSaldoPos.innerHTML = `<span style="color:#198754;font-weight:600">+${fmt(saldoPos)} kWh</span>`;
+            } else if (saldoPos < -1) {
+                tdSaldoPos.innerHTML = `<span style="color:#dc3545;font-weight:600">${fmt(saldoPos)} kWh</span>`;
+            } else {
+                tdSaldoPos.innerHTML = `<span class="text-muted">≈ 0 kWh</span>`;
+            }
+        }
+    });
+
+    const elTotal = document.getElementById('sim_total_alocado');
+    const elSobra = document.getElementById('sim_sobra');
+    if (elTotal) elTotal.textContent = fmt(totalAlocado) + ' kWh';
+    if (elSobra) {
+        const sobra = GERACAO_PREVISTA - totalAlocado;
+        if (Math.abs(sobra) < 1) {
+            elSobra.innerHTML = '<span class="text-success">≈ 0 kWh</span>';
+        } else if (sobra > 0) {
+            elSobra.innerHTML = `<span style="color:#fd7e14">+${fmt(sobra)} kWh não alocados</span>`;
+        } else {
+            elSobra.innerHTML = `<span class="text-danger">${fmt(sobra)} kWh (excede geração)</span>`;
+        }
+    }
+}
+
+function recalc() {
+    recalcSoma();
+    recalcSimulacao();
+}
+
+document.querySelectorAll('.input-pct').forEach(el => el.addEventListener('input', recalc));
 
 function aplicarSugestoes() {
     if (!confirm('Aplicar os % sugeridos em todos os clientes?')) return;
     document.querySelectorAll('.input-pct').forEach(el => {
         el.value = el.dataset.sugerido;
     });
-    recalcSoma();
+    recalc();
 }
 
-document.addEventListener('DOMContentLoaded', recalcSoma);
+document.addEventListener('DOMContentLoaded', recalc);
 </script>
 {% endblock %}

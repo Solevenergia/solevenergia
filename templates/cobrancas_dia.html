@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% block title %}Cobranças do Dia{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span> › <span class="here">Cobranças do Dia</span>{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="mb-1"><i class="bi bi-calendar-check-fill me-2" style="color:var(--orange)"></i>Cobranças do Dia</h1>
+            <p class="text-muted mb-0">Clientes com leitura prevista no intervalo selecionado (a Equatorial emite a fatura 5–10 dias depois).</p>
+        </div>
+    </div>
+
+    <!-- Filtro de datas -->
+    <div class="card mb-4">
+        <div class="card-body p-3">
+            <form method="get" action="{{ url_for('cobrancas_dia') }}" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Leitura de</label>
+                    <input type="text" name="de" class="form-control" value="{{ de_br }}"
+                           placeholder="DD/MM/AAAA" id="campo_de">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">até</label>
+                    <input type="text" name="ate" class="form-control" value="{{ ate_br }}"
+                           placeholder="DD/MM/AAAA" id="campo_ate">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-cta px-4">
+                        <i class="bi bi-funnel me-1"></i>Filtrar
+                    </button>
+                    <a href="{{ url_for('cobrancas_dia') }}" class="btn btn-outline-secondary ms-2">Reset</a>
+                </div>
+                <div class="col-md-3 text-end">
+                    <small class="text-muted">Hoje: <strong>{{ hoje_br }}</strong></small>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if clientes_lista %}
+    <form method="post" action="{{ url_for('cobrancas_dia_baixar') }}" id="formBaixar">
+        <input type="hidden" name="de"  value="{{ de_br }}">
+        <input type="hidden" name="ate" value="{{ ate_br }}">
+        <input type="hidden" name="mes_ref" id="mesRefHidden" value="">
+
+        <!-- Toolbar de açao -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <span class="badge bg-secondary me-2">{{ total }} cliente(s) no intervalo</span>
+                <span class="text-muted small">Marque as UCs e clique em Baixar para gerar as cobranças.</span>
+            </div>
+            <div>
+                <button type="submit" class="btn btn-cta">
+                    <i class="bi bi-download me-1"></i>Baixar selecionadas
+                </button>
+            </div>
+        </div>
+
+        <!-- Tabela -->
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width:40px">
+                                <input type="checkbox" id="chkTodos" class="form-check-input">
+                            </th>
+                            <th>UC</th>
+                            <th>Cliente</th>
+                            <th class="text-center">Próx. Leitura</th>
+                            <th class="text-center">Mês Cobrança</th>
+                            <th class="text-center">Status</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in clientes_lista %}
+                        <tr>
+                            <td>
+                                <input type="checkbox" name="ucs" value="{{ c.cod_uc }}"
+                                       class="form-check-input row-check"
+                                       data-mes="{{ c._mes_ref }}">
+                            </td>
+                            <td><code class="text-dark">{{ c.cod_uc }}</code></td>
+                            <td>
+                                <a href="{{ url_for('cliente_editar', uc=c.cod_uc) }}" class="text-dark text-decoration-none">
+                                    {{ c.desc_nome }}
+                                </a>
+                            </td>
+                            <td class="text-center">
+                                <div>{{ c._proxima_leitura_br }}</div>
+                                <small class="text-muted">
+                                    {% if c._dias_ate_leitura == 0 %}hoje
+                                    {% elif c._dias_ate_leitura > 0 %}em {{ c._dias_ate_leitura }}d
+                                    {% else %}há {{ -c._dias_ate_leitura }}d
+                                    {% endif %}
+                                </small>
+                            </td>
+                            <td class="text-center"><code>{{ c._mes_ref }}</code></td>
+                            <td class="text-center">
+                                <span class="badge bg-{{ c._status_color }}">
+                                    {{ c._status_icon }} {{ c._status_label }}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                {% if c._id_fatura %}
+                                <button type="button" class="btn btn-sm btn-outline-success btn-scee"
+                                        title="Conferir SCEE (rateio)"
+                                        data-id-fatura="{{ c._id_fatura }}"
+                                        data-nome="{{ c.desc_nome }}"
+                                        data-mes-ref="{{ c._mes_ref }}">
+                                    <i class="bi bi-lightning-charge-fill"></i>
+                                </button>
+                                {% endif %}
+                                {% if c._status == 'cobranca' or c._status == 'pago' or c._status == 'baixada' %}
+                                <a href="{{ url_for('cliente_ver', uc=c.cod_uc) }}" class="btn btn-sm btn-outline-secondary" title="Ver cliente">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </form>
+    {% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-calendar-x" style="font-size:3rem; color:var(--muted)"></i>
+            <p class="text-muted mt-3 mb-0">
+                Nenhum cliente com leitura prevista entre <strong>{{ de_br }}</strong> e <strong>{{ ate_br }}</strong>.
+            </p>
+            <small class="text-muted">A próxima leitura é preenchida automaticamente quando uma fatura é baixada do portal.</small>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Modal SCEE -->
+<div class="modal fade" id="modalScee" tabindex="-1" aria-labelledby="modalSceeTitle" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered">
+    <div class="modal-content">
+      <form id="formScee">
+        <div class="modal-header" style="background:rgba(25,135,84,.06); border-bottom:1px solid rgba(25,135,84,.18)">
+          <h5 class="modal-title fw-bold" id="modalSceeTitle" style="color:#198754">
+            <i class="bi bi-sun-fill me-2"></i>Compensação de Energia Solar (SCEE)
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3 small text-muted d-flex justify-content-between">
+            <span><i class="bi bi-person me-1"></i><strong id="sceeNome">—</strong> · Mês <code id="sceeMesRef">—</code></span>
+            <span><i class="bi bi-info-circle me-1"></i>Esses valores alimentam o rateio. Não recalculam o PDF da cobrança.</span>
+          </div>
+
+          <!-- BLOCO 1 — Usina Geradora -->
+          <div class="p-3 rounded mb-3" style="background:rgba(25,135,84,.06); border:1px solid rgba(25,135,84,.18)">
+            <div class="mb-2 fw-bold text-uppercase text-success" style="font-size:11px; letter-spacing:.8px">
+              <i class="bi bi-lightning-charge-fill me-1"></i>Usina Geradora
+            </div>
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label small mb-1">UC da Usina</label>
+                <input type="text" name="cod_uc_usina" class="form-control form-control-sm font-monospace" placeholder="000435543201270">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Ciclo de Geração</label>
+                <input type="text" name="desc_ciclo_geracao" class="form-control form-control-sm text-center" placeholder="MM/AAAA" maxlength="7">
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Rateio desta UC</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" name="pct_rateio_scee" class="form-control text-center" placeholder="3,00">
+                  <span class="input-group-text">%</span>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small mb-1"><i class="bi bi-lightning-fill me-1 text-success"></i>Geração total da usina</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" name="qtd_geracao_usina_kwh" class="form-control text-end fw-bold" style="color:#198754" placeholder="14.143,00">
+                  <span class="input-group-text" style="font-size:10px">kWh</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCO 2 — Compensação desta UC -->
+          <div class="p-3 rounded" style="background:rgba(13,110,253,.04); border:1px solid rgba(13,110,253,.15)">
+            <div class="mb-2 fw-bold text-uppercase text-primary" style="font-size:11px; letter-spacing:.8px">
+              <i class="bi bi-house-fill me-1"></i>Compensação desta UC
+            </div>
+            <div class="row g-2">
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Excedente Recebido</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" name="qtd_excedente_kwh" class="form-control text-end" placeholder="424,29">
+                  <span class="input-group-text" style="font-size:10px">kWh</span>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Crédito Compensado</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" name="qtd_credito_kwh" class="form-control text-end" placeholder="363,00">
+                  <span class="input-group-text" style="font-size:10px">kWh</span>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">
+                  <span class="badge bg-success" style="font-size:10px">Saldo</span> Disponível
+                </label>
+                <div class="input-group input-group-sm">
+                  <input type="text" name="qtd_saldo_kwh" class="form-control text-end fw-bold" placeholder="61,29">
+                  <span class="input-group-text" style="font-size:10px">kWh</span>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Expira em 30 dias</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" name="qtd_saldo_exp_30d_kwh" class="form-control text-end" placeholder="0,00">
+                  <span class="input-group-text" style="font-size:10px">kWh</span>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label small mb-1">Expira em 60 dias</label>
+                <div class="input-group input-group-sm">
+                  <input type="text" name="qtd_saldo_exp_60d_kwh" class="form-control text-end" placeholder="0,00">
+                  <span class="input-group-text" style="font-size:10px">kWh</span>
+                </div>
+              </div>
+              <div class="col-md-2 d-flex align-items-end">
+                <div class="w-100 p-2 rounded text-center" style="background:rgba(25,135,84,.08); border:1px dashed rgba(25,135,84,.3)">
+                  <div style="font-size:10px; color:#6c757d; text-transform:uppercase; letter-spacing:.5px">Verificação</div>
+                  <div id="sceeCheckMsg" style="font-size:11px; color:#6c757d; min-height:18px">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="sceeAviso" class="alert alert-info mt-3 mb-0 py-2 small" style="display:none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-cta"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    // Mascara DD/MM/AAAA
+    function maskData(v) {
+        const d = (v || '').replace(/\D/g, '').slice(0, 8);
+        let out = d;
+        if (d.length > 2) out = d.slice(0, 2) + '/' + d.slice(2);
+        if (d.length > 4) out = d.slice(0, 2) + '/' + d.slice(2, 4) + '/' + d.slice(4);
+        return out;
+    }
+    ['campo_de', 'campo_ate'].forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('input', function() { this.value = maskData(this.value); });
+    });
+
+    // Check-todos
+    const chkTodos = document.getElementById('chkTodos');
+    const rows = document.querySelectorAll('.row-check');
+    if (chkTodos) {
+        chkTodos.addEventListener('change', function() {
+            rows.forEach(r => r.checked = this.checked);
+        });
+    }
+
+    // ───────── MODAL SCEE ─────────
+    const modalEl = document.getElementById('modalScee');
+    const modal   = modalEl ? new bootstrap.Modal(modalEl) : null;
+    const formScee = document.getElementById('formScee');
+    let idFaturaAtual = null;
+
+    function fmtNum(v) {
+        if (v === null || v === undefined || v === '') return '';
+        const n = Number(v);
+        if (isNaN(n)) return String(v);
+        return n.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    function preencheCheckVerificacao() {
+        const exc = parseFloat((formScee.qtd_excedente_kwh.value || '0').replace(/\./g,'').replace(',', '.')) || 0;
+        const cre = parseFloat((formScee.qtd_credito_kwh.value   || '0').replace(/\./g,'').replace(',', '.')) || 0;
+        const sld = parseFloat((formScee.qtd_saldo_kwh.value     || '0').replace(/\./g,'').replace(',', '.')) || 0;
+        const msg = document.getElementById('sceeCheckMsg');
+        if (!msg) return;
+        // Saldo esperado = excedente - credito (ignora saldo anterior)
+        const esperado = exc - cre;
+        if (sld === 0 && esperado === 0) { msg.textContent = '—'; msg.style.color = '#6c757d'; return; }
+        const dif = Math.abs(sld - esperado);
+        if (dif < 1) { msg.textContent = '✓ OK'; msg.style.color = '#198754'; }
+        else { msg.textContent = `Δ ${dif.toFixed(2)} kWh`; msg.style.color = '#dc3545'; }
+    }
+
+    document.querySelectorAll('.btn-scee').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            idFaturaAtual = this.dataset.idFatura;
+            document.getElementById('sceeNome').textContent   = this.dataset.nome   || '—';
+            document.getElementById('sceeMesRef').textContent = this.dataset.mesRef || '—';
+            const aviso = document.getElementById('sceeAviso');
+            aviso.style.display = 'none';
+            // Limpa form
+            Array.from(formScee.elements).forEach(el => { if (el.name) el.value = ''; });
+            modal.show();
+            // Busca dados
+            try {
+                const r = await fetch(`/cobrancas/dia/scee/${idFaturaAtual}`);
+                if (!r.ok) throw new Error('Erro ao buscar SCEE');
+                const d = await r.json();
+                formScee.cod_uc_usina.value         = d.cod_uc_usina || '';
+                formScee.desc_ciclo_geracao.value   = d.desc_ciclo_geracao || '';
+                formScee.pct_rateio_scee.value      = fmtNum(d.pct_rateio_scee);
+                formScee.qtd_geracao_usina_kwh.value= fmtNum(d.qtd_geracao_usina_kwh);
+                formScee.qtd_excedente_kwh.value    = fmtNum(d.qtd_excedente_kwh);
+                formScee.qtd_credito_kwh.value      = fmtNum(d.qtd_credito_kwh);
+                formScee.qtd_saldo_kwh.value        = fmtNum(d.qtd_saldo_kwh);
+                formScee.qtd_saldo_exp_30d_kwh.value= fmtNum(d.qtd_saldo_exp_30d_kwh);
+                formScee.qtd_saldo_exp_60d_kwh.value= fmtNum(d.qtd_saldo_exp_60d_kwh);
+                preencheCheckVerificacao();
+            } catch (e) {
+                aviso.textContent = 'Erro ao carregar dados: ' + e.message;
+                aviso.style.display = '';
+            }
+        });
+    });
+
+    // Recalcula "Verificação" ao editar
+    if (formScee) {
+        ['qtd_excedente_kwh','qtd_credito_kwh','qtd_saldo_kwh'].forEach(n => {
+            const el = formScee.elements[n];
+            if (el) el.addEventListener('input', preencheCheckVerificacao);
+        });
+        formScee.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const aviso = document.getElementById('sceeAviso');
+            const fd = new FormData(formScee);
+            try {
+                const r = await fetch(`/cobrancas/dia/scee/${idFaturaAtual}`, {method: 'POST', body: fd});
+                const d = await r.json();
+                if (!r.ok || d.erro) throw new Error(d.erro || 'Erro ao salvar');
+                aviso.className = 'alert alert-success mt-3 mb-0 py-2 small';
+                aviso.textContent = '✓ ' + (d.msg || 'Salvo.');
+                aviso.style.display = '';
+                setTimeout(() => modal.hide(), 900);
+            } catch (e) {
+                aviso.className = 'alert alert-danger mt-3 mb-0 py-2 small';
+                aviso.textContent = 'Erro: ' + e.message;
+                aviso.style.display = '';
+            }
+        });
+    }
+
+    // Ao submeter: pega mes_ref da primeira UC marcada (assume mesmo mes pra todas)
+    const form = document.getElementById('formBaixar');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const marcadas = Array.from(rows).filter(r => r.checked);
+            if (marcadas.length === 0) {
+                e.preventDefault();
+                alert('Marque pelo menos uma UC.');
+                return;
+            }
+            // Pega mes da primeira marcada
+            const mes = marcadas[0].dataset.mes || '';
+            document.getElementById('mesRefHidden').value = mes;
+            // Confirma se mistura de meses
+            const meses = new Set(marcadas.map(r => r.dataset.mes));
+            if (meses.size > 1) {
+                if (!confirm('As UCs marcadas pertencem a meses diferentes (' +
+                             Array.from(meses).join(', ') +
+                             '). O download usará o mês ' + mes +
+                             '. Continuar?')) {
+                    e.preventDefault();
+                    return;
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

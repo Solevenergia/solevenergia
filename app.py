@@ -119,6 +119,24 @@ def _basename_filter(path):
 def _fmt_uc15_filter(v):
     return _fmt_uc15(v)
 
+@app.template_filter('data_br')
+def _data_br_filter(v):
+    """Converte data ISO (YYYY-MM-DD ou primeiros 10 chars de um timestamp ISO)
+    para formato BR (DD/MM/AAAA). Vazio/invalido → '—'."""
+    return _iso_to_br(v) or "—"
+
+
+@app.context_processor
+def _inject_helpers_portal():
+    """Helpers globais disponiveis em todos os templates."""
+    def saudacao_horario():
+        from datetime import datetime as _dt
+        h = _dt.now().hour
+        if h < 12:  return "Bom dia"
+        if h < 18:  return "Boa tarde"
+        return "Boa noite"
+    return {"saudacao_horario": saudacao_horario}
+
 _DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(_DIR, "uploads")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -498,7 +516,17 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
             difci=dados_calc.get("difci", 0),
             ecnisenta=dados_calc.get("ecnisenta", 0),
             anterior_leitura=equatorial.get("data_leitura_anterior", ""),
+            proxima_leitura=equatorial.get("proxima_leitura", ""),
             n_dias=int(equatorial.get("n_dias", 0) or 0),
+            # SCEE — dados da geração solar extraídos do PDF Equatorial
+            scee_ciclo_mes=equatorial.get("scee_ciclo_mes", "") or equatorial.get("ciclo_geracao_mes", ""),
+            scee_uc_geradora=equatorial.get("scee_uc_geradora", ""),
+            scee_pct_rateio=equatorial.get("scee_pct_rateio", 0) or 0,
+            scee_geracao_usina_kwh=equatorial.get("geracao_ciclo_kwh", 0) or 0,
+            scee_excedente_kwh=equatorial.get("excedente_recebido_kwh", 0) or 0,
+            scee_credito_kwh=equatorial.get("credito_recebido_kwh", 0) or 0,
+            scee_saldo_exp_30d_kwh=equatorial.get("saldo_expirar_30d_kwh", 0) or 0,
+            scee_saldo_exp_60d_kwh=equatorial.get("saldo_expirar_60d_kwh", 0) or 0,
         )
         msg = f"{cliente['nome']} — {_fmt_brl(dados_calc['_total_com'])} (economia: {_fmt_brl(dados_calc['_economia_mes'])})"
         return True, msg, dados_calc
@@ -701,16 +729,17 @@ def portal_cliente(token):
     # 6) Formatadores
     def _brl(v): return f"R$ {float(v or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-    # 7) Histórico do cliente (últimas 6 faturas — pelo id_cliente, não pelo token)
+    # 7) Histórico do cliente (todas as faturas, pra contar e achar primeira)
     historico = []
+    fats_cli = []
     try:
         fats_cli = _db().select(
             "tb_faturas",
             filtros={"id_cliente": cliente["id_cliente"]},
-            order="ano_referencia.desc,mes_referencia.desc",
+            order="ano_referencia.asc,mes_referencia.asc",
             columns="id_fatura,ano_referencia,mes_referencia,vlr_total_com,vlr_economia_mes,status,token_acesso",
         )
-        for f in fats_cli[:6]:
+        for f in fats_cli[-6:][::-1]:  # ultimas 6 em ordem desc
             historico.append({
                 "mes":    f"{f.get('mes_referencia',0):02d}/{f.get('ano_referencia',0)}",
                 "total":  _brl(f.get("vlr_total_com")),
@@ -722,27 +751,97 @@ def portal_cliente(token):
     except Exception as e:
         app.logger.warning(f"[portal] historico falhou: {e}")
 
+    # ── Monta dicts no formato do novo layout (handoff Claude Design) ──
+    MESES_BR = ["", "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+                "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+    MESES_BR_CAP = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+
+    # Cliente — primeiro_nome + iniciais (max 2 letras)
+    nome_full = (cliente.get("desc_nome") or "").strip()
+    nome_partes = nome_full.split()
+    primeiro_nome = nome_partes[0].title() if nome_partes else "Cliente"
+    if len(nome_partes) >= 2:
+        iniciais = (nome_partes[0][:1] + nome_partes[-1][:1]).upper()
+    elif nome_partes:
+        iniciais = nome_partes[0][:2].upper()
+    else:
+        iniciais = "??"
+
+    cliente_view = {
+        "primeiro_nome":    primeiro_nome,
+        "iniciais":         iniciais,
+        "tem_notificacao":  False,  # placeholder pra futura feature
+    }
+
+    # Fatura — separa valor em reais/centavos, formata data por extenso
+    valor_num = float(fatura.get("vlr_total_com") or 0)
+    valor_reais = f"{int(valor_num):,}".replace(",", ".")
+    valor_cents = f"{int(round((valor_num - int(valor_num)) * 100)):02d}"
+
+    mes_fat = int(fatura.get("mes_referencia") or 0)
+    ano_fat = int(fatura.get("ano_referencia") or 0)
+    mes_label = f"{MESES_BR_CAP[mes_fat]} · {ano_fat}" if 1 <= mes_fat <= 12 else f"{mes_fat:02d}/{ano_fat}"
+
+    venc_data_extenso = ""
+    if dt_venc:
+        try:
+            dt_v = datetime.strptime(str(dt_venc)[:10], "%Y-%m-%d").date()
+            venc_data_extenso = f"{dt_v.day} de {MESES_BR[dt_v.month]}"
+        except Exception:
+            venc_data_extenso = dt_venc_br
+
+    fatura_view = {
+        "mes_label":         mes_label,
+        "valor_reais":       valor_reais,
+        "valor_centavos":    valor_cents,
+        "vencimento_data":   venc_data_extenso or dt_venc_br,
+        "vencimento_dias":   dias_p_vencimento if dias_p_vencimento is not None else 0,
+        "pix_payload":       pix_chave,  # idealmente um BR Code completo; cai pra chave bruta
+        "pix_nome":          pix_nome,
+        "pix_chave_display": pix_chave_display,
+        "pdf_url":           pdf_signed_url,
+        "codigo_barras":     "",  # nao temos linha digitavel ainda em tb_faturas
+        "venc_br":           dt_venc_br,
+        "venc_status":       venc_status,
+        "status":            status,
+    }
+
+    # Economia — total acumulado + data da primeira fatura + contagem
+    qtd_faturas = len(fats_cli)
+    desde_data = ""
+    if fats_cli:
+        primeira = fats_cli[0]
+        m0 = int(primeira.get("mes_referencia") or 0)
+        a0 = int(primeira.get("ano_referencia") or 0)
+        if 1 <= m0 <= 12 and a0:
+            desde_data = f"{MESES_BR[m0]} de {a0}"
+
+    eco_acum_num = float(fatura.get("vlr_economia_acum") or 0)
+    eco_acum_reais = f"{int(eco_acum_num):,}".replace(",", ".")
+    eco_acum_cents = f"{int(round((eco_acum_num - int(eco_acum_num)) * 100)):02d}"
+
+    eco_mes_num = float(fatura.get("vlr_economia_mes") or 0)
+    eco_mes_fmt = f"{eco_mes_num:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    economia_view = {
+        "acumulada_reais":  eco_acum_reais,
+        "acumulada_cents":  eco_acum_cents,
+        "desde_data":       desde_data or "—",
+        "qtd_faturas":      qtd_faturas,
+        "mes_valor":        eco_mes_fmt,
+    }
+
     return render_template("portal_cliente.html",
-        # Cliente
-        nome_cliente=cliente.get("desc_nome", ""),
-        apelido=cliente.get("desc_apelido", ""),
-        # Fatura
-        mes_ref=f"{fatura.get('mes_referencia',0):02d}/{fatura.get('ano_referencia',0)}",
-        valor_total=_brl(fatura.get("vlr_total_com")),
-        valor_total_num=float(fatura.get("vlr_total_com") or 0),
-        economia_mes=_brl(fatura.get("vlr_economia_mes")),
-        economia_acum=_brl(fatura.get("vlr_economia_acum")),
+        # Novos dicts (formato handoff Claude Design)
+        cliente=cliente_view,
+        fatura=fatura_view,
+        economia=economia_view,
+        # Mantém compatibilidade com OG meta tags (variaveis antigas)
+        nome_cliente=nome_full,
+        valor_total=_brl(valor_num),
         venc_br=dt_venc_br,
-        dias_p_vencimento=dias_p_vencimento,
-        venc_status=venc_status,
-        status=status,
-        # PIX
-        pix_chave=pix_chave,
-        pix_nome=pix_nome,
-        pix_chave_display=pix_chave_display,
-        # PDF
-        pdf_signed_url=pdf_signed_url,
-        # Histórico
+        # Histórico (pra futuras telas, nao usado no layout principal)
         historico=historico,
     )
 
@@ -905,6 +1004,7 @@ def clientes_lista():
         c["_endereco"] = ", ".join(filter(None, [
             end.get("desc_logradouro", ""),
             end.get("desc_numero", ""),
+            end.get("desc_complemento", ""),
             end.get("desc_setor", ""),
             end.get("desc_cidade", ""),
         ]))
@@ -916,6 +1016,12 @@ def clientes_lista():
         # Normaliza STATUS (banco usa maiuscula) para c.status no template
         st = c.get("STATUS")
         c["status"] = True if st is None else bool(st)
+
+        # Busca data de leitura atual da fatura mais recente
+        # Nome real em tb_faturas: dt_leitura_atual (nao data_leitura_atual)
+        from db import tb_get_faturas_por_cliente
+        faturas = tb_get_faturas_por_cliente(id_c, limite=1)
+        c["_data_leitura_atual"] = faturas[0].get("dt_leitura_atual", "")[:10] if faturas and faturas[0].get("dt_leitura_atual") else None
 
     # Filtrar por usina se especificado
     if filtro_usina:
@@ -931,10 +1037,193 @@ def clientes_lista():
         per_page_opts=_PER_PAGE_CLIENTES_OPTS,
         fmt=_fmt_brl)
 
+
+@app.route("/clientes/ver/<path:uc>")
+def cliente_ver(uc):
+    from db import (tb_get_cliente_por_uc, tb_get_endereco_cliente,
+                    tb_get_usinas_do_cliente, tb_carregar_usinas,
+                    tb_get_pix_da_usina,
+                    tb_get_faturas_por_cliente)
+
+    cliente = tb_get_cliente_por_uc(uc)
+    if not cliente:
+        logger.warning(f"[CLIENTE_VER] Cliente nao encontrado para UC: {uc}")
+        flash("Cliente nao encontrado!", "danger")
+        return redirect(url_for("clientes_lista"))
+
+    id_cliente = cliente["id_cliente"]
+    endereco = tb_get_endereco_cliente(id_cliente) or {}
+    usinas = {u["id_usina"]: u for u in tb_carregar_usinas()}
+    usinas_cliente = [
+        {**usinas[v["id_usina"]], "id_usina": v["id_usina"]}
+        for v in tb_get_usinas_do_cliente(id_cliente)
+        if v["id_usina"] in usinas
+    ]
+
+    # Formata endereço completo
+    endereco_completo = ", ".join(filter(None, [
+        endereco.get("desc_logradouro", ""),
+        endereco.get("desc_numero", ""),
+        endereco.get("desc_complemento", ""),
+        endereco.get("desc_setor", ""),
+        endereco.get("desc_cidade", ""),
+        endereco.get("desc_estado", ""),
+    ]))
+
+    # Busca PIX das usinas vinculadas
+    pix_info = {}
+    for usina in usinas_cliente:
+        id_usina = usina["id_usina"]
+        pix = tb_get_pix_da_usina(id_usina)
+        if pix:
+            pix_info[id_usina] = pix
+
+    # Busca histórico de faturas (últimas 12)
+    todas_faturas = tb_get_faturas_por_cliente(id_cliente, limite=12)
+    ultima_fatura = todas_faturas[0] if todas_faturas else None
+
+    # Monta dados de consumo para o gráfico
+    consumo_historico = []
+    for fatura in reversed(todas_faturas):  # inverte para ordem cronológica
+        mes_ano = f"{fatura.get('mes_fatura', '00')}/{fatura.get('ano_fatura', '0000')}"
+        kwh = fatura.get('kwh_consumido', 0) or 0
+        consumo_historico.append({
+            'mes_ano': mes_ano,
+            'kwh': float(kwh)
+        })
+
+    from db import tb_get_documentos_cliente, tb_get_outras_ucs
+    documentos = tb_get_documentos_cliente(id_cliente)
+    outras_ucs = tb_get_outras_ucs(
+        id_cliente,
+        desc_cpf=cliente.get("desc_cpf", ""),
+        desc_nome=cliente.get("desc_nome", ""),
+    )
+
+    return render_template("clientes_detalhes.html",
+        cliente=cliente, endereco=endereco, endereco_completo=endereco_completo,
+        usinas_cliente=usinas_cliente, pix_info=pix_info, ultima_fatura=ultima_fatura,
+        todas_faturas=todas_faturas, consumo_historico=consumo_historico,
+        documentos=documentos, outras_ucs=outras_ucs)
+
+
+@app.route("/clientes/ver/<path:uc>/upload_documento", methods=["POST"])
+def cliente_upload_documento(uc):
+    from db import (tb_get_cliente_por_uc, tb_save_documento_cliente,
+                    storage_upload_pdf, storage_ensure_bucket)
+    cliente = tb_get_cliente_por_uc(uc)
+    if not cliente:
+        flash("Cliente não encontrado.", "danger")
+        return redirect(url_for("clientes_lista"))
+
+    f = request.files.get("documento")
+    if not f or not f.filename:
+        flash("Nenhum arquivo enviado.", "warning")
+        return redirect(url_for("cliente_ver", uc=uc))
+
+    if not f.filename.lower().endswith(".pdf"):
+        flash("Apenas arquivos PDF são aceitos.", "danger")
+        return redirect(url_for("cliente_ver", uc=uc))
+
+    tipo_doc = request.form.get("tipo_doc", "outro")
+    nome_custom = request.form.get("nome_arquivo", "").strip()
+    nome_arquivo = nome_custom if nome_custom else f.filename
+    if not nome_arquivo.lower().endswith(".pdf"):
+        nome_arquivo += ".pdf"
+
+    from datetime import datetime
+    id_cliente = cliente["id_cliente"]
+    storage_name = f"cliente{id_cliente}_{datetime.now().strftime('%Y%m%d%H%M%S')}_{nome_arquivo}"
+    tmp_path = os.path.join(UPLOAD_FOLDER, storage_name)
+    f.save(tmp_path)
+
+    try:
+        storage_ensure_bucket("documentos")
+        storage_path = storage_upload_pdf(tmp_path, storage_name, bucket="documentos")
+        os.unlink(tmp_path)
+    except Exception:
+        storage_path = f"local/{storage_name}"
+
+    tb_save_documento_cliente(
+        id_cliente=id_cliente,
+        nome_arquivo=nome_arquivo,
+        tipo_doc=tipo_doc,
+        storage_path=storage_path,
+    )
+    flash("Documento salvo com sucesso!", "success")
+    return redirect(url_for("cliente_ver", uc=uc) + "?aba=documentos")
+
+
+@app.route("/clientes/ver/<path:uc>/download_documento/<int:id_doc>")
+def cliente_download_documento(uc, id_doc):
+    from db import (tb_get_cliente_por_uc, tb_get_documentos_cliente, storage_signed_url)
+    from flask import send_file as _send
+    cliente = tb_get_cliente_por_uc(uc)
+    if not cliente:
+        flash("Cliente não encontrado.", "danger")
+        return redirect(url_for("clientes_lista"))
+
+    docs = tb_get_documentos_cliente(cliente["id_cliente"])
+    doc = next((d for d in docs if d.get("id") == id_doc), None)
+    if not doc:
+        flash("Documento não encontrado.", "danger")
+        return redirect(url_for("cliente_ver", uc=uc))
+
+    storage_path = doc.get("storage_path", "")
+
+    if storage_path.startswith("local/"):
+        fname = storage_path[len("local/"):]
+        local_path = os.path.join(UPLOAD_FOLDER, fname)
+        if os.path.exists(local_path):
+            return _send(local_path, as_attachment=True,
+                         download_name=doc.get("nome_arquivo", fname))
+        flash("Arquivo não encontrado localmente.", "danger")
+        return redirect(url_for("cliente_ver", uc=uc))
+
+    try:
+        signed_url = storage_signed_url(storage_path, expires_in=300)
+        return redirect(signed_url)
+    except Exception as e:
+        flash(f"Erro ao acessar documento: {e}", "danger")
+        return redirect(url_for("cliente_ver", uc=uc))
+
+
+@app.route("/clientes/ver/<path:uc>/deletar_documento/<int:id_doc>", methods=["POST"])
+def cliente_deletar_documento(uc, id_doc):
+    from db import (tb_get_cliente_por_uc, tb_get_documentos_cliente,
+                    tb_delete_documento_cliente, storage_delete_arquivo)
+    cliente = tb_get_cliente_por_uc(uc)
+    if not cliente:
+        flash("Cliente não encontrado.", "danger")
+        return redirect(url_for("clientes_lista"))
+
+    docs = tb_get_documentos_cliente(cliente["id_cliente"])
+    doc = next((d for d in docs if d.get("id") == id_doc), None)
+    if doc:
+        sp = doc.get("storage_path", "")
+        if sp and not sp.startswith("local/"):
+            try:
+                storage_delete_arquivo(sp)
+            except Exception:
+                pass
+        elif sp.startswith("local/"):
+            fname = sp[len("local/"):]
+            lp = os.path.join(UPLOAD_FOLDER, fname)
+            try:
+                if os.path.exists(lp):
+                    os.remove(lp)
+            except Exception:
+                pass
+        tb_delete_documento_cliente(id_doc)
+        flash("Documento removido.", "warning")
+
+    return redirect(url_for("cliente_ver", uc=uc) + "?aba=documentos")
+
+
 @app.route("/clientes/novo", methods=["GET", "POST"])
 def cliente_novo():
-    from db import tb_save_cliente, tb_save_endereco, tb_save_cliente_usina, tb_carregar_usinas
-    usinas = tb_carregar_usinas()
+    from db import tb_save_cliente, tb_save_endereco, tb_save_cliente_usina, tb_carregar_usinas_com_titular
+    usinas = tb_carregar_usinas_com_titular()
     if request.method == "POST":
         nome_cliente = request.form.get("desc_nome", "").strip().upper()
         logger.info(f"[CLIENTE_NOVO] Tentativa de cadastro do cliente: {nome_cliente}")
@@ -952,20 +1241,24 @@ def cliente_novo():
             if desc > 1: desc = desc / 100
 
             # Salva cliente
+            def _kwh_field(name):
+                try: return float(request.form.get(name, "").replace(",", ".") or 0) or None
+                except Exception: return None
             cliente = tb_save_cliente({
-                "cod_uc":              cod_uc,
-                "cod_uc":  uc_nova,
-                "desc_nome":           nome_cliente,
-                "desc_apelido":        request.form.get("desc_apelido", "").strip() or None,
-                "desc_cpf":            request.form.get("desc_cpf", "").strip(),
-                "desc_telefone":       request.form.get("desc_telefone", "").strip(),
-                "desc_email":          request.form.get("desc_email", "").strip().lower(),
-                "desc_titular_fatura": request.form.get("desc_titular_fatura", "").strip().upper(),
-                "tp_fornecimento":     request.form.get("tp_fornecimento", "").strip(),
-                "tp_bandeira":         request.form.get("tp_bandeira", "com_bandeira"),
-                "pct_desconto":        desc,
-                "dt_adesao":           _data_br_para_iso(request.form.get("dt_adesao", "")),
-                "STATUS":              request.form.get("status_ativo") == "1",
+                "cod_uc":                  uc_nova,
+                "desc_nome":               nome_cliente,
+                "desc_apelido":            request.form.get("desc_apelido", "").strip() or None,
+                "desc_cpf":                request.form.get("desc_cpf", "").strip(),
+                "desc_telefone":           request.form.get("desc_telefone", "").strip(),
+                "desc_email":              request.form.get("desc_email", "").strip().lower(),
+                "desc_titular_fatura":     request.form.get("desc_titular_fatura", "").strip().upper(),
+                "tp_fornecimento":         request.form.get("tp_fornecimento", "").strip(),
+                "tp_bandeira":             request.form.get("tp_bandeira", "com_bandeira"),
+                "pct_desconto":            desc,
+                "dt_adesao":               _data_br_para_iso(request.form.get("dt_adesao", "")),
+                "STATUS":                  request.form.get("status_ativo") == "1",
+                "qtd_consumo_medio_kwh":   _kwh_field("qtd_consumo_medio_kwh"),
+                "qtd_saldo_inicial_kwh":   _kwh_field("qtd_saldo_inicial_kwh"),
             })
             id_cliente = cliente.get("id_cliente")
 
@@ -1000,13 +1293,13 @@ def cliente_novo():
 @app.route("/clientes/nova_uc/<path:uc>")
 def cliente_nova_uc(uc):
     from db import (tb_get_cliente_por_uc,
-                    tb_get_usinas_do_cliente, tb_carregar_usinas)
+                    tb_get_usinas_do_cliente, tb_carregar_usinas_com_titular)
     origem = tb_get_cliente_por_uc(uc)
     if not origem:
         flash("Cliente nao encontrado!", "danger")
         return redirect(url_for("clientes_lista"))
     id_cliente = origem["id_cliente"]
-    usinas = tb_carregar_usinas()
+    usinas = tb_carregar_usinas_com_titular()
     usinas_cliente = [v["id_usina"] for v in tb_get_usinas_do_cliente(id_cliente)]
     return render_template("cliente_form.html",
                            cliente=None,
@@ -1021,14 +1314,14 @@ def cliente_editar(uc):
     from db import (tb_get_cliente_por_uc, tb_save_cliente, tb_save_endereco,
                     tb_get_endereco_cliente, tb_save_cliente_usina,
                     tb_delete_cliente_usina, tb_get_usinas_do_cliente,
-                    tb_carregar_usinas)
+                    tb_carregar_usinas_com_titular)
     cliente = tb_get_cliente_por_uc(uc)
     if not cliente:
         logger.warning(f"[CLIENTE_EDITAR] Cliente nao encontrado para UC: {uc}")
         flash("Cliente nao encontrado!", "danger")
         return redirect(url_for("clientes_lista"))
     id_cliente = cliente["id_cliente"]
-    usinas = tb_carregar_usinas()
+    usinas = tb_carregar_usinas_com_titular()
 
     if request.method == "POST":
         nome_cliente = request.form.get("desc_nome", "").strip().upper()
@@ -1047,21 +1340,25 @@ def cliente_editar(uc):
             if desc > 1: desc = desc / 100
 
             # Atualiza cliente
+            def _kwh_field_e(name):
+                try: return float(request.form.get(name, "").replace(",", ".") or 0) or None
+                except Exception: return None
             tb_save_cliente({
-                "id_cliente":          id_cliente,
-                "cod_uc":              novo_cod_uc,
-                "cod_uc":  nova_uc_nova,
-                "desc_nome":           nome_cliente,
-                "desc_apelido":        request.form.get("desc_apelido", "").strip() or None,
-                "desc_cpf":            request.form.get("desc_cpf", "").strip(),
-                "desc_telefone":       request.form.get("desc_telefone", "").strip(),
-                "desc_email":          request.form.get("desc_email", "").strip().lower(),
-                "desc_titular_fatura": request.form.get("desc_titular_fatura", "").strip().upper(),
-                "tp_fornecimento":     request.form.get("tp_fornecimento", "").strip(),
-                "tp_bandeira":         request.form.get("tp_bandeira", "com_bandeira"),
-                "pct_desconto":        desc,
-                "dt_adesao":           _data_br_para_iso(request.form.get("dt_adesao", "")),
-                "STATUS":              request.form.get("status_ativo") == "1",
+                "id_cliente":              id_cliente,
+                "cod_uc":                  nova_uc_nova,
+                "desc_nome":               nome_cliente,
+                "desc_apelido":            request.form.get("desc_apelido", "").strip() or None,
+                "desc_cpf":                request.form.get("desc_cpf", "").strip(),
+                "desc_telefone":           request.form.get("desc_telefone", "").strip(),
+                "desc_email":              request.form.get("desc_email", "").strip().lower(),
+                "desc_titular_fatura":     request.form.get("desc_titular_fatura", "").strip().upper(),
+                "tp_fornecimento":         request.form.get("tp_fornecimento", "").strip(),
+                "tp_bandeira":             request.form.get("tp_bandeira", "com_bandeira"),
+                "pct_desconto":            desc,
+                "dt_adesao":               _data_br_para_iso(request.form.get("dt_adesao", "")),
+                "STATUS":                  request.form.get("status_ativo") == "1",
+                "qtd_consumo_medio_kwh":   _kwh_field_e("qtd_consumo_medio_kwh"),
+                "qtd_saldo_inicial_kwh":   _kwh_field_e("qtd_saldo_inicial_kwh"),
             })
 
             # Atualiza endereco
@@ -1136,6 +1433,202 @@ def cliente_remover_post():
         logger.warning(f"[CLIENTE_REMOVER_POST] Cliente nao encontrado para UC: {uc}")
         flash(f"UC '{uc}' nao encontrada!", "danger")
     return redirect(url_for("clientes_lista"))
+
+# ── COBRANCAS DO DIA: lista clientes com leitura no intervalo + status ───────
+@app.route("/cobrancas/dia", methods=["GET"])
+def cobrancas_dia():
+    """Lista clientes com proxima_leitura num intervalo de datas, com status
+    da cobranca de cada um (sem fatura / PDF baixado / cobranca gerada / pago).
+
+    Query params:
+      de   = DD/MM/AAAA (default: hoje)
+      ate  = DD/MM/AAAA (default: hoje + 10 dias)
+    """
+    from datetime import date, timedelta
+    from db import _db
+
+    def _parse_br(s, default):
+        if not s:
+            return default
+        try:
+            d, m, a = s.split("/")
+            return date(int(a), int(m), int(d))
+        except Exception:
+            return default
+
+    # Default: leitura entre hoje-10 e hoje+3.
+    # Motivo: Equatorial emite fatura 5-10 dias DEPOIS da leitura, entao
+    # leituras recentes (passadas) ja tem fatura disponivel no portal.
+    # Inclui +3 dias pra antecipar quem esta prestes a fechar a leitura.
+    hoje = date.today()
+    de_default  = hoje - timedelta(days=10)
+    ate_default = hoje + timedelta(days=3)
+    de   = _parse_br(request.args.get("de"),  de_default)
+    ate  = _parse_br(request.args.get("ate"), ate_default)
+
+    # Carrega clientes com proxima_leitura no intervalo
+    clientes = _db().select("tb_clientes", order="proxima_leitura.asc")
+    no_intervalo = []
+    for c in clientes:
+        pl_raw = (c.get("proxima_leitura") or "").strip()
+        if not pl_raw:
+            continue
+        try:
+            pl = date.fromisoformat(pl_raw[:10])
+        except Exception:
+            continue
+        if de <= pl <= ate:
+            c["_proxima_leitura_dt"] = pl
+            c["_proxima_leitura_br"] = pl.strftime("%d/%m/%Y")
+            c["_dias_ate_leitura"]   = (pl - hoje).days
+            no_intervalo.append(c)
+
+    # Busca status em tb_faturas pro mes_ref de cada cliente (mes da leitura)
+    if no_intervalo:
+        # Indexa faturas por (id_cliente, ano, mes)
+        faturas = _db().select("tb_faturas")
+        fat_por_chave = {}
+        for f in faturas:
+            chv = (f.get("id_cliente"), f.get("ano_referencia"), f.get("mes_referencia"))
+            fat_por_chave[chv] = f
+        for c in no_intervalo:
+            pl = c["_proxima_leitura_dt"]
+            # mes da leitura define mes da cobranca (Equatorial emite ~5-10 dias depois)
+            chv = (c.get("id_cliente"), pl.year, pl.month)
+            f = fat_por_chave.get(chv)
+            if not f:
+                c["_status"]       = "sem_fatura"
+                c["_status_label"] = "Sem fatura"
+                c["_status_icon"]  = "🚫"
+                c["_status_color"] = "secondary"
+            elif f.get("dt_pagamento"):
+                c["_status"]       = "pago"
+                c["_status_label"] = "Pago"
+                c["_status_icon"]  = "💰"
+                c["_status_color"] = "success"
+            elif f.get("pdf_solev"):
+                c["_status"]       = "cobranca"
+                c["_status_label"] = "Cobranca gerada"
+                c["_status_icon"]  = "✅"
+                c["_status_color"] = "primary"
+            elif f.get("pdf_equatorial"):
+                c["_status"]       = "baixada"
+                c["_status_label"] = "PDF baixado"
+                c["_status_icon"]  = "📥"
+                c["_status_color"] = "info"
+            else:
+                c["_status"]       = "pendente"
+                c["_status_label"] = "Registrada"
+                c["_status_icon"]  = "📭"
+                c["_status_color"] = "warning"
+            c["_id_fatura"] = f.get("id_fatura") if f else None
+            c["_mes_ref"]   = f"{pl.month}/{pl.year}"
+
+    return render_template(
+        "cobrancas_dia.html",
+        clientes_lista=no_intervalo,
+        de_br=de.strftime("%d/%m/%Y"),
+        ate_br=ate.strftime("%d/%m/%Y"),
+        hoje_br=hoje.strftime("%d/%m/%Y"),
+        total=len(no_intervalo),
+    )
+
+
+# ── DISPARA DOWNLOAD EM BACKGROUND PARA UCs SELECIONADAS ─────────────────────
+@app.route("/cobrancas/dia/baixar", methods=["POST"])
+def cobrancas_dia_baixar():
+    """Recebe lista de UCs marcadas e dispara baixar_equatorial.py em background.
+    O download e a geracao de cobranca rodam num subprocesso isolado.
+    """
+    import subprocess, sys as _sys
+    ucs = request.form.getlist("ucs")
+    mes_ref = request.form.get("mes_ref", "").strip()
+    if not ucs:
+        flash("Selecione pelo menos uma UC.", "warning")
+        return redirect(url_for("cobrancas_dia",
+                                de=request.form.get("de"),
+                                ate=request.form.get("ate")))
+    if not mes_ref:
+        from datetime import date
+        mes_ref = date.today().strftime("%m/%Y")
+
+    script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "baixar_equatorial.py")
+    cmd = [_sys.executable, script_path,
+           "--ucs", ",".join(ucs),
+           "--mes", mes_ref,
+           "--headless", "--forcar"]
+
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs_download")
+    os.makedirs(log_dir, exist_ok=True)
+    from datetime import datetime as _dt
+    log_path = os.path.join(log_dir, f"download_{_dt.now().strftime('%Y%m%d_%H%M%S')}.log")
+    log_file = open(log_path, "w", encoding="utf-8")
+    subprocess.Popen(
+        cmd, stdout=log_file, stderr=subprocess.STDOUT,
+        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+    )
+    logger.info(f"[COBRANCAS_DIA] Download iniciado: {len(ucs)} UCs, log={log_path}")
+    flash(f"Download iniciado em background para {len(ucs)} UC(s) — mes {mes_ref}. "
+          f"Recarregue a pagina em ~1 min para ver o progresso. Log: {os.path.basename(log_path)}",
+          "info")
+    return redirect(url_for("cobrancas_dia",
+                            de=request.form.get("de"),
+                            ate=request.form.get("ate")))
+
+
+# ── SCEE da fatura (GET retorna JSON, POST salva) ────────────────────────────
+@app.route("/cobrancas/dia/scee/<int:id_fatura>", methods=["GET", "POST"])
+def cobrancas_dia_scee(id_fatura):
+    """API JSON: visualizar e editar campos SCEE de uma fatura.
+    Esses valores alimentam o rateio (nao recalculam o PDF da cobranca).
+    """
+    from db import _db
+    if request.method == "GET":
+        rows = _db().select("tb_faturas", filtros={"id_fatura": id_fatura})
+        if not rows:
+            return {"erro": "Fatura nao encontrada"}, 404
+        f = rows[0]
+        return {
+            "id_fatura":              id_fatura,
+            "id_cliente":             f.get("id_cliente"),
+            "mes_referencia":         f.get("mes_referencia"),
+            "ano_referencia":         f.get("ano_referencia"),
+            "cod_uc_usina":           f.get("cod_uc_usina") or "",
+            "desc_ciclo_geracao":    f.get("desc_ciclo_geracao") or "",
+            "pct_rateio_scee":       f.get("pct_rateio_scee") or 0,
+            "qtd_geracao_usina_kwh": f.get("qtd_geracao_usina_kwh") or 0,
+            "qtd_excedente_kwh":     f.get("qtd_excedente_kwh") or 0,
+            "qtd_credito_kwh":       f.get("qtd_credito_kwh") or 0,
+            "qtd_saldo_kwh":         f.get("qtd_saldo_kwh") or 0,
+            "qtd_saldo_exp_30d_kwh": f.get("qtd_saldo_exp_30d_kwh") or 0,
+            "qtd_saldo_exp_60d_kwh": f.get("qtd_saldo_exp_60d_kwh") or 0,
+        }
+    # POST: atualiza os campos SCEE
+    def _f(name):
+        v = (request.form.get(name) or "").strip().replace(".", "").replace(",", ".")
+        try:
+            return float(v) if v else 0
+        except ValueError:
+            return 0
+    dados = {
+        "cod_uc_usina":          (request.form.get("cod_uc_usina") or "").strip() or None,
+        "desc_ciclo_geracao":   (request.form.get("desc_ciclo_geracao") or "").strip() or None,
+        "pct_rateio_scee":      _f("pct_rateio_scee"),
+        "qtd_geracao_usina_kwh":_f("qtd_geracao_usina_kwh"),
+        "qtd_excedente_kwh":    _f("qtd_excedente_kwh"),
+        "qtd_credito_kwh":      _f("qtd_credito_kwh"),
+        "qtd_saldo_kwh":        _f("qtd_saldo_kwh"),
+        "qtd_saldo_exp_30d_kwh":_f("qtd_saldo_exp_30d_kwh"),
+        "qtd_saldo_exp_60d_kwh":_f("qtd_saldo_exp_60d_kwh"),
+    }
+    try:
+        _db().patch("tb_faturas", {"id_fatura": id_fatura}, dados)
+        return {"ok": True, "msg": "Campos SCEE salvos."}
+    except Exception as e:
+        logger.error(f"[COBRANCAS_DIA_SCEE] Erro salvando fatura {id_fatura}: {e}")
+        return {"erro": str(e)}, 500
+
 
 # GERAR COBRANCA (individual)
 @app.route("/gerar", methods=["GET", "POST"])
@@ -1825,17 +2318,8 @@ def gerar_manual():
             _eco_acum   = round(dados_calc.get("_economia_acum", eco_acum_anterior), 2)
             if cliente.get("_fonte") == "tb_clientes" and cliente.get("_id_cliente"):
                 from db import tb_writeback_pos_cobranca
-                # Converte DD/MM/YYYY para YYYY-MM-DD antes de gravar no Supabase
-                _venc_db = venc_solev
-                if venc_solev and "/" in venc_solev:
-                    try:
-                        _p = venc_solev.split("/")
-                        if len(_p) == 3:
-                            _venc_db = f"{_p[2]}-{_p[1]}-{_p[0]}"
-                    except Exception:
-                        pass
                 tb_writeback_pos_cobranca(cliente["_id_cliente"], _total_com,
-                                          _venc_db, _eco_acum)
+                                          venc_solev, _eco_acum)
             else:
                 clientes = carregar_clientes()
                 if chave_real in clientes:
@@ -1924,6 +2408,7 @@ def gerar_manual():
                 difci=dados_calc.get("difci", 0),
                 ecnisenta=dados_calc.get("ecnisenta", 0),
                 anterior_leitura=request.form.get("anterior_leitura", ""),
+                proxima_leitura=request.form.get("proxima_leitura", "") or _eq_m_scee.get("proxima_leitura", ""),
                 n_dias=int(request.form.get("n_dias", 0) or 0),
                 # SCEE
                 scee_ciclo_mes   = scee_ciclo_mes   or _eq_m_scee.get("scee_ciclo_mes", "") or _eq_m_scee.get("ciclo_geracao_mes", ""),
@@ -2664,32 +3149,34 @@ def enviar_whatsapp(filename):
 
     # 3. Monta mensagem
     BULLET  = "\u25b8"       # \u25b8
-    SORRISO = "\U0001F60A"   # \ud83d\ude0a
-    RAIO    = "\u26a1"       # \u26a1
 
     nome_curto = nome.split()[0] if nome else "Cliente"
 
+    # Link do portal do cliente (rota /c/<token>). Se nao tiver token, omite.
+    token = item.get("token_acesso") or ""
+    link_portal = url_for("portal_cliente", token=token, _external=True) if token else ""
+
     # Acentos em \u escape para evitar problemas de encoding cp1252 no Windows
     linhas = [
-        f"Ol\u00e1! *{nome_curto}* {SORRISO}",
+        f"Ol\u00e1! *{nome_curto}*",
         "",
-        "Passando para lembrar da sua cobran\u00e7a e tamb\u00e9m compartilhar "
-        f"uma novidade: agora somos *SOLEV ENERGIA* {RAIO}",
-        "",
-        "Nossa marca evoluiu para acompanhar nosso crescimento e continuar "
-        "oferecendo o melhor atendimento e solu\u00e7\u00f5es em energia.",
-        "",
-        "Seguimos \u00e0 disposi\u00e7\u00e3o!",
+        "Sua fatura da SOLEV ENERGIA j\u00e1 est\u00e1 dispon\u00edvel.",
         "",
         f"{BULLET} Valor: *{_fmt_brl(valor)}*",
     ]
     if venc:
         linhas.append(f"{BULLET} Vencimento: {venc}")
 
+    if link_portal:
+        linhas.append("")
+        linhas.append("Acesse o link abaixo para visualizar o detalhamento, "
+                      "baixar o PDF e copiar o PIX:")
+        linhas.append("")
+        linhas.append(link_portal)
+
     linhas.append("")
-    linhas.append("Enviarei em seguida o PDF da cobranca e a *chave PIX* "
-                  "para pagamento (basta tocar e segurar na chave, copiar, "
-                  "colar no app do banco em PIX > Chave Aleatoria e digitar o valor).")
+    linhas.append("Qualquer d\u00favida, \u00e9 s\u00f3 responder esta mensagem.")
+    linhas.append("SOLEV ENERGIA")
 
     msg = "\n".join(linhas)
 
@@ -3269,7 +3756,7 @@ def usina_nova():
                 "qtd_modulos": int(request.form.get("qtd_modulos", "0") or "0"),
                 "desc_inversor": request.form.get("desc_inversor", "").strip(),
                 "desc_estrutura": request.form.get("desc_estrutura", "").strip(),
-                "dt_comissionamento": request.form.get("dt_comissionamento", "").strip() or None,
+                "dt_comissionamento": _data_br_para_iso(request.form.get("dt_comissionamento", "").strip()) or None,
                 "desc_garantia_modulos": request.form.get("desc_garantia_modulos", "25 anos").strip(),
                 "desc_garantia_inversor": request.form.get("desc_garantia_inversor", "10 anos").strip(),
                 "qtd_geracao_media_mensal": float(request.form.get("qtd_geracao_media_mensal", "0").replace(",", ".") or "0"),
@@ -3412,7 +3899,7 @@ def usina_editar(id_usina):
                 "qtd_modulos": int(request.form.get("qtd_modulos", "0") or "0"),
                 "desc_inversor": request.form.get("desc_inversor", "").strip(),
                 "desc_estrutura": request.form.get("desc_estrutura", "").strip(),
-                "dt_comissionamento": request.form.get("dt_comissionamento", "").strip() or None,
+                "dt_comissionamento": _data_br_para_iso(request.form.get("dt_comissionamento", "").strip()) or None,
                 "desc_garantia_modulos": request.form.get("desc_garantia_modulos", "25 anos").strip(),
                 "desc_garantia_inversor": request.form.get("desc_garantia_inversor", "10 anos").strip(),
                 "qtd_geracao_media_mensal": float(request.form.get("qtd_geracao_media_mensal", "0").replace(",", ".") or "0"),
@@ -3911,7 +4398,7 @@ def registrar_geracao_mensal(uid):
             try:
                 _prox_ext_iso = _data_br_para_iso(_prox_ext)
             except Exception:
-                _prox_ext_iso = _prox_ext  # fallback: tenta usar como esta
+                _prox_ext_iso = None  # descarta se nao conseguiu converter
 
         if uid in usinas:
             if _prox_ext:
@@ -4581,6 +5068,9 @@ def _prever_consumo(consumos, modo="max3m", n_std=1.0, margem_pct=10.0):
 # ══════════════════════════════════════════════════════════════
 @app.route("/usinas/rateio/<uid>/planejar")
 def rateio_planejar(uid):
+    return redirect(url_for("rateio_dashboard", uid=uid))
+
+def rateio_planejar_old(uid):
     """Tela de planejamento do rateio do proximo mes.
 
     Para cada cliente vinculado a usina:
@@ -4892,6 +5382,52 @@ def rateio_aplicar(uid):
 
 
 # RATEIO - Dashboard (por mes de referencia)
+# ── EDIT INLINE: saldo manual + consumo medio direto na tela de rateio ──────
+@app.route("/usinas/rateio/<int:id_usina>/cliente/<int:id_cliente>/edit", methods=["POST"])
+def rateio_editar_base(id_usina, id_cliente):
+    """Atualiza qtd_saldo_kwh (tb_cliente_usina) e qtd_consumo_medio_kwh (tb_clientes).
+    Aceita apenas os campos enviados (parcial). Retorna JSON."""
+    from db import _db, tb_get_vinculo_ativo_do_cliente
+    def _num(name):
+        v = (request.form.get(name) or "").strip()
+        if not v:
+            return None
+        # Só interpreta como BR ('1.234,56') se houver vírgula.
+        # '125.5' (US) é interpretado direto pelo float().
+        if "," in v:
+            v = v.replace(".", "").replace(",", ".")
+        elif v.count(".") > 1:
+            v = v.replace(".", "")  # '1.234' (BR sem decimais) → 1234
+        try:
+            return float(v)
+        except ValueError:
+            return None
+
+    saldo   = _num("saldo_kwh")
+    consumo = _num("consumo_medio_kwh")
+    if saldo is None and consumo is None:
+        return {"erro": "Nada para salvar"}, 400
+
+    try:
+        if saldo is not None:
+            vinc = tb_get_vinculo_ativo_do_cliente(id_cliente)
+            if not vinc or vinc.get("id_usina") != id_usina:
+                return {"erro": "Vinculo ativo nao encontrado para essa usina"}, 404
+            from datetime import date as _d
+            _db().patch("tb_cliente_usina",
+                        {"id": vinc["id"]},
+                        {"qtd_saldo_kwh": round(saldo, 2),
+                         "dt_saldo_conferido": _d.today().isoformat()})
+        if consumo is not None:
+            _db().patch("tb_clientes",
+                        {"id_cliente": id_cliente},
+                        {"qtd_consumo_medio_kwh": round(consumo, 1)})
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"[RATEIO_EDIT] id_usina={id_usina} id_cliente={id_cliente}: {e}")
+        return {"erro": str(e)}, 500
+
+
 @app.route("/usinas/rateio/<uid>")
 def rateio_dashboard(uid):
     from db import (tb_get_usina, tb_get_usina_por_nome,
@@ -4977,7 +5513,11 @@ def rateio_dashboard(uid):
 
     mes_sel = request.args.get("mes", "")
     if not mes_sel:
-        mes_sel = mes_atual  # padrao: mes atual (em andamento)
+        # Padrão: mês mais recente com geração real; fallback mês atual
+        if geracao_mensal_all:
+            mes_sel = max(geracao_mensal_all.keys(), key=_sort_mes)
+        else:
+            mes_sel = mes_atual
 
     # ── Estimativa diaria (geracao em andamento) ──────────
     geracao_diaria = carregar_geracao()
@@ -5054,6 +5594,15 @@ def rateio_dashboard(uid):
 
     # ── Confrontacao: alocacao esperada vs fatura do cliente ─
     total_rateio = sum((c.get("rateio_pct", 0) or 0) for c in vinculados.values())
+    # Mapeia uc → id_cliente pra incluir no dict de alocacao (necessario pro
+    # endpoint AJAX de edicao manual de saldo/consumo)
+    _uc_para_id_cliente = {}
+    for v in vinculos_lista:
+        id_c = v.get("id_cliente")
+        c_tb = clientes_id_map.get(id_c, {})
+        if id_c and c_tb.get("cod_uc"):
+            _uc_para_id_cliente[c_tb["cod_uc"]] = id_c
+
     alocacoes = []
     for uc, c in vinculados.items():
         pct = c.get("rateio_pct", 0) or 0
@@ -5113,6 +5662,7 @@ def rateio_dashboard(uid):
 
         alocacoes.append({
             "uc": uc, "uc_display": c.get("uc_display", uc), "nome": c["nome"], "rateio_pct": pct,
+            "id_cliente": _uc_para_id_cliente.get(uc),
             "kwh_esperado": round(kwh_esperado, 1),
             "kwh_compensado": round(kwh_compensado, 1),
             "consumo_cliente": round(consumo_cliente, 1),
@@ -5128,6 +5678,51 @@ def rateio_dashboard(uid):
             "status": status,
         })
     alocacoes.sort(key=lambda x: -x["rateio_pct"])
+
+    # ── Enriquece alocacoes com dados de planejamento ──────────
+    _uc_tp_map      = {}
+    _uc_med_map     = {}  # consumo_medio_kwh por uc
+    _uc_saldo_ini   = {}  # saldo_inicial_kwh por uc
+    for v in vinculos_lista:
+        id_c = v.get("id_cliente")
+        c_tb = clientes_id_map.get(id_c, {})
+        uc_c = c_tb.get("cod_uc", "")
+        if uc_c:
+            _uc_tp_map[uc_c]    = c_tb.get("tp_fornecimento", "") or ""
+            _uc_med_map[uc_c]   = float(c_tb.get("qtd_consumo_medio_kwh") or 0)
+            _uc_saldo_ini[uc_c] = float(c_tb.get("qtd_saldo_inicial_kwh") or 0)
+
+    for a in alocacoes:
+        tp_forn  = _uc_tp_map.get(a["uc"], "")
+        consumos = _historico_consumo_cliente(a["uc"], historico, n_meses=6)
+        # Fallback: sem histórico → usa consumo médio do cadastro
+        if not consumos:
+            med = _uc_med_map.get(a["uc"], 0)
+            if med > 0:
+                consumos = [{"mes": "estimado", "mes_ord": 0, "consumo": med,
+                             "compensado": 0, "nao_compensado": med}]
+        prev       = _prever_consumo(consumos, modo="max3m", margem_pct=10.0)
+        cd         = _cd_kwh(tp_forn)
+        parte_comp = max(0.0, prev["previsao"] - cd)
+        # Saldo: tb_cliente_usina > saldo_inicial do cadastro
+        saldo_efetivo = a["saldo_kwh"] if a["saldo_kwh"] != 0 else _uc_saldo_ini.get(a["uc"], 0)
+        nec = max(0.0, parte_comp - saldo_efetivo)
+        a.update({
+            "previsao":       round(prev["previsao"], 1),
+            "media_consumo":  round(prev["media"], 1),
+            "qtd_meses":      prev["qtd_meses"],
+            "necessidade":    round(nec, 1),
+            "pct_sugerido":   0.0,
+            "saldo_kwh":      round(saldo_efetivo, 1),
+        })
+
+    _soma_nec  = sum(a["necessidade"] for a in alocacoes)
+    _soma_prev = sum(a["previsao"]    for a in alocacoes)
+    for a in alocacoes:
+        if _soma_nec > 0:
+            a["pct_sugerido"] = round(a["necessidade"] / _soma_nec * 100, 2) if a["necessidade"] > 0 else 0.0
+        elif _soma_prev > 0:
+            a["pct_sugerido"] = round(a["previsao"] / _soma_prev * 100, 2)
 
     # ── Sugestao de rateio para o proximo mes ──────────────
     # Baseado na diferenca: quem recebeu mais do que deveria, reduz;
@@ -5176,6 +5771,8 @@ def rateio_dashboard(uid):
         mes_sel=mes_sel, meses_disponiveis=meses_disponiveis,
         sugestoes=sugestoes, todas_faturas=todas_faturas,
         protocolo_info=protocolo_info,
+        soma_necessidade=round(_soma_nec, 1),
+        base_para_sugestao="necessidade" if _soma_nec > 0 else "previsao",
         fmt=_fmt_brl,
         now_str=datetime.now().strftime("%Y%m%d"),
     )
@@ -5269,6 +5866,22 @@ def teste_versao():
 def sync_page():
     flash("Sincronizacao nao e mais necessaria — todos os dados ja estao no Supabase.", "info")
     return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/sync_leituras", methods=["POST"])
+def admin_sync_leituras():
+    """Popula proxima_leitura em tb_clientes a partir de tb_faturas."""
+    from db import tb_sync_proxima_leitura_por_fatura
+    try:
+        resultado = tb_sync_proxima_leitura_por_fatura()
+        flash(
+            f"Datas sincronizadas: {resultado['atualizados']} clientes atualizados"
+            + (f", {resultado['erros']} erros" if resultado['erros'] else "") + ".",
+            "success" if not resultado['erros'] else "warning"
+        )
+    except Exception as e:
+        flash(f"Erro ao sincronizar datas: {e}", "danger")
+    return redirect(request.referrer or url_for("clientes"))
 
 # RATEIO - Gerar PDF formulario Equatorial
 @app.route("/usinas/rateio/pdf/<uid>")

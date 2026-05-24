@@ -1,0 +1,665 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.desc_nome }} - Detalhes do Cliente{% endblock %}
+{% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><a href="/clientes">Clientes</a><span class="sep">›</span><span class="here">{{ cliente.desc_nome }}</span>{% endblock %}
+{% block topbar_actions %}
+<a href="/clientes/editar/{{ cliente.cod_uc }}" class="btn btn-primary"><i class="bi bi-pencil me-1"></i> Editar</a>
+<a href="/clientes" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header mb-4">
+    <h1>
+        <i class="bi bi-person-circle me-2" style="color:var(--accent)"></i>
+        {{ cliente.desc_nome }}
+        {% if cliente.STATUS %}
+        <span class="badge rounded-pill" style="background:rgba(25,135,84,0.12);color:#198754;font-size:12px">
+            <i class="bi bi-check-circle-fill me-1"></i>Ativo
+        </span>
+        {% else %}
+        <span class="badge rounded-pill" style="background:rgba(108,117,125,0.12);color:#6c757d;font-size:12px">
+            <i class="bi bi-dash-circle me-1"></i>Inativo
+        </span>
+        {% endif %}
+    </h1>
+</div>
+
+<!-- Abas -->
+<ul class="nav nav-tabs mb-3" id="abasCliente" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="aba-detalhes" data-bs-toggle="tab" data-bs-target="#conteudo-detalhes" type="button" role="tab">
+            <i class="bi bi-info-circle me-1"></i>Detalhes
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="aba-consumo" data-bs-toggle="tab" data-bs-target="#conteudo-consumo" type="button" role="tab">
+            <i class="bi bi-bar-chart me-1"></i>Consumo
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="aba-pagamentos" data-bs-toggle="tab" data-bs-target="#conteudo-pagamentos" type="button" role="tab">
+            <i class="bi bi-receipt me-1"></i>Pagamentos
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="aba-documentos" data-bs-toggle="tab" data-bs-target="#conteudo-documentos" type="button" role="tab">
+            <i class="bi bi-file-earmark me-1"></i>Documentos
+        </button>
+    </li>
+</ul>
+
+<!-- Conteúdo das Abas -->
+<div class="tab-content" id="conteudoAbas">
+
+    <!-- ABA 1: DETALHES -->
+    <div class="tab-pane fade show active" id="conteudo-detalhes" role="tabpanel">
+        <div class="row g-3">
+            <!-- Coluna Principal -->
+            <div class="col-lg-8">
+                <!-- Dados Pessoais -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-info-circle me-2" style="color:var(--accent)"></i>Informações Pessoais</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small">UC</label>
+                                <code class="d-block" style="font-size:16px;font-weight:bold">{{ cliente.cod_uc }}</code>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">APELIDO</label>
+                                <p class="mb-0">{{ cliente.desc_apelido or '—' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">CPF/CNPJ</label>
+                                <p class="mb-0">{{ cliente.desc_cpf or '—' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">TELEFONE</label>
+                                <p class="mb-0">
+                                    {% if cliente.desc_telefone %}
+                                    <a href="tel:{{ cliente.desc_telefone }}" style="text-decoration:none;color:var(--accent)">
+                                        {{ cliente.desc_telefone }}
+                                    </a>
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="col-12">
+                                <label class="text-muted small">EMAIL</label>
+                                <p class="mb-0">
+                                    {% if cliente.desc_email %}
+                                    <a href="mailto:{{ cliente.desc_email }}" style="text-decoration:none;color:var(--accent)">
+                                        {{ cliente.desc_email }}
+                                    </a>
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="col-12">
+                                <label class="text-muted small">TITULAR NA FATURA</label>
+                                <p class="mb-0">{{ cliente.desc_titular_fatura or '—' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">DATA DE ADESÃO</label>
+                                <p class="mb-0">
+                                    {% if cliente.dt_adesao %}
+                                    {{ cliente.dt_adesao[:10] }}
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">DESCONTO</label>
+                                <p class="mb-0">
+                                    <span class="badge" style="background:var(--or);color:var(--db);font-size:14px">
+                                        {{ ((cliente.pct_desconto or 0) * 100)|int }}%
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Endereço -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-geo-alt me-2" style="color:var(--accent)"></i>Endereço</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if endereco_completo %}
+                        <p class="mb-3" style="line-height:1.8">
+                            <strong>{{ endereco.desc_logradouro }}</strong><br>
+                            Nº {{ endereco.desc_numero }}
+                            {% if endereco.desc_complemento %}<br>{{ endereco.desc_complemento }}{% endif %}<br>
+                            {{ endereco.desc_setor }}<br>
+                            {{ endereco.desc_cidade }}{% if endereco.desc_estado %}, {{ endereco.desc_estado }}{% endif %}
+                            {% if endereco.cod_cep %}<br>CEP: {{ endereco.cod_cep }}{% endif %}
+                        </p>
+                        {% else %}
+                        <p class="text-muted">Nenhum endereço cadastrado</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Leituras -->
+                {% if ultima_fatura %}
+                <div class="card mb-3">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-calendar-check me-2" style="color:var(--accent)"></i>Leituras</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small">DATA DE LEITURA ATUAL</label>
+                                <p class="mb-0">
+                                    {% if ultima_fatura.dt_leitura_atual %}
+                                    <strong>{{ ultima_fatura.dt_leitura_atual | data_br }}</strong>
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">PRÓXIMA LEITURA</label>
+                                <p class="mb-0">
+                                    {% if cliente.proxima_leitura %}
+                                    <strong>{{ cliente.proxima_leitura | data_br }}</strong>
+                                    {% else %}
+                                    —
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Dados Técnicos -->
+                <div class="card">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-lightning me-2" style="color:var(--accent)"></i>Dados Técnicos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="text-muted small">TIPO DE FORNECIMENTO</label>
+                                <p class="mb-0">{{ cliente.tp_fornecimento or '—' }}</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="text-muted small">MODO DE BANDEIRA</label>
+                                <p class="mb-0">
+                                    {% if cliente.tp_bandeira == 'com_bandeira' %}
+                                    <span class="badge" style="background:rgba(255,165,0,0.2);color:var(--or)">Com Bandeira</span>
+                                    {% elif cliente.tp_bandeira == 'sem_bandeira' %}
+                                    <span class="badge" style="background:rgba(108,117,125,0.2);color:#6c757d">Sem Bandeira</span>
+                                    {% else %}
+                                    {{ cliente.tp_bandeira or '—' }}
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna Secundária -->
+            <div class="col-lg-4">
+                <!-- Usinas Vinculadas -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-sun-fill me-2" style="color:var(--accent)"></i>Usinas Vinculadas</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if usinas_cliente %}
+                        <div class="list-group list-group-flush">
+                            {% for usina in usinas_cliente %}
+                            <a href="/usinas/ver/{{ usina.id_usina }}" class="list-group-item list-group-item-action px-0 py-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <strong class="text-dark">{{ usina.desc_nome }}</strong>
+                                        <small class="text-muted d-block">ID: {{ usina.id_usina }}</small>
+                                    </div>
+                                    <i class="bi bi-arrow-right text-muted"></i>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">Nenhuma usina vinculada</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- PIX -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-qr-code me-2" style="color:var(--accent)"></i>PIX</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if pix_info %}
+                        {% for id_usina, pix in pix_info.items() %}
+                        <div class="mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+                            <small class="text-muted">{{ usinas_cliente | selectattr('id_usina', 'equalto', id_usina) | map(attribute='desc_nome') | first or ('Usina ' ~ id_usina) }}</small>
+                            <code class="d-block mt-2" style="font-size:11px;word-break:break-all;background:#f5f5f5;padding:8px;border-radius:4px">
+                                {{ pix.chave_pix }}
+                            </code>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted mb-0">Nenhuma chave PIX cadastrada</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Outras UCs da mesma pessoa -->
+                {% if outras_ucs %}
+                <div class="card mb-3">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0" style="font-size:14px">
+                            <i class="bi bi-link-45deg me-2" style="color:var(--accent)"></i>
+                            Outras UCs — {{ cliente.desc_nome.split()[0] }}
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            {% for ou in outras_ucs %}
+                            <a href="/clientes/ver/{{ ou.cod_uc }}"
+                               class="list-group-item list-group-item-action px-3 py-2">
+                                <code style="font-size:12px">{{ ou.cod_uc }}</code>
+                                {% if ou.desc_apelido %}
+                                <small class="text-muted d-block" style="font-size:11px">{{ ou.desc_apelido }}</small>
+                                {% endif %}
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Ações -->
+                <div class="card">
+                    <div class="card-body">
+                        <a href="/clientes/editar/{{ cliente.cod_uc }}" class="btn btn-primary w-100 mb-2">
+                            <i class="bi bi-pencil me-1"></i>Editar
+                        </a>
+                        <button type="button" class="btn btn-outline-danger w-100"
+                                onclick="abrirModalExcluir('{{ cliente.cod_uc }}', '{{ cliente.desc_nome|replace("'", " ") }}')">
+                            <i class="bi bi-trash me-1"></i>Remover esta UC
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA 2: CONSUMO -->
+    <div class="tab-pane fade" id="conteudo-consumo" role="tabpanel">
+        <div class="row g-3">
+            <!-- Gráfico de Consumo -->
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-bar-chart me-2" style="color:var(--accent)"></i>Histórico de Consumo (últimos 12 meses)</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if consumo_historico %}
+                        <canvas id="graficoConsumo" height="80"></canvas>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-bar-chart" style="font-size:48px;color:#ccc"></i>
+                            <p class="text-muted mt-3">Nenhum histórico de consumo disponível</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resumo Consumo -->
+            {% if consumo_historico %}
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <p class="text-muted small mb-2">CONSUMO MÉDIO</p>
+                        <h4 style="color:var(--accent)">
+                            {{ (consumo_historico|map(attribute='kwh')|sum / consumo_historico|length)|int }} kWh
+                        </h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <p class="text-muted small mb-2">CONSUMO MÁXIMO</p>
+                        <h4 style="color:var(--or)">
+                            {{ consumo_historico|map(attribute='kwh')|max|int }} kWh
+                        </h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <p class="text-muted small mb-2">CONSUMO MÍNIMO</p>
+                        <h4 style="color:#28a745">
+                            {{ consumo_historico|map(attribute='kwh')|min|int }} kWh
+                        </h4>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <p class="text-muted small mb-2">TOTAL 12 MESES</p>
+                        <h4 style="color:#6c757d">
+                            {{ consumo_historico|map(attribute='kwh')|sum|int }} kWh
+                        </h4>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ABA 3: PAGAMENTOS -->
+    <div class="tab-pane fade" id="conteudo-pagamentos" role="tabpanel">
+        {% if todas_faturas %}
+        <div class="card">
+            <div class="card-header bg-light border-0">
+                <h5 class="mb-0"><i class="bi bi-receipt me-2" style="color:var(--accent)"></i>Histórico de Faturas</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Período</th>
+                                <th>Consumo</th>
+                                <th>Valor</th>
+                                <th>Status</th>
+                                <th>Data Vencimento</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for fatura in todas_faturas %}
+                            <tr>
+                                <td>
+                                    <strong>{{ fatura._mes_ref_br or '—' }}</strong>
+                                </td>
+                                <td>
+                                    {{ (fatura.qtd_consumo_kwh or 0)|int }} kWh
+                                </td>
+                                <td>
+                                    R$ {{ "%.2f"|format(fatura.vlr_fatura_equatorial or 0) }}
+                                </td>
+                                <td>
+                                    {% if fatura.status == 'pago' %}
+                                    <span class="badge rounded-pill" style="background:rgba(25,135,84,0.12);color:#198754;font-size:11px">
+                                        <i class="bi bi-check-circle-fill me-1"></i>Pago
+                                    </span>
+                                    {% elif fatura._vencido %}
+                                    <span class="badge rounded-pill" style="background:rgba(220,53,69,0.12);color:#dc3545;font-size:11px">
+                                        <i class="bi bi-exclamation-circle-fill me-1"></i>Vencido
+                                    </span>
+                                    {% else %}
+                                    <span class="badge rounded-pill" style="background:rgba(255,193,7,0.18);color:#7a5800;font-size:11px">
+                                        <i class="bi bi-hourglass-split me-1"></i>Pendente
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ fatura.dt_venc_solev[:10] if fatura.dt_venc_solev else '—' }}
+                                </td>
+                                <td class="text-end">
+                                    <a href="/faturas/ver/{{ fatura.id_fatura }}" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-receipt" style="font-size:48px;color:#ccc"></i>
+                <p class="text-muted mt-3">Nenhuma fatura cadastrada</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ABA 4: DOCUMENTOS -->
+    <div class="tab-pane fade" id="conteudo-documentos" role="tabpanel">
+        <div class="row g-3">
+
+            <!-- Coluna esquerda: gerar + upload manual -->
+            <div class="col-md-5">
+
+                <!-- Gerar Documentos -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-file-earmark-pdf me-2" style="color:var(--accent)"></i>Gerar Documentos</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="/contrato/cliente/{{ cliente.cod_uc }}" class="btn btn-outline-primary" target="_blank">
+                                <i class="bi bi-file-pdf me-1"></i>Contrato
+                                <small class="ms-1 text-muted">(preencher e salvar)</small>
+                            </a>
+                            <button class="btn btn-outline-secondary" disabled title="Em desenvolvimento">
+                                <i class="bi bi-file-pdf me-1"></i>Transf. Titularidade
+                            </button>
+                            <button class="btn btn-outline-secondary" disabled title="Em desenvolvimento">
+                                <i class="bi bi-file-pdf me-1"></i>Transf. Saldo
+                            </button>
+                            <button class="btn btn-outline-secondary" disabled title="Em desenvolvimento">
+                                <i class="bi bi-file-pdf me-1"></i>Cancelamento
+                            </button>
+                        </div>
+                        <small class="text-muted d-block mt-2" style="font-size:11px">
+                            <i class="bi bi-info-circle me-1"></i>Clique em Contrato para preencher o formulário e salvar o PDF no sistema.
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Upload Manual -->
+                <div class="card">
+                    <div class="card-header bg-light border-0">
+                        <h5 class="mb-0"><i class="bi bi-upload me-2" style="color:var(--accent)"></i>Enviar Documento</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST"
+                              action="/clientes/ver/{{ cliente.cod_uc }}/upload_documento"
+                              enctype="multipart/form-data">
+                            <div class="mb-2">
+                                <label class="form-label small text-muted mb-1">Tipo</label>
+                                <select name="tipo_doc" class="form-select form-select-sm">
+                                    <option value="contrato">Contrato</option>
+                                    <option value="titularidade">Transf. Titularidade</option>
+                                    <option value="saldo">Transf. Saldo</option>
+                                    <option value="cancelamento">Cancelamento</option>
+                                    <option value="outro">Outro</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small text-muted mb-1">Nome (opcional)</label>
+                                <input type="text" name="nome_arquivo" class="form-control form-control-sm"
+                                       placeholder="Ex: Contrato João 2026.pdf">
+                            </div>
+                            <div class="input-group input-group-sm">
+                                <input type="file" name="documento" class="form-control" accept=".pdf" required>
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-upload me-1"></i>Salvar
+                                </button>
+                            </div>
+                            <small class="text-muted" style="font-size:11px">Apenas PDF</small>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coluna direita: documentos salvos -->
+            <div class="col-md-7">
+                <div class="card h-100">
+                    <div class="card-header bg-light border-0 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-folder-fill me-2" style="color:var(--accent)"></i>Documentos Salvos</h5>
+                        {% if documentos %}
+                        <span class="badge rounded-pill" style="background:var(--or);color:var(--db)">
+                            {{ documentos|length }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body p-0">
+                        {% if documentos %}
+                        <div class="list-group list-group-flush">
+                            {% for doc in documentos %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-3 py-2">
+                                <div style="min-width:0">
+                                    <i class="bi bi-file-pdf-fill text-danger me-2"></i>
+                                    <span class="text-truncate" style="font-size:14px">{{ doc.nome_arquivo }}</span>
+                                    <small class="text-muted d-block ms-4" style="font-size:11px">
+                                        {{ doc.tipo_doc|capitalize if doc.tipo_doc else 'Outro' }}
+                                        {% if doc.created_at %}
+                                        · {{ doc.created_at[:10] }}
+                                        {% endif %}
+                                    </small>
+                                </div>
+                                <div class="d-flex gap-1 ms-2 flex-shrink-0">
+                                    <a href="/clientes/ver/{{ cliente.cod_uc }}/download_documento/{{ doc.id }}"
+                                       class="btn btn-sm btn-outline-primary" title="Download">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    <form method="POST"
+                                          action="/clientes/ver/{{ cliente.cod_uc }}/deletar_documento/{{ doc.id }}"
+                                          onsubmit="return confirm('Remover este documento?')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Remover">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-inbox" style="font-size:36px;color:#ccc"></i>
+                            <p class="text-muted mt-3 mb-1">Nenhum documento salvo</p>
+                            <small class="text-muted">Gere um contrato ou faça upload de um PDF.</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal fade" id="modalExcluirCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-bold">
+                    <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Confirmar exclusão
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body pt-2">
+                Tem certeza que deseja remover o cliente<br>
+                <strong id="nomeClienteExcluir" class="fs-6"></strong>?
+                <p class="text-muted mt-2 mb-0" style="font-size:13px">Esta ação não pode ser desfeita.</p>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i>Cancelar
+                </button>
+                <form method="POST" action="/clientes/remover_post" id="formExcluirCliente" style="display:inline">
+                    <input type="hidden" name="uc" id="ucExcluirCliente">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="bi bi-trash me-1"></i>Confirmar exclusão
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+function abrirModalExcluir(uc, nome) {
+    document.getElementById('ucExcluirCliente').value = uc;
+    document.getElementById('nomeClienteExcluir').textContent = nome;
+    new bootstrap.Modal(document.getElementById('modalExcluirCliente')).show();
+}
+
+// Ativa aba via query param ?aba=documentos|consumo|pagamentos|detalhes
+(function() {
+    const aba = new URLSearchParams(window.location.search).get('aba');
+    if (aba) {
+        const tabEl = document.getElementById('aba-' + aba);
+        if (tabEl) new bootstrap.Tab(tabEl).show();
+    }
+})();
+
+// Renderizar gráfico de consumo
+{% if consumo_historico %}
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('graficoConsumo');
+    if (ctx) {
+        const consumoData = {{ consumo_historico | tojson }};
+        const labels = consumoData.map(d => d.mes_ano);
+        const dados = consumoData.map(d => d.kwh);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Consumo (kWh)',
+                    data: dados,
+                    backgroundColor: 'rgba(245, 166, 35, 0.6)',
+                    borderColor: 'var(--or)',
+                    borderWidth: 2,
+                    borderRadius: 4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return value + ' kWh';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

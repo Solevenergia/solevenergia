@@ -231,6 +231,33 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-6 mb-3">
+                            <label class="form-label">
+                                Consumo médio estimado (kWh/mês)
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Usado no rateio quando não há histórico de faturas. Preencha para clientes novos ou vindos de outro sistema."
+                                   style="cursor:help"></i>
+                            </label>
+                            <input type="number" name="qtd_consumo_medio_kwh" class="form-control"
+                                   step="1" min="0"
+                                   value="{{ cliente.qtd_consumo_medio_kwh|int if cliente and cliente.qtd_consumo_medio_kwh else '' }}"
+                                   placeholder="Ex: 350">
+                        </div>
+                        <div class="col-6 mb-3">
+                            <label class="form-label">
+                                Saldo inicial (kWh)
+                                <i class="bi bi-question-circle text-muted ms-1"
+                                   title="Saldo de créditos kWh trazido de outro sistema. Usado no rateio até que uma fatura real seja processada."
+                                   style="cursor:help"></i>
+                            </label>
+                            <input type="number" name="qtd_saldo_inicial_kwh" class="form-control"
+                                   step="0.1" min="0"
+                                   value="{{ cliente.qtd_saldo_inicial_kwh if cliente and cliente.qtd_saldo_inicial_kwh else '' }}"
+                                   placeholder="Ex: 125.5">
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label">Bandeira Tarifária</label>
                         <div class="d-flex gap-3">
@@ -269,6 +296,10 @@
                                 name="id_usinas" value="{{ u.id_usina }}"
                                 id="usina_{{ u.id_usina }}"
                                 data-titular="{{ u.desc_titular_uc or '' }}"
+                                data-titular-cpf="{{ u._titular_cpf or '' }}"
+                                data-titular-dn="{{ u._titular_dn_br or '' }}"
+                                data-titular-tel="{{ u._titular_telefone or '' }}"
+                                data-titular-email="{{ u._titular_email or '' }}"
                                 {{ 'checked' if u.id_usina in usinas_cliente else '' }}>
                             <label class="form-check-label" for="usina_{{ u.id_usina }}">
                                 <i class="bi bi-sun me-1" style="color:var(--orange)"></i>
@@ -283,6 +314,40 @@
                     {% else %}
                         <p class="text-muted mb-0">Nenhuma usina cadastrada.</p>
                     {% endif %}
+                </div>
+            </div>
+
+            <!-- Titularidade da UC (preenchido automaticamente pela usina) -->
+            <div class="card mb-4" id="cardTitularidade" style="display:none">
+                <div class="card-body p-4">
+                    <h5 class="fw-bold mb-3">
+                        <i class="bi bi-person-badge me-2" style="color:var(--orange)"></i>Titularidade da UC
+                        <small class="text-muted fw-normal ms-2" style="font-size:12px">
+                            (preenchido a partir da usina vinculada — usado no login do portal Equatorial)
+                        </small>
+                    </h5>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-1">Nome</label>
+                            <input type="text" class="form-control form-control-sm" id="tit_nome" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1">CPF</label>
+                            <input type="text" class="form-control form-control-sm" id="tit_cpf" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted mb-1">Data Nascimento</label>
+                            <input type="text" class="form-control form-control-sm" id="tit_dn" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-1">Telefone</label>
+                            <input type="text" class="form-control form-control-sm" id="tit_tel" readonly>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted mb-1">E-mail</label>
+                            <input type="text" class="form-control form-control-sm" id="tit_email" readonly>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -384,6 +449,55 @@
                 if (campo && !campo.value.trim()) campo.value = titular;
             });
         });
+
+        // Card "Titularidade da UC": preenche com dados do titular da usina marcada
+        const cardTit  = document.getElementById('cardTitularidade');
+        const fNome    = document.getElementById('tit_nome');
+        const fCpf     = document.getElementById('tit_cpf');
+        const fDn      = document.getElementById('tit_dn');
+        const fTel     = document.getElementById('tit_tel');
+        const fEmail   = document.getElementById('tit_email');
+
+        function fmtCpf(d) {
+            d = (d || '').replace(/\D/g, '').slice(0, 11);
+            if (d.length !== 11) return d;
+            return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
+        }
+
+        function atualizarTitularidade() {
+            if (!cardTit) return;
+            // Pega a PRIMEIRA usina marcada que tenha titular cadastrado
+            var marcadas = document.querySelectorAll('.usina-check:checked');
+            var fonte = null;
+            for (var i = 0; i < marcadas.length; i++) {
+                if ((marcadas[i].dataset.titular || '').trim()) {
+                    fonte = marcadas[i];
+                    break;
+                }
+            }
+            if (!fonte) {
+                cardTit.style.display = 'none';
+                if (fNome) fNome.value = '';
+                if (fCpf)  fCpf.value  = '';
+                if (fDn)   fDn.value   = '';
+                if (fTel)  fTel.value  = '';
+                if (fEmail)fEmail.value= '';
+                return;
+            }
+            cardTit.style.display = '';
+            if (fNome) fNome.value = fonte.dataset.titular || '';
+            if (fCpf)  fCpf.value  = fmtCpf(fonte.dataset.titularCpf || '');
+            if (fDn)   fDn.value   = fonte.dataset.titularDn || '';
+            if (fTel)  fTel.value  = fonte.dataset.titularTel || '';
+            if (fEmail)fEmail.value= fonte.dataset.titularEmail || '';
+        }
+
+        // Recalcula ao marcar/desmarcar qualquer usina
+        document.querySelectorAll('.usina-check').forEach(function(cb) {
+            cb.addEventListener('change', atualizarTitularidade);
+        });
+        // Preenche já na carga (caso modo edição com usina marcada)
+        atualizarTitularidade();
 
         // Toggle STATUS: atualiza label ao mudar
         const switchStatus = document.getElementById('switchStatusAtivo');

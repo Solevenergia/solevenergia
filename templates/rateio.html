@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-pie-chart-fill me-2" style="color:var(--or)"></i>Rateio de Créditos</h1>
-    <div>
+    <div class="d-flex gap-2">
         <a href="/usinas/rateio/pdf/{{ uid }}" class="btn btn-cta btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF Equatorial</a>
         <button type="button" class="btn btn-db btn-sm" data-bs-toggle="modal" data-bs-target="#modalEnviarEmail">
             <i class="bi bi-envelope-fill me-1"></i>Enviar para Equatorial
@@ -13,10 +13,10 @@
     </div>
 </div>
 
-{# ══════ SELETOR DE MÊS ══════ #}
+{# ══ SELETOR DE MÊS ══ #}
 {% if meses_disponiveis %}
-<div class="d-flex align-items-center gap-2 mb-4">
-    <span class="fw-bold" style="font-size:13px;color:var(--db)"><i class="bi bi-calendar3 me-1"></i>Mês de referência:</span>
+<div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+    <span class="fw-bold" style="font-size:13px;color:var(--db)"><i class="bi bi-calendar3 me-1"></i>Ciclo:</span>
     {% for m in meses_disponiveis %}
     <a href="/usinas/rateio/{{ uid }}?mes={{ m }}"
        class="btn btn-sm {% if m == mes_sel %}btn-cta{% else %}btn-outline-secondary{% endif %}"
@@ -25,7 +25,7 @@
 </div>
 {% endif %}
 
-{# ══════ CARDS RESUMO ══════ #}
+{# ══ CARDS RESUMO ══ #}
 <div class="row g-3 mb-4">
     <div class="col-md-3"><div class="card stat-card">
         <div class="stat-icon" style="background:rgba(245,166,35,0.1);color:var(--or)"><i class="bi bi-sun-fill"></i></div>
@@ -46,197 +46,241 @@
     <div class="col-md-3"><div class="card stat-card">
         <div class="stat-icon" style="background:{% if total_rateio == 100 %}rgba(34,197,94,0.1);color:var(--green){% else %}rgba(239,68,68,0.1);color:#ef4444{% endif %}">
             <i class="bi bi-pie-chart-fill"></i></div>
-        <div class="stat-value" style="color:{% if total_rateio == 100 %}var(--green){% else %}#ef4444{% endif %}">{{ "%.2f"|format(total_rateio) }}%</div>
+        <div class="stat-value" id="cardTotalPct" style="color:{% if total_rateio == 100 %}var(--green){% else %}#ef4444{% endif %}">{{ "%.2f"|format(total_rateio) }}%</div>
         <div class="stat-label">Total rateio{% if total_rateio != 100 %} (deve ser 100%){% endif %}</div>
     </div></div>
 </div>
 
-{# ══════ FASE INDICADORA ══════ #}
-<div class="card mb-4 p-3">
-    <div class="d-flex align-items-center gap-3" style="font-size:12px">
+{# ══ FASE ══ #}
+<div class="card mb-3 p-3" style="font-size:12px">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
         <span class="fw-bold text-muted" style="font-size:11px">CICLO {{ mes_sel }}:</span>
         <span class="d-flex align-items-center gap-1">
-            <span class="rounded-circle d-inline-block" style="width:10px;height:10px;background:var(--green)"></span>
-            <span {% if not tem_geracao_real %}class="text-muted"{% else %}class="fw-bold" style="color:var(--green)"{% endif %}>1. Fatura Usina{% if tem_geracao_real %} ✓{% endif %}</span>
+            <span class="rounded-circle d-inline-block" style="width:10px;height:10px;background:{% if tem_geracao_real %}var(--green){% else %}#eab308{% endif %}"></span>
+            <span class="{% if not tem_geracao_real %}fw-bold{% else %}text-muted{% endif %}" style="{% if tem_geracao_real %}color:var(--green){% endif %}">
+                1. Planejamento / Envio{% if tem_geracao_real %} ✓{% endif %}
+            </span>
         </span>
         <i class="bi bi-chevron-right text-muted"></i>
         <span class="d-flex align-items-center gap-1">
             {% set faturas_recebidas = alocacoes|selectattr('tem_fatura')|list|length %}
             <span class="rounded-circle d-inline-block" style="width:10px;height:10px;background:{% if faturas_recebidas == alocacoes|length and alocacoes|length > 0 %}var(--green){% elif faturas_recebidas > 0 %}#ffc107{% else %}#ccc{% endif %}"></span>
-            <span {% if faturas_recebidas == 0 %}class="text-muted"{% else %}class="fw-bold"{% endif %}>2. Faturas Clientes ({{ faturas_recebidas }}/{{ alocacoes|length }})</span>
+            <span class="{% if faturas_recebidas == 0 %}text-muted{% else %}fw-bold{% endif %}">
+                2. Confirmação ({{ faturas_recebidas }}/{{ alocacoes|length }} faturas){% if todas_faturas %} ✓{% endif %}
+            </span>
         </span>
-        <i class="bi bi-chevron-right text-muted"></i>
-        <span class="d-flex align-items-center gap-1">
-            <span class="rounded-circle d-inline-block" style="width:10px;height:10px;background:{% if todas_faturas %}var(--green){% else %}#ccc{% endif %}"></span>
-            <span {% if not todas_faturas %}class="text-muted"{% else %}class="fw-bold" style="color:var(--green)"{% endif %}>3. Confrontação{% if todas_faturas %} ✓{% endif %}</span>
+        {% if base_para_sugestao == 'necessidade' %}
+        <span class="ms-auto badge" style="background:rgba(13,110,253,.1);color:#0d6efd;font-size:10px">
+            <i class="bi bi-shield-check me-1"></i>% sugerido baseado em necessidade (consumo − saldo)
         </span>
+        {% else %}
+        <span class="ms-auto badge" style="background:rgba(108,117,125,.1);color:#6c757d;font-size:10px">
+            <i class="bi bi-bar-chart me-1"></i>% sugerido baseado em consumo previsto
+        </span>
+        {% endif %}
     </div>
 </div>
 
 <div class="row g-3">
-    {# ══════ TABELA PRINCIPAL ══════ #}
+    {# ══ TABELA PRINCIPAL ══ #}
     <div class="col-md-8">
-        <div class="card mb-3"><div class="card-body p-3">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold mb-0"><i class="bi bi-table me-1" style="color:var(--or)"></i>
-                    {% if tem_geracao_real %}Confrontação — {{ mes_sel }}{% else %}Estimativa de Rateio{% endif %}
-                </h6>
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2" style="background:rgba(245,166,35,.06)">
+            <h6 class="fw-bold mb-0">
+                <i class="bi bi-table me-1" style="color:var(--or)"></i>
+                Clientes vinculados ({{ alocacoes|length }})
+            </h6>
+            <div class="d-flex align-items-center gap-2">
+                <div class="input-group input-group-sm" style="width:190px">
+                    <span class="input-group-text" style="font-size:11px"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>kWh geração</span>
+                    <input type="number" id="simKwhInput" class="form-control text-end"
+                           value="{{ "{:.0f}".format(base_kwh if base_kwh > 0 else geracao_mensal) }}"
+                           min="0" step="1" style="font-size:12px"
+                           title="Edite para simular com outro valor de geração">
+                </div>
                 {% if tem_geracao_real %}
                 <span class="badge" style="background:rgba(34,197,94,0.1);color:var(--green);font-size:11px">
-                    <i class="bi bi-check-circle me-1"></i>Geração real: {{ "{:,.0f}".format(kwh_gerado_real).replace(",", ".") }} kWh
+                    <i class="bi bi-check-circle me-1"></i>Real: {{ "{:,.0f}".format(kwh_gerado_real).replace(",", ".") }} kWh
                 </span>
                 {% else %}
                 <span class="badge" style="background:rgba(234,179,8,0.1);color:#eab308;font-size:11px">
-                    <i class="bi bi-hourglass-split me-1"></i>Aguardando fatura da usina
+                    <i class="bi bi-hourglass-split me-1"></i>Estimativa
                 </span>
                 {% endif %}
             </div>
+        </div>
 
-            <form method="POST" action="/usinas/rateio/atualizar/{{ uid }}">
-            <div class="table-responsive">
-            <table class="table table-sm mb-0" style="font-size:12px">
-                <thead><tr>
-                    <th>UC</th>
-                    <th>Cliente</th>
-                    <th style="width:80px">Rateio %</th>
-                    <th class="text-end">kWh Esperado</th>
-                    <th class="text-end">kWh Compensado</th>
-                    <th class="text-end">Diferença</th>
-                    <th class="text-end" style="min-width:130px">Saldo kWh</th>
-                    <th class="text-center">Status</th>
-                </tr></thead>
-                <tbody>
-                {% for a in alocacoes %}
-                <tr style="{% if a.status == 'deficit' %}background:rgba(239,68,68,0.03){% elif a.status == 'excedente' %}background:rgba(34,197,94,0.03){% endif %}">
-                    <td><code>{{ a.uc_display or (a.uc | fmt_uc15) }}</code></td>
-                    <td><strong>{{ a.nome[:22] }}</strong></td>
-                    <td><input type="text" name="rateio_{{ a.uc }}" class="form-control form-control-sm text-center"
-                        value="{{ "%.2f"|format(a.rateio_pct) }}" style="width:70px;font-size:11px"></td>
-                    <td class="text-end"><strong style="color:var(--or)">{{ "{:,.1f}".format(a.kwh_esperado).replace(",", ".") }}</strong></td>
-                    <td class="text-end">
-                        {% if a.tem_fatura %}
-                            {% if a.kwh_compensado > 0 %}{{ "{:,.1f}".format(a.kwh_compensado).replace(",", ".") }}
-                            {% else %}<span class="text-muted">0</span>{% endif %}
-                        {% else %}<span class="text-muted">—</span>{% endif %}
-                    </td>
-                    <td class="text-end">
-                        {% if a.tem_fatura and a.kwh_compensado > 0 %}
-                            {% if a.diferenca > 0 %}<span style="color:var(--green);font-weight:600">+{{ "{:,.1f}".format(a.diferenca).replace(",", ".") }}</span>
-                            {% elif a.diferenca < 0 %}<span style="color:#ef4444;font-weight:600">{{ "{:,.1f}".format(a.diferenca).replace(",", ".") }}</span>
-                            {% else %}<span class="text-muted">0</span>{% endif %}
-                        {% else %}<span class="text-muted">—</span>{% endif %}
-                    </td>
-                    <td class="text-end">
-                        <a href="#" class="text-decoration-none saldo-link" style="color:inherit"
-                           data-bs-toggle="modal" data-bs-target="#modalConferirSaldo"
-                           data-uc="{{ a.uc }}"
-                           data-nome="{{ a.nome }}"
-                           data-saldo-conferido="{{ a.saldo_kwh }}"
-                           data-saldo-equatorial="{{ a.saldo_equatorial }}"
-                           data-data-saldo-eq="{{ a.data_saldo_eq }}"
-                           data-dt-conferido="{{ a.dt_saldo_conferido }}"
-                           data-obs="{{ a.desc_saldo_obs|e }}"
-                           title="Clique para conferir o saldo">
-                            <div style="line-height:1.1">
-                                {% if a.saldo_kwh > 0 %}<span style="color:#3b82f6;font-weight:600">{{ "{:,.1f}".format(a.saldo_kwh).replace(",", ".") }}</span>
-                                {% elif a.saldo_kwh < 0 %}<span style="color:#ef4444;font-weight:600">{{ "{:,.1f}".format(a.saldo_kwh).replace(",", ".") }}</span>
-                                {% else %}<span class="text-muted">0</span>{% endif %}
-                                {% if a.dt_saldo_conferido %}
-                                <i class="bi bi-patch-check-fill ms-1" style="color:var(--green);font-size:11px" title="Conferido em {{ a.dt_saldo_conferido }}"></i>
-                                {% endif %}
-                            </div>
-                            <div style="font-size:10px;line-height:1;margin-top:2px">
-                                {% if a.tem_divergencia %}
-                                    <span style="color:#eab308" title="Divergência com Equatorial">
-                                        <i class="bi bi-exclamation-triangle-fill"></i>
-                                        Eq: {{ "{:,.1f}".format(a.saldo_equatorial).replace(",", ".") }}
-                                    </span>
-                                {% else %}
-                                    <span class="text-muted">Eq: {{ "{:,.1f}".format(a.saldo_equatorial).replace(",", ".") }}</span>
-                                {% endif %}
-                            </div>
-                        </a>
-                    </td>
+        <form method="POST" action="/usinas/rateio/atualizar/{{ uid }}">
+        <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0" style="font-size:12px">
+            <thead style="background:#f8f9fa">
+            <tr>
+                <th style="font-size:11px">UC / Cliente</th>
+                <th class="text-end" style="font-size:11px">
+                    Saldo atual
+                    <i class="bi bi-question-circle text-muted ms-1" title="Saldo de créditos kWh acumulado. Clique para conferir." style="cursor:help"></i>
+                </th>
+                <th class="text-end" style="font-size:11px">
+                    Prev. consumo
+                    <i class="bi bi-question-circle text-muted ms-1" title="Previsão de consumo no próximo ciclo (máx. 3 meses + 10% margem)." style="cursor:help"></i>
+                </th>
+                <th class="text-end" style="font-size:11px">
+                    Necessidade
+                    <i class="bi bi-question-circle text-muted ms-1" title="max(0, previsão − saldo): quanto o cliente precisa receber no rateio." style="cursor:help"></i>
+                </th>
+                <th class="text-end" style="font-size:11px; color:#0d6efd">% Sug.</th>
+                <th class="text-center" style="font-size:11px; min-width:110px">% Rateio</th>
+                <th class="text-end" style="font-size:11px; background:rgba(245,166,35,.06)">kWh Alocado</th>
+                <th class="text-end" style="font-size:11px">kWh Compensado</th>
+                <th class="text-end" style="font-size:11px">Δ</th>
+                <th class="text-center" style="font-size:11px">Status</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for a in alocacoes %}
+            <tr class="rateio-row" data-saldo="{{ a.saldo_kwh }}" data-previsao="{{ a.previsao }}"
+                data-id-cliente="{{ a.id_cliente or '' }}"
+                style="{% if a.status == 'deficit' %}background:rgba(239,68,68,0.03){% elif a.status == 'excedente' %}background:rgba(34,197,94,0.03){% endif %}">
+                <td>
+                    <strong>{{ a.nome[:20] }}</strong>
+                    <br><code style="font-size:10px">{{ a.uc_display or (a.uc | fmt_uc15) }}</code>
+                </td>
+                <td class="text-end" style="position:relative">
+                    <div class="input-group input-group-sm" style="max-width:100px;margin-left:auto">
+                        <input type="text"
+                               class="form-control form-control-sm text-end input-edit-base input-saldo"
+                               value="{{ "%.1f"|format(a.saldo_kwh) if a.saldo_kwh else '0' }}"
+                               data-campo="saldo_kwh"
+                               data-original="{{ "%.1f"|format(a.saldo_kwh) }}"
+                               style="font-size:11px;{% if a.saldo_kwh > 0 %}color:#3b82f6;font-weight:600{% elif a.saldo_kwh < 0 %}color:#ef4444;font-weight:600{% endif %}"
+                               title="Editar saldo. Sera sobrescrito pela proxima fatura.">
+                    </div>
+                    {% if a.dt_saldo_conferido %}<small class="text-success" style="font-size:9px"><i class="bi bi-patch-check-fill"></i> {{ a.dt_saldo_conferido[:10] }}</small>{% endif %}
+                    {% if a.tem_divergencia %}<br><small style="color:#eab308;font-size:10px"><i class="bi bi-exclamation-triangle-fill"></i> Eq:{{ "{:,.1f}".format(a.saldo_equatorial) }}</small>{% endif %}
+                </td>
+                <td class="text-end">
+                    <div class="input-group input-group-sm" style="max-width:100px;margin-left:auto">
+                        <input type="text"
+                               class="form-control form-control-sm text-end input-edit-base input-consumo"
+                               value="{{ "%.0f"|format(a.previsao) if a.previsao else '' }}"
+                               data-campo="consumo_medio_kwh"
+                               data-original="{{ "%.0f"|format(a.previsao) }}"
+                               placeholder="—"
+                               style="font-size:11px;font-weight:600"
+                               title="Editar previsao de consumo. Pre-preenchida com calculo automatico (fatura > cadastro).">
+                    </div>
+                    {% if a.qtd_meses %}<small class="text-muted" style="font-size:10px">{{ a.qtd_meses }}m</small>{% endif %}
+                </td>
+                <td class="text-end">
+                    {% if a.necessidade > 0 %}
+                    <strong style="color:#198754">{{ "{:,.0f}".format(a.necessidade) }}</strong>
+                    {% else %}<span class="text-muted" title="Saldo cobre a previsão">—</span>{% endif %}
+                </td>
+                <td class="text-end">
+                    <span style="color:#0d6efd;font-size:11px">{{ "%.1f"|format(a.pct_sugerido) }}%</span>
+                    <br>
+                    <button type="button" class="btn-aplicar-sug p-0 border-0 bg-transparent text-muted"
+                            style="font-size:10px;cursor:pointer;text-decoration:underline"
+                            data-sug="{{ "%.2f"|format(a.pct_sugerido) }}"
+                            onclick="aplicarSug(this)">aplicar</button>
+                </td>
+                <td class="text-center">
+                    <div class="input-group input-group-sm" style="max-width:110px;margin:0 auto">
+                        <input type="text" name="rateio_{{ a.uc }}"
+                               class="form-control form-control-sm text-center input-rateio-pct"
+                               value="{{ "%.2f"|format(a.rateio_pct) }}"
+                               style="font-size:11px"
+                               data-sugerido="{{ "%.2f"|format(a.pct_sugerido) }}">
+                        <span class="input-group-text">%</span>
+                    </div>
+                </td>
+                <td class="text-end val-kwh-alocado" style="background:rgba(245,166,35,.04);font-weight:600;color:var(--or)">
+                    {{ "{:,.1f}".format(a.kwh_esperado) }}
+                </td>
+                <td class="text-end">
+                    {% if a.tem_fatura %}
+                        {% if a.kwh_compensado > 0 %}
+                        <strong>{{ "{:,.1f}".format(a.kwh_compensado) }}</strong>
+                        {% else %}<span class="text-muted">0</span>{% endif %}
+                    {% else %}<span class="text-muted" style="font-size:11px">—</span>{% endif %}
+                </td>
+                <td class="text-end">
+                    {% if a.tem_fatura and a.kwh_compensado > 0 %}
+                        {% if a.diferenca > 0 %}<span style="color:var(--green);font-weight:600">+{{ "{:,.1f}".format(a.diferenca) }}</span>
+                        {% elif a.diferenca < 0 %}<span style="color:#ef4444;font-weight:600">{{ "{:,.1f}".format(a.diferenca) }}</span>
+                        {% else %}<span class="text-muted">0</span>{% endif %}
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td class="text-center">
+                    {% if a.status == 'estimativa' %}<span class="badge" style="background:rgba(234,179,8,.15);color:#b45309;font-size:10px">Estimativa</span>
+                    {% elif a.status == 'aguardando' %}<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;font-size:10px">Aguardando</span>
+                    {% elif a.status == 'ok' %}<span class="badge" style="background:rgba(34,197,94,.15);color:#166534;font-size:10px">OK</span>
+                    {% elif a.status == 'excedente' %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:10px">+Excedente</span>
+                    {% elif a.status == 'deficit' %}<span class="badge" style="background:#fee2e2;color:#991b1b;font-size:10px">Déficit</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="10" class="text-center text-muted py-4">
+                    <i class="bi bi-people" style="font-size:32px;opacity:.3"></i>
+                    <p class="mt-2 mb-0">Nenhum cliente vinculado.</p>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            {% if alocacoes %}
+            <tfoot>
+                <tr style="background:var(--db);color:white;font-size:12px">
+                    <td><strong>TOTAL</strong></td>
+                    <td></td>
+                    <td class="text-end"><strong>{{ "{:,.0f}".format(alocacoes|sum(attribute='previsao')) }}</strong></td>
+                    <td class="text-end"><strong>{{ "{:,.0f}".format(alocacoes|sum(attribute='necessidade')) }}</strong></td>
+                    <td></td>
                     <td class="text-center">
-                        {% if a.status == 'estimativa' %}<span class="badge badge-pendente" style="font-size:10px">Estimativa</span>
-                        {% elif a.status == 'aguardando' %}<span class="badge" style="background:rgba(59,130,246,0.1);color:#3b82f6;font-size:10px">Aguardando</span>
-                        {% elif a.status == 'ok' %}<span class="badge badge-pago" style="font-size:10px">OK</span>
-                        {% elif a.status == 'excedente' %}<span class="badge" style="background:#dcfce7;color:#166534;font-size:10px">+Excedente</span>
-                        {% elif a.status == 'deficit' %}<span class="badge" style="background:#fee2e2;color:#991b1b;font-size:10px">Déficit</span>
-                        {% endif %}
+                        <strong id="totalPctRateio" style="color:{% if total_rateio == 100 %}#22c55e{% else %}#ef4444{% endif %}">
+                            {{ "%.2f"|format(total_rateio) }}%
+                        </strong>
                     </td>
+                    <td class="text-end"><strong id="totalKwhAlocado">{{ "{:,.1f}".format(base_kwh) }}</strong></td>
+                    <td class="text-end"><strong>{{ "{:,.1f}".format(alocacoes|sum(attribute='kwh_compensado')) }}</strong></td>
+                    <td class="text-end"><strong>{{ "{:,.1f}".format(alocacoes|sum(attribute='diferenca')) }}</strong></td>
+                    <td></td>
                 </tr>
-                {% endfor %}
-                </tbody>
-                <tfoot>
-                    <tr style="background:var(--db);color:white">
-                        <td></td><td><strong>TOTAL</strong></td>
-                        <td class="text-center"><strong>{{ "%.2f"|format(total_rateio) }}%</strong></td>
-                        <td class="text-end"><strong>{{ "{:,.1f}".format(base_kwh).replace(",", ".") }}</strong></td>
-                        <td class="text-end"><strong>{{ "{:,.1f}".format(alocacoes|sum(attribute='kwh_compensado')).replace(",", ".") }}</strong></td>
-                        <td class="text-end"><strong>{{ "{:,.1f}".format(alocacoes|sum(attribute='diferenca')).replace(",", ".") }}</strong></td>
-                        <td class="text-end"><strong>{{ "{:,.1f}".format(alocacoes|sum(attribute='saldo_kwh')).replace(",", ".") }}</strong></td>
-                        <td></td>
-                    </tr>
-                </tfoot>
-            </table>
-            </div>
-            <div class="mt-3 d-flex gap-2">
-                <button type="submit" class="btn btn-cta btn-sm"><i class="bi bi-check-lg me-1"></i>Salvar Rateio</button>
-                <a href="/usinas/rateio/pdf/{{ uid }}" class="btn btn-db btn-sm"><i class="bi bi-file-earmark-pdf me-1"></i>Gerar PDF</a>
-            </div>
-            </form>
-        </div></div>
+            </tfoot>
+            {% endif %}
+        </table>
+        </div>
 
-        {# ══════ SUGESTÃO PRÓXIMO MÊS ══════ #}
-        {% if sugestoes %}
-        <div class="card mb-3" style="border-left:4px solid var(--green)"><div class="card-body p-3">
-            <h6 class="fw-bold mb-2"><i class="bi bi-lightbulb-fill me-1" style="color:var(--or)"></i>Sugestão de Rateio — Próximo Mês</h6>
-            <p class="text-muted small mb-3">Baseado no consumo real dos clientes no mês {{ mes_sel }}. Ajuste os percentuais para que cada cliente receba proporcionalmente ao seu consumo.</p>
-            <div class="table-responsive">
-            <table class="table table-sm mb-0" style="font-size:12px">
-                <thead><tr>
-                    <th>Cliente</th>
-                    <th class="text-center">% Atual</th>
-                    <th class="text-center">% Sugerido</th>
-                    <th class="text-center">Variação</th>
-                </tr></thead>
-                <tbody>
-                {% for s in sugestoes %}
-                <tr>
-                    <td><strong>{{ s.nome[:22] }}</strong> <code style="font-size:10px">{{ s.uc | fmt_uc15 }}</code></td>
-                    <td class="text-center">{{ "%.2f"|format(s.pct_atual) }}%</td>
-                    <td class="text-center"><strong style="color:var(--or)">{{ "%.2f"|format(s.pct_sugerido) }}%</strong></td>
-                    <td class="text-center">
-                        {% if s.delta > 0 %}<span style="color:var(--green)">+{{ "%.2f"|format(s.delta) }}%</span>
-                        {% elif s.delta < 0 %}<span style="color:#ef4444">{{ "%.2f"|format(s.delta) }}%</span>
-                        {% else %}<span class="text-muted">—</span>{% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
+        {% if alocacoes %}
+        <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2" style="background:#f8f9fa">
+            <div class="d-flex gap-2 align-items-center">
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="aplicarTodosSugeridos()">
+                    <i class="bi bi-magic me-1"></i>Aplicar % sugeridos
+                </button>
+                <span class="text-muted" style="font-size:11px">
+                    Soma: <strong id="somaDisplay">{{ "%.2f"|format(total_rateio) }}%</strong>
+                    <span id="somaAlerta" class="ms-1"></span>
+                </span>
             </div>
-            <form method="POST" action="/usinas/rateio/aplicar_sugestao/{{ uid }}" class="mt-3">
-                <input type="hidden" name="mes_sel" value="{{ mes_sel }}">
-                {% for s in sugestoes %}
-                <input type="hidden" name="rateio_{{ s.uc }}" value="{{ "%.2f"|format(s.pct_sugerido) }}">
-                {% endfor %}
-                <button type="submit" class="btn btn-cta btn-sm"><i class="bi bi-check-lg me-1"></i>Aplicar Sugestão</button>
-                <small class="text-muted ms-2">Atualiza os percentuais do rateio automaticamente</small>
-            </form>
-        </div></div>
+            <button type="submit" class="btn btn-cta btn-sm">
+                <i class="bi bi-floppy-fill me-1"></i>Salvar Rateio
+            </button>
+        </div>
         {% endif %}
-
-        {# ══════ GRÁFICO ══════ #}
-        <div class="card"><div class="card-body p-3">
-            <h6 class="fw-bold mb-2"><i class="bi bi-pie-chart me-1" style="color:var(--or)"></i>Distribuição</h6>
-            <canvas id="chartRateio" height="200"></canvas>
-        </div></div>
+        </form>
     </div>
 
-    {# ══════ COLUNA LATERAL ══════ #}
+    {# ══ DISTRIBUIÇÃO ══ #}
+    <div class="card"><div class="card-body p-3">
+        <h6 class="fw-bold mb-2"><i class="bi bi-pie-chart me-1" style="color:var(--or)"></i>Distribuição</h6>
+        <canvas id="chartRateio" height="160"></canvas>
+    </div></div>
+    </div>
+
+    {# ══ COLUNA LATERAL ══ #}
     <div class="col-md-4">
+
         {% if nao_vinculados %}
         <div class="card mb-3"><div class="card-body p-3">
             <h6 class="fw-bold mb-2"><i class="bi bi-person-plus-fill me-1" style="color:var(--or)"></i>Vincular Cliente</h6>
@@ -252,28 +296,26 @@
                 <div class="mb-2">
                     <div class="input-group input-group-sm">
                         <input type="text" name="rateio_pct" class="form-control" id="vincRateio" placeholder="% do rateio">
-                        <span class="input-group-text" id="vincKwh" style="font-size:11px;min-width:90px">= 0 kWh</span>
+                        <span class="input-group-text" id="vincKwh" style="font-size:11px;min-width:80px">= 0 kWh</span>
                     </div>
-                    <small class="text-muted" style="font-size:10px">Base: {{ "{:,.0f}".format(base_kwh).replace(",", ".") }} kWh</small>
                 </div>
                 <button type="submit" class="btn btn-cta btn-sm w-100"><i class="bi bi-link-45deg me-1"></i>Vincular</button>
             </form>
         </div></div>
         {% endif %}
 
-        {# ══════ RESUMO DO CICLO ══════ #}
         <div class="card mb-3" style="background:linear-gradient(135deg, var(--db), #0f1d35);color:white">
             <div class="card-body p-3">
-                <h6 class="mb-3" style="color:rgba(255,255,255,0.6)"><i class="bi bi-arrow-repeat me-1"></i>Ciclo {{ mes_sel or 'atual' }}</h6>
+                <h6 class="mb-3" style="color:rgba(255,255,255,0.5)"><i class="bi bi-arrow-repeat me-1"></i>Ciclo {{ mes_sel }}</h6>
                 <div class="row text-center g-2">
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
                         <div style="color:rgba(255,255,255,0.4);font-size:10px">Previsão mensal</div>
-                        <div class="fw-bold" style="font-size:14px">{{ "{:,.0f}".format(geracao_mensal).replace(",", ".") }} kWh</div>
+                        <div class="fw-bold" style="font-size:14px">{{ "{:,.0f}".format(geracao_mensal) }} kWh</div>
                     </div></div>
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
                         <div style="color:rgba(255,255,255,0.4);font-size:10px">Geração real</div>
                         <div class="fw-bold" style="font-size:14px;color:{% if tem_geracao_real %}var(--green){% else %}rgba(255,255,255,0.3){% endif %}">
-                            {% if tem_geracao_real %}{{ "{:,.0f}".format(kwh_gerado_real).replace(",", ".") }} kWh{% else %}—{% endif %}
+                            {% if tem_geracao_real %}{{ "{:,.0f}".format(kwh_gerado_real) }} kWh{% else %}—{% endif %}
                         </div>
                     </div></div>
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
@@ -282,134 +324,86 @@
                     </div></div>
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
                         <div style="color:rgba(255,255,255,0.4);font-size:10px">Rateio total</div>
-                        <div class="fw-bold" style="font-size:14px;color:{% if total_rateio == 100 %}var(--green){% else %}#ef4444{% endif %}">{{ "%.2f"|format(total_rateio) }}%</div>
+                        <div id="cicloTotalPct" class="fw-bold" style="font-size:14px;color:{% if total_rateio == 100 %}var(--green){% else %}#ef4444{% endif %}">{{ "%.2f"|format(total_rateio) }}%</div>
                     </div></div>
                 </div>
-                {% if tem_geracao_real and geracao_mensal > 0 %}
-                <div class="mt-2 text-center" style="font-size:11px;color:rgba(255,255,255,0.4)">
-                    Performance: <strong style="color:{% if kwh_gerado_real >= geracao_mensal * 0.8 %}var(--green){% else %}#ef4444{% endif %}">
-                    {{ "%.0f"|format(kwh_gerado_real / geracao_mensal * 100) }}%</strong> da previsão
-                </div>
-                {% endif %}
             </div>
         </div>
 
-        {# ══════ FLUXO ══════ #}
-        <div class="card mb-3"><div class="card-body p-3">
-            <h6 class="fw-bold mb-2"><i class="bi bi-arrow-down-circle-fill me-1" style="color:var(--or)"></i>Fluxo do Rateio</h6>
-            <ol class="small text-muted mb-0" style="padding-left:16px;font-size:12px">
-                <li class="mb-2" style="{% if tem_geracao_real %}color:var(--green);font-weight:600{% endif %}">
-                    <i class="bi bi-{% if tem_geracao_real %}check-circle-fill{% else %}circle{% endif %} me-1"></i>
-                    8 dias antes da leitura: envia rateio baseado na <strong>estimativa</strong>
-                </li>
-                <li class="mb-2" style="{% if tem_geracao_real %}color:var(--green);font-weight:600{% endif %}">
-                    <i class="bi bi-{% if tem_geracao_real %}check-circle-fill{% else %}circle{% endif %} me-1"></i>
-                    Fatura da usina chega: geração real confirmada
-                </li>
-                <li class="mb-2" style="{% if todas_faturas %}color:var(--green);font-weight:600{% endif %}">
-                    <i class="bi bi-{% if todas_faturas %}check-circle-fill{% else %}circle{% endif %} me-1"></i>
-                    Faturas dos clientes: confronta esperado × compensado
-                </li>
-                <li class="mb-2" style="{% if sugestoes %}color:var(--green);font-weight:600{% endif %}">
-                    <i class="bi bi-{% if sugestoes %}check-circle-fill{% else %}circle{% endif %} me-1"></i>
-                    Sistema sugere ajuste de rateio para o próximo mês
-                </li>
-                <li class="mb-0" style="{% if protocolo_info.protocolo %}color:var(--green);font-weight:600{% endif %}">
-                    <i class="bi bi-{% if protocolo_info.protocolo %}check-circle-fill{% else %}circle{% endif %} me-1"></i>
-                    Protocolo registrado após envio
-                </li>
-            </ol>
-        </div></div>
-
-        {# ══════ PROTOCOLO ══════ #}
+        {# ══ PROTOCOLO ══ #}
         {% if protocolo_info.protocolo %}
-        <div class="card" style="border-left:4px solid var(--green)"><div class="card-body p-3">
+        <div class="card mb-3" style="border-left:4px solid var(--green)"><div class="card-body p-3">
             <div class="d-flex align-items-center justify-content-between mb-2">
-                <h6 class="fw-bold mb-0" style="color:var(--green)">
-                    <i class="bi bi-patch-check-fill me-1"></i>Protocolo Registrado
-                </h6>
+                <h6 class="fw-bold mb-0" style="color:var(--green)"><i class="bi bi-patch-check-fill me-1"></i>Protocolo Registrado</h6>
                 <button type="button" class="btn btn-outline-secondary btn-sm" style="font-size:11px"
                         data-bs-toggle="collapse" data-bs-target="#formProtocolo">
                     <i class="bi bi-pencil me-1"></i>Editar
                 </button>
             </div>
-            <div class="mb-1" style="font-size:13px">
+            <div style="font-size:13px">
                 <strong style="color:var(--db)">Nº {{ protocolo_info.protocolo }}</strong>
                 <span class="badge ms-2" style="background:{% if protocolo_info.via_envio == 'email' %}rgba(59,130,246,0.1);color:#3b82f6{% else %}rgba(245,166,35,0.15);color:#b45309{% endif %};font-size:11px">
-                    <i class="bi bi-{% if protocolo_info.via_envio == 'email' %}envelope-fill{% else %}building{% endif %} me-1"></i>
                     {% if protocolo_info.via_envio == 'email' %}E-mail{% else %}Agência{% endif %}
                 </span>
             </div>
             {% if protocolo_info.data_protocolo %}
-            <div class="text-muted" style="font-size:11px">
-                <i class="bi bi-clock me-1"></i>{{ protocolo_info.data_protocolo }}
-            </div>
+            <div class="text-muted mt-1" style="font-size:11px"><i class="bi bi-clock me-1"></i>{{ protocolo_info.data_protocolo }}</div>
             {% endif %}
             <div class="collapse mt-2" id="formProtocolo">
                 <form method="POST" action="/usinas/rateio/protocolo/{{ uid }}">
                     <input type="hidden" name="mes_ref" value="{{ mes_sel }}">
+                    <div class="mb-2"><input type="text" class="form-control form-control-sm" name="protocolo" value="{{ protocolo_info.protocolo }}" required></div>
                     <div class="mb-2">
-                        <label class="form-label" style="font-size:11px">Nº do Protocolo</label>
-                        <input type="text" class="form-control form-control-sm" name="protocolo"
-                               value="{{ protocolo_info.protocolo }}" required>
-                    </div>
-                    <div class="mb-2">
-                        <label class="form-label" style="font-size:11px">Via de Envio</label>
                         <select class="form-select form-select-sm" name="via_envio">
                             <option value="email" {% if protocolo_info.via_envio == 'email' %}selected{% endif %}>E-mail</option>
                             <option value="agencia" {% if protocolo_info.via_envio == 'agencia' %}selected{% endif %}>Agência</option>
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-cta btn-sm w-100">
-                        <i class="bi bi-floppy-fill me-1"></i>Salvar
-                    </button>
+                    <button type="submit" class="btn btn-cta btn-sm w-100"><i class="bi bi-floppy-fill me-1"></i>Salvar</button>
                 </form>
             </div>
         </div></div>
         {% else %}
-        <div class="card" style="border-left:4px solid #e2e8f0"><div class="card-body p-3">
-            <h6 class="fw-bold mb-2 text-muted">
-                <i class="bi bi-hash me-1" style="color:var(--or)"></i>Registrar Protocolo — {{ mes_sel }}
-            </h6>
-            <p class="text-muted mb-2" style="font-size:11px">Após enviar à Equatorial (e-mail ou agência), registre o protocolo para confirmar o envio e remover este rateio das pendências.</p>
+        <div class="card mb-3" style="border-left:4px solid #e2e8f0"><div class="card-body p-3">
+            <h6 class="fw-bold mb-2 text-muted"><i class="bi bi-hash me-1" style="color:var(--or)"></i>Registrar Protocolo — {{ mes_sel }}</h6>
+            <p class="text-muted mb-2" style="font-size:11px">Após enviar à Equatorial, registre o protocolo para confirmar o envio.</p>
             <form method="POST" action="/usinas/rateio/protocolo/{{ uid }}">
                 <input type="hidden" name="mes_ref" value="{{ mes_sel }}">
+                <div class="mb-2"><input type="text" class="form-control form-control-sm" name="protocolo" placeholder="Ex: 2026042012345" required></div>
                 <div class="mb-2">
-                    <label class="form-label" style="font-size:11px">Nº do Protocolo *</label>
-                    <input type="text" class="form-control form-control-sm" name="protocolo"
-                           placeholder="Ex: 2026042012345" required>
-                </div>
-                <div class="mb-2">
-                    <label class="form-label" style="font-size:11px">Via de Envio</label>
                     <select class="form-select form-select-sm" name="via_envio">
                         <option value="email">E-mail</option>
                         <option value="agencia">Agência</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-cta btn-sm w-100">
-                    <i class="bi bi-patch-check me-1"></i>Confirmar Envio
-                </button>
+                <button type="submit" class="btn btn-cta btn-sm w-100"><i class="bi bi-patch-check me-1"></i>Confirmar Envio</button>
             </form>
         </div></div>
         {% endif %}
+
+        {# ══ LEGENDA ══ #}
+        <div class="card"><div class="card-body p-3" style="font-size:11px">
+            <h6 class="fw-bold mb-2" style="font-size:12px"><i class="bi bi-info-circle-fill me-1 text-info"></i>Como funciona</h6>
+            <ul class="mb-0 ps-3 text-muted">
+                <li><strong>% Sug.</strong>: calculado por necessidade (previsão − saldo). Aplique com o botão "aplicar" por linha ou "Aplicar % sugeridos" para todos.</li>
+                <li><strong>kWh Alocado</strong>: atualiza em tempo real conforme você ajusta o % ou o campo kWh geração.</li>
+                <li><strong>Confirmação</strong>: após receber as faturas dos clientes, os campos kWh Compensado e Δ são preenchidos automaticamente.</li>
+            </ul>
+        </div></div>
     </div>
 </div>
 
-{# ══════ MODAL CONFERIR SALDO ══════ #}
+{# ══ MODAL CONFERIR SALDO ══ #}
 <div class="modal fade" id="modalConferirSaldo" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h6 class="modal-title fw-bold">
-                    <i class="bi bi-patch-check-fill me-2" style="color:var(--or)"></i>
-                    Conferir saldo — <span id="saldoModalNome">cliente</span>
-                </h6>
+                <h6 class="modal-title fw-bold"><i class="bi bi-patch-check-fill me-2" style="color:var(--or)"></i>Conferir saldo — <span id="saldoModalNome"></span></h6>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" id="formConferirSaldo" action="">
                 <input type="hidden" name="mes_sel" value="{{ mes_sel }}">
                 <div class="modal-body">
-                    {# Saldo da Equatorial (read-only) #}
                     <div class="mb-3 p-3 rounded" style="background:#f8f9fa">
                         <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:0.5px">Saldo na Equatorial</div>
                         <div class="d-flex align-items-baseline gap-2 mt-1">
@@ -421,49 +415,31 @@
                             <i class="bi bi-arrow-down-circle me-1"></i>Aceitar este valor
                         </button>
                     </div>
-
-                    {# Saldo conferido (editavel) #}
                     <div class="mb-3">
-                        <label class="form-label" style="font-size:12px">
-                            Saldo conferido (kWh) <span style="color:#ef4444">*</span>
-                        </label>
-                        <input type="text" name="saldo_conferido" id="saldoModalInput"
-                               class="form-control" required
+                        <label class="form-label" style="font-size:12px">Saldo conferido (kWh) *</label>
+                        <input type="text" name="saldo_conferido" id="saldoModalInput" class="form-control"
                                style="font-size:18px;font-weight:600;text-align:right" data-no-persist="true">
-                        <small class="text-muted" style="font-size:11px">
-                            Valor que você confirma estar correto após conferir com a fatura.
-                        </small>
                     </div>
-
-                    {# Observacao #}
                     <div class="mb-3">
                         <label class="form-label" style="font-size:12px">Observação</label>
-                        <textarea name="obs" id="saldoModalObs" class="form-control" rows="2"
-                                  placeholder="Ex: conferido com a fatura 04/2026 do cliente"
-                                  maxlength="500" data-no-persist="true"></textarea>
+                        <textarea name="obs" id="saldoModalObs" class="form-control" rows="2" maxlength="500" data-no-persist="true"></textarea>
                     </div>
-
-                    {# Historico de conferencia #}
                     <div id="saldoModalHistorico" class="d-none">
                         <small class="text-muted" style="font-size:11px">
-                            <i class="bi bi-clock-history me-1"></i>
-                            Última conferência: <span id="saldoModalHistData"></span>
-                            <span id="saldoModalHistObs"></span>
+                            <i class="bi bi-clock-history me-1"></i>Última conferência: <span id="saldoModalHistData"></span><span id="saldoModalHistObs"></span>
                         </small>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-cta btn-sm">
-                        <i class="bi bi-patch-check me-1"></i>Confirmar saldo
-                    </button>
+                    <button type="submit" class="btn btn-cta btn-sm"><i class="bi bi-patch-check me-1"></i>Confirmar saldo</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-{# ══════ MODAL EMAIL ══════ #}
+{# ══ MODAL EMAIL ══ #}
 <div class="modal fade" id="modalEnviarEmail" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -473,7 +449,7 @@
             </div>
             <form method="POST" action="/usinas/rateio/email/{{ uid }}">
             <div class="modal-body">
-                <div class="mb-3 p-3 rounded" style="background:#f8f9fa;font-size:13px">
+                <div class="p-3 rounded" style="background:#f8f9fa;font-size:13px">
                     <div class="mb-1"><strong>Para:</strong> gd.goias@equatorialenergia.com.br</div>
                     <div class="mb-1"><strong>Assunto:</strong> UC {{ usina.uc_geradora | fmt_uc15 }} {{ now_str }}</div>
                     <div class="mt-2 text-muted" style="white-space:pre-line">Bom dia!
@@ -497,29 +473,149 @@ Certo do pronto atendimento, desde já agradeço.</div>
 
 {% block scripts %}
 <script>
-const vincR = document.getElementById('vincRateio');
-const vincK = document.getElementById('vincKwh');
-const baseKwh = {{ base_kwh }};
-if (vincR) { vincR.addEventListener('input', function() {
-    const pct = parseFloat((this.value || '0').replace(',', '.'));
-    if (baseKwh > 0 && pct > 0) {
-        const kwh = (baseKwh * pct / 100).toFixed(0);
-        vincK.innerHTML = '= <strong>' + parseInt(kwh).toLocaleString('pt-BR') + ' kWh</strong>';
-        vincK.style.color = 'var(--or)';
-    } else { vincK.innerHTML = '= 0 kWh'; vincK.style.color = '#999'; }
-}); }
+const BASE_KWH_SERVIDOR = {{ base_kwh }};
+const simInput = document.getElementById('simKwhInput');
+const vincR    = document.getElementById('vincRateio');
+const vincK    = document.getElementById('vincKwh');
 
-const labels = [{% for a in alocacoes %}'{{ a.nome[:15] }}'{% if not loop.last %},{% endif %}{% endfor %}];
-const data = [{% for a in alocacoes %}{{ a.rateio_pct }}{% if not loop.last %},{% endif %}{% endfor %}];
-const colors = ['#f5a623','#1a2a4a','#22c55e','#3b82f6','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1',
-    '#84cc16','#06b6d4','#d946ef','#0ea5e9','#eab308','#a855f7','#f43f5e','#10b981','#6d28d9','#0891b2'];
-new Chart(document.getElementById('chartRateio'), {
-    type: 'doughnut', data: { labels: labels,
-    datasets: [{ data: data, backgroundColor: colors.slice(0, data.length), borderWidth: 2, borderColor: '#fff' }] },
-    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } } }
+function getSimKwh() {
+    return parseFloat((simInput?.value || '0').replace(',', '.')) || 0;
+}
+function fmtN(n) {
+    return n.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
+}
+
+function recalc() {
+    const kwh = getSimKwh();
+    let somaPct = 0, somaKwh = 0;
+
+    document.querySelectorAll('.rateio-row').forEach(tr => {
+        const inp = tr.querySelector('.input-rateio-pct');
+        const tdA = tr.querySelector('.val-kwh-alocado');
+        if (!inp || !tdA) return;
+        const pct = parseFloat((inp.value || '0').replace(',', '.')) || 0;
+        const alocado = (pct / 100) * kwh;
+        tdA.textContent = fmtN(alocado);
+        somaPct += pct;
+        somaKwh += alocado;
+    });
+
+    const elPct  = document.getElementById('totalPctRateio');
+    const elKwh  = document.getElementById('totalKwhAlocado');
+    const elSoma = document.getElementById('somaDisplay');
+    const elAlt  = document.getElementById('somaAlerta');
+    const elCard = document.getElementById('cardTotalPct');
+    const elCiclo = document.getElementById('cicloTotalPct');
+
+    const pctStr = somaPct.toFixed(2) + '%';
+    const cor = Math.abs(somaPct - 100) < 0.01 ? '#22c55e' : '#ef4444';
+    const ico = Math.abs(somaPct - 100) < 0.01
+        ? '<i class="bi bi-check-circle-fill text-success"></i>'
+        : somaPct > 100
+        ? '<i class="bi bi-exclamation-triangle-fill text-danger"></i>'
+        : '<i class="bi bi-exclamation-circle-fill text-warning"></i>';
+
+    if (elPct)  { elPct.textContent = pctStr; elPct.style.color = cor; }
+    if (elKwh)  elKwh.textContent = fmtN(somaKwh);
+    if (elSoma) { elSoma.textContent = pctStr; elSoma.style.color = cor; }
+    if (elAlt)  elAlt.innerHTML = ico;
+    if (elCard) { elCard.textContent = pctStr; elCard.style.color = cor; }
+    if (elCiclo){ elCiclo.textContent = pctStr; elCiclo.style.color = cor; }
+
+    if (vincR && vincK) {
+        const pV = parseFloat((vincR.value||'0').replace(',','.'));
+        if (kwh > 0 && pV > 0) {
+            vincK.innerHTML = '= <strong>' + fmtN(kwh * pV / 100) + ' kWh</strong>';
+            vincK.style.color = 'var(--or)';
+        } else { vincK.innerHTML = '= 0 kWh'; vincK.style.color = '#999'; }
+    }
+}
+
+function aplicarSug(btn) {
+    const tr  = btn.closest('tr');
+    const inp = tr?.querySelector('.input-rateio-pct');
+    if (inp) { inp.value = btn.dataset.sug; recalc(); }
+}
+
+function aplicarTodosSugeridos() {
+    if (!confirm('Aplicar os % sugeridos em todos os clientes?')) return;
+    document.querySelectorAll('.input-rateio-pct').forEach(el => {
+        el.value = el.dataset.sugerido;
+    });
+    recalc();
+}
+
+if (simInput) simInput.addEventListener('input', recalc);
+if (vincR)    vincR.addEventListener('input', recalc);
+document.querySelectorAll('.input-rateio-pct').forEach(el => el.addEventListener('input', recalc));
+document.addEventListener('DOMContentLoaded', recalc);
+
+// ───── Auto-save de SALDO e PREVISAO via AJAX ─────
+const ID_USINA_RATEIO = {{ id_usina or 'null' }};
+function _toNum(v) {
+    if (!v) return null;
+    const s = v.trim();
+    if (!s) return null;
+    let n;
+    if (s.includes(',')) {
+        // BR: '1.234,56' → 1234.56
+        n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+    } else if ((s.match(/\./g) || []).length > 1) {
+        // BR sem decimais: '1.234' → 1234
+        n = parseFloat(s.replace(/\./g, ''));
+    } else {
+        // Decimal US ou inteiro: '125.5' / '1255'
+        n = parseFloat(s);
+    }
+    return isNaN(n) ? null : n;
+}
+document.querySelectorAll('.input-edit-base').forEach(el => {
+    el.addEventListener('blur', async function() {
+        const tr = this.closest('tr');
+        const id_cliente = tr?.dataset.idCliente;
+        if (!id_cliente || !ID_USINA_RATEIO) return;
+        const val = _toNum(this.value);
+        if (val === null) return;
+        if (parseFloat(this.dataset.original || '0') === val) return; // sem mudanca
+        const fd = new FormData();
+        fd.append(this.dataset.campo, val);
+        try {
+            const r = await fetch(`/usinas/rateio/${ID_USINA_RATEIO}/cliente/${id_cliente}/edit`,
+                                  {method: 'POST', body: fd});
+            const d = await r.json();
+            if (r.ok && d.ok) {
+                this.dataset.original = val;
+                this.style.background = '#d1fae5';
+                setTimeout(() => { this.style.background = ''; }, 1200);
+            } else {
+                this.style.background = '#fee2e2';
+                console.error('Erro ao salvar:', d.erro);
+            }
+        } catch (e) {
+            this.style.background = '#fee2e2';
+            console.error(e);
+        }
+    });
+    // Enter dispara blur (= salva)
+    el.addEventListener('keydown', function(ev) {
+        if (ev.key === 'Enter') { ev.preventDefault(); this.blur(); }
+    });
 });
 
-// ══════ Modal de conferência de saldo ══════
+// Gráfico de distribuição
+const labels = [{% for a in alocacoes %}'{{ a.nome[:15] }}'{% if not loop.last %},{% endif %}{% endfor %}];
+const data   = [{% for a in alocacoes %}{{ a.rateio_pct }}{% if not loop.last %},{% endif %}{% endfor %}];
+const colors = ['#f5a623','#1a2a4a','#22c55e','#3b82f6','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1',
+    '#84cc16','#06b6d4','#d946ef','#0ea5e9','#eab308','#a855f7','#f43f5e','#10b981','#6d28d9','#0891b2'];
+if (document.getElementById('chartRateio')) {
+    new Chart(document.getElementById('chartRateio'), {
+        type: 'doughnut',
+        data: { labels: labels, datasets: [{ data: data, backgroundColor: colors.slice(0, data.length), borderWidth: 2, borderColor: '#fff' }] },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } } }
+    });
+}
+
+// Modal de conferência de saldo
 (function(){
     const modal = document.getElementById('modalConferirSaldo');
     if (!modal) return;
@@ -527,39 +623,25 @@ new Chart(document.getElementById('chartRateio'), {
     modal.addEventListener('show.bs.modal', function(e){
         const t = e.relatedTarget;
         if (!t) return;
-        const uc       = t.getAttribute('data-uc') || '';
-        const nome     = t.getAttribute('data-nome') || '';
-        const conf     = t.getAttribute('data-saldo-conferido') || '0';
-        const eq       = t.getAttribute('data-saldo-equatorial') || '0';
-        const eqData   = t.getAttribute('data-data-saldo-eq') || '';
-        const dtConf   = t.getAttribute('data-dt-conferido') || '';
-        const obsAnt   = t.getAttribute('data-obs') || '';
-
-        document.getElementById('saldoModalNome').textContent      = nome;
-        document.getElementById('saldoModalEqValor').textContent   = fmtNum(eq);
-        document.getElementById('saldoModalEqData').textContent    = eqData ? '(fatura ' + eqData + ')' : '';
-        document.getElementById('saldoModalInput').value           = (conf || '0').replace('.', ',');
-        document.getElementById('saldoModalObs').value             = '';
-
-        // Botao "Aceitar este valor" → copia o saldo Equatorial pro input
+        document.getElementById('saldoModalNome').textContent    = t.getAttribute('data-nome') || '';
+        document.getElementById('saldoModalEqValor').textContent = fmtNum(t.getAttribute('data-saldo-equatorial') || '0');
+        document.getElementById('saldoModalEqData').textContent  = t.getAttribute('data-data-saldo-eq') ? '(fatura ' + t.getAttribute('data-data-saldo-eq') + ')' : '';
+        document.getElementById('saldoModalInput').value         = (t.getAttribute('data-saldo-conferido') || '0').replace('.', ',');
+        document.getElementById('saldoModalObs').value           = '';
         document.getElementById('btnAceitarEq').onclick = () => {
-            document.getElementById('saldoModalInput').value = (eq || '0').replace('.', ',');
+            document.getElementById('saldoModalInput').value = (t.getAttribute('data-saldo-equatorial') || '0').replace('.', ',');
         };
-
-        // Historico
-        const histDiv  = document.getElementById('saldoModalHistorico');
-        const histData = document.getElementById('saldoModalHistData');
-        const histObs  = document.getElementById('saldoModalHistObs');
+        const dtConf = t.getAttribute('data-dt-conferido') || '';
+        const obsAnt = t.getAttribute('data-obs') || '';
+        const histDiv = document.getElementById('saldoModalHistorico');
         if (dtConf) {
             histDiv.classList.remove('d-none');
-            histData.textContent = dtConf;
-            histObs.textContent  = obsAnt ? ' — ' + obsAnt : '';
+            document.getElementById('saldoModalHistData').textContent = dtConf;
+            document.getElementById('saldoModalHistObs').textContent  = obsAnt ? ' — ' + obsAnt : '';
         } else {
             histDiv.classList.add('d-none');
         }
-
-        // Action do form
-        document.getElementById('formConferirSaldo').action = '/usinas/conferir_saldo/{{ uid }}/' + uc;
+        document.getElementById('formConferirSaldo').action = '/usinas/conferir_saldo/{{ uid }}/' + t.getAttribute('data-uc');
     });
 })();
 </script>

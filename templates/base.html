@@ -297,6 +297,7 @@
         ::-webkit-scrollbar-thumb:hover { background-color: rgba(14,27,46,0.25); background-clip: content-box; }
     </style>
     {% block head %}{% endblock %}
+    {% block styles %}{% endblock %}
 </head>
 <body>
 <div class="app-shell">
@@ -343,6 +344,7 @@
         <a href="/conciliacao"  class="{% if 'conciliacao' in ep %}active{% endif %}"><i class="bi bi-clipboard-check-fill"></i> Conciliacao</a>
         <a href="/tarifas"      class="{% if 'tarifa' in ep %}active{% endif %}"><i class="bi bi-tag-fill"></i> Tarifas</a>
 
+        <a href="/cobrancas/dia" class="{% if ep == 'cobrancas_dia' %}active{% endif %}"><i class="bi bi-calendar-check-fill"></i> Cobrancas do Dia</a>
         <a href="/gerar/manual" class="{% if in_gerar %}active{% endif %}"><i class="bi bi-lightning-charge-fill"></i> Gerar Cobrança</a>
 
         <div class="side-section">Analise</div>

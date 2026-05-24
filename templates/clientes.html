@@ -2,6 +2,12 @@
 {% block title %}Clientes{% endblock %}
 {% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Clientes</span>{% endblock %}
 {% block topbar_actions %}
+<form method="POST" action="/admin/sync_leituras" style="display:inline"
+      onsubmit="return confirm('Sincronizar datas de leitura de todos os clientes com histórico de faturas?')">
+    <button type="submit" class="btn btn-outline-secondary btn-sm me-2" title="Busca a data de leitura mais recente de tb_faturas e salva em tb_clientes para cada cliente">
+        <i class="bi bi-calendar-check me-1"></i> Sincronizar datas de leitura
+    </button>
+</form>
 <a href="/clientes/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Cliente</a>
 {% endblock %}
 {% block content %}
@@ -10,21 +16,21 @@
     {% if total_pages > 1 %}
     <div class="d-flex align-items-center gap-1">
         {% if page > 1 %}
-        <a href="/clientes?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+        <a href="/clientes?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if filtro_usina %}&filtro_usina={{ filtro_usina }}{% endif %}"
            class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
         {% endif %}
         {% for p in range(1, total_pages + 1) %}
             {% if p == page %}
             <span class="btn btn-sm btn-cta" style="min-width:34px">{{ p }}</span>
             {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-            <a href="/clientes?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+            <a href="/clientes?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if filtro_usina %}&filtro_usina={{ filtro_usina }}{% endif %}"
                class="btn btn-sm btn-outline-secondary" style="min-width:34px">{{ p }}</a>
             {% elif p == page - 3 or p == page + 3 %}
             <span class="text-muted px-1">…</span>
             {% endif %}
         {% endfor %}
         {% if page < total_pages %}
-        <a href="/clientes?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}"
+        <a href="/clientes?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if filtro_usina %}&filtro_usina={{ filtro_usina }}{% endif %}"
            class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
         {% endif %}
     </div>
@@ -55,11 +61,12 @@
             </select>
         </div>
         <div class="col-md-2">
-            <select id="filtroUsina" class="form-select form-select-sm">
+            <select name="filtro_usina" id="filtroUsina" class="form-select form-select-sm"
+                    onchange="document.getElementById('formBusca').submit()">
                 <option value="">Todas as usinas</option>
                 <option value="__sem__">Sem usina vinculada</option>
                 {% for uid, u in usinas.items() %}
-                <option value="{{ uid }}">{{ u.desc_nome or uid }}</option>
+                <option value="{{ uid }}" {% if filtro_usina == uid %}selected{% endif %}>{{ u.desc_nome or uid }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -95,7 +102,7 @@
             <th>Nome</th>
             <th>Endereço</th>
             <th>Desconto</th>
-            <th>Tarifa</th>
+            <th>Data Leitura</th>
             <th>Usina(s)</th>
             <th>Status</th>
             <th></th>
@@ -110,10 +117,12 @@
                 <code style="font-size:13px">{{ (c.cod_uc | fmt_uc15) or c.cod_uc }}</code>
             </td>
             <td>
-                <strong>{{ c.desc_nome }}</strong>
-                {% if c.desc_apelido %}
-                <small class="text-muted d-block" style="font-size:11px">{{ c.desc_apelido }}</small>
-                {% endif %}
+                <a href="/clientes/ver/{{ c.cod_uc }}" class="link-cliente">
+                    <strong>{{ c.desc_nome }}</strong>
+                    {% if c.desc_apelido %}
+                    <small class="text-muted d-block" style="font-size:11px">{{ c.desc_apelido }}</small>
+                    {% endif %}
+                </a>
             </td>
             <td class="text-muted" style="font-size:12px">{{ c._endereco }}</td>
             <td>
@@ -121,7 +130,13 @@
                     {{ ((c.pct_desconto or 0) * 100)|int }}%
                 </span>
             </td>
-            <td style="font-size:13px">R$ {{ "%.4f"|format(c.vlr_tarifa_sem or 0) }}</td>
+            <td style="font-size:13px">
+                {% if c._data_leitura_atual %}
+                <strong>{{ c._data_leitura_atual | data_br }}</strong>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+            </td>
             <td>
                 {% if c._usinas %}
                     {% for u in c._usinas %}
@@ -240,6 +255,18 @@
     </div>
 </div>
 {% endblock %}
+{% block styles %}
+<style>
+.link-cliente {
+    text-decoration: none;
+    color: inherit;
+}
+.link-cliente:hover strong {
+    color: var(--accent);
+    text-decoration: underline;
+}
+</style>
+{% endblock %}
 {% block scripts %}
 <script>
 // Busca por Enter no campo
@@ -253,36 +280,23 @@ document.getElementById('campoBusca').addEventListener('input', function() {
     _t = setTimeout(function() { document.getElementById('formBusca').submit(); }, 600);
 });
 
-// Filtros client-side (usina + status)
-var filtroUsina  = document.getElementById('filtroUsina');
+// Filtro de status (client-side apenas para não recarregar a página)
 var filtroStatus = document.getElementById('filtroStatus');
 var contagem     = document.getElementById('contagem');
 
-function aplicarFiltros() {
-    var usina  = filtroUsina.value;
+function aplicarFiltroStatus() {
     var status = filtroStatus.value;
     var rows   = document.querySelectorAll('#tabelaClientes tbody tr');
     var vis    = 0;
     rows.forEach(function(tr) {
-        var matchUsina = true;
-        if (usina === '__sem__') {
-            matchUsina = !tr.dataset.usinas;
-        } else if (usina) {
-            matchUsina = tr.dataset.usinas.split(',').indexOf(String(usina)) >= 0;
-        }
-        var matchStatus = true;
-        if (status) {
-            matchStatus = tr.dataset.status === status;
-        }
-        var show = matchUsina && matchStatus;
-        tr.style.display = show ? '' : 'none';
-        if (show) vis++;
+        var matchStatus = !status || tr.dataset.status === status;
+        tr.style.display = matchStatus ? '' : 'none';
+        if (matchStatus) vis++;
     });
     if (contagem) contagem.textContent = vis;
 }
 
-filtroUsina.addEventListener('change', aplicarFiltros);
-filtroStatus.addEventListener('change', aplicarFiltros);
+filtroStatus.addEventListener('change', aplicarFiltroStatus);
 
 function abrirModalExcluir(uc, nome) {
     document.getElementById('ucExcluirCliente').value = uc;

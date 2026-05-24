@@ -603,9 +603,10 @@ def tb_writeback_pos_cobranca(id_cliente: int, total_com: float,
     NOTA: o parâmetro economia_acum é IGNORADO porque ele é recalculado
     de forma idempotente a partir da soma das faturas em
     recalcular_economia_acumulada(). Isso evita duplicação por re-submit."""
+    from utils import _data_br_para_iso
     _db().patch("tb_clientes", {"id_cliente": id_cliente}, {
         "vlr_cobranca_anterior":  round(total_com, 2),
-        "dt_venc_anterior":       venc_solev,
+        "dt_venc_anterior":       _data_br_para_iso(venc_solev),
         "dt_ultimo_pagamento":    None,
         # qtd_economia_acumulada gerenciada por recalcular_economia_acumulada
     })
@@ -731,8 +732,10 @@ def tb_save_endereco_usina(id_usina: int, dados: dict) -> None:
     else:
         # Primeiro cadastro: precisa que id_cliente seja nullable no banco
         # (execute migration_pix_recebedores.sql no Supabase SQL Editor)
+        # tb_enderecos.id_usina não tem unique constraint, então usamos
+        # upsert sem on_conflict (INSERT puro).
         row["id_usina"] = id_usina
-        _db().upsert("tb_enderecos", row, on_conflict="id_usina")
+        _db().upsert("tb_enderecos", row)
 
 
 def tb_delete_endereco_usina(id_usina: int) -> None:
@@ -1011,6 +1014,46 @@ def tb_carregar_usinas() -> list:
     return [_limpar_nulos(r) for r in rows]
 
 
+def tb_carregar_usinas_com_titular() -> list:
+    """Lista de usinas com dados do titular embutidos via id_titular → tb_titulares.
+
+    Cada usina recebe os campos adicionais:
+      desc_titular_uc       (nome, sobrescreve fallback legado vazio)
+      _titular_cpf
+      _titular_dn           (ISO YYYY-MM-DD)
+      _titular_dn_br        (DD/MM/AAAA, conveniencia para front)
+      _titular_telefone
+      _titular_email
+    Usado pelos forms de cliente para preencher o quadro de titularidade da UC
+    ao selecionar uma usina vinculada.
+    """
+    usinas = tb_carregar_usinas()
+    titulares_rows = _db().select("tb_titulares")
+    by_id = {t["id_titular"]: _limpar_nulos(t) for t in titulares_rows if t.get("id_titular")}
+    for u in usinas:
+        t = by_id.get(u.get("id_titular")) if u.get("id_titular") else None
+        if t:
+            if not u.get("desc_titular_uc"):
+                u["desc_titular_uc"] = t.get("desc_nome", "")
+            u["_titular_cpf"]      = t.get("desc_cpf_cnpj", "")
+            dn = (t.get("dt_nascimento") or "").strip()
+            u["_titular_dn"]       = dn
+            if len(dn) == 10 and dn[4] == "-":
+                a, m, d = dn.split("-")
+                u["_titular_dn_br"] = f"{d}/{m}/{a}"
+            else:
+                u["_titular_dn_br"] = dn
+            u["_titular_telefone"] = t.get("desc_telefone", "")
+            u["_titular_email"]    = t.get("desc_email", "")
+        else:
+            u.setdefault("_titular_cpf", "")
+            u.setdefault("_titular_dn", "")
+            u.setdefault("_titular_dn_br", "")
+            u.setdefault("_titular_telefone", "")
+            u.setdefault("_titular_email", "")
+    return usinas
+
+
 def tb_get_usina(id_usina: int) -> Optional[dict]:
     """Busca uma usina pelo ID."""
     rows = _db().select("tb_usinas", filtros={"id_usina": id_usina})
@@ -1055,7 +1098,7 @@ def tb_save_usina(dados: dict) -> dict:
         rows = _db().select("tb_usinas", filtros={"id_usina": id_usina})
         return _limpar_nulos(rows[0]) if rows else {"id_usina": id_usina}
     # INSERT novo registro
-    return _db().upsert_returning("tb_usinas", row, on_conflict="desc_nome")
+    return _db().insert_returning("tb_usinas", row)
 
 
 def tb_delete_usina(id_usina: int) -> None:
@@ -1248,6 +1291,15 @@ def salvar_usinas(usinas: dict) -> None:
 
     def _mapear(u: dict) -> dict:
         """Converte campos legados para colunas de tb_usinas."""
+        def _iso(s):
+            if not s: return None
+            s = str(s).strip()
+            if len(s) >= 10 and s[4] == '-': return s[:10]
+            try:
+                from datetime import datetime as _dt
+                return _dt.strptime(s, "%d/%m/%Y").strftime("%Y-%m-%d")
+            except Exception:
+                return None
         row = {
             "desc_nome":                  u.get("nome") or None,
             "qtd_potencia_kwp":           u.get("potencia_kwp") or None,
@@ -1258,14 +1310,14 @@ def salvar_usinas(usinas: dict) -> None:
             "cod_uc_geradora":            u.get("uc_geradora") or None,
             "desc_titular_uc":            u.get("titular_uc") or None,
             "desc_cpf_titular":           u.get("cpf_titular") or None,
-            "dt_comissionamento":         u.get("data_comissionamento") or None,
+            "dt_comissionamento":         _iso(u.get("data_comissionamento")),
             "desc_garantia_modulos":      u.get("garantia_modulos") or None,
             "desc_garantia_inversor":     u.get("garantia_inversor") or None,
             "qtd_geracao_media_mensal":   u.get("geracao_media_mensal") or None,
             "qtd_geracao_prevista_diaria":u.get("geracao_prevista_diaria") or None,
             "desc_observacoes":           u.get("observacoes") or None,
             "desc_documento_titular_pdf": u.get("documento_titular_pdf") or None,
-            "dt_proxima_leitura":         u.get("proxima_leitura") or None,
+            "dt_proxima_leitura":         _iso(u.get("proxima_leitura")),
             "qtd_saldo_kwh":              u.get("saldo_kwh") if u.get("saldo_kwh") is not None else None,
             # Campos extras presentes em tb_usinas
             "desc_classe":                u.get("classe") or None,
@@ -1486,6 +1538,7 @@ def inserir_fatura(
     difci:                float = 0,
     ecnisenta:            float = 0,
     anterior_leitura:     str = "",
+    proxima_leitura:      str = "",
     n_dias:               int = 0,
     # SCEE — dados da geração solar
     scee_ciclo_mes:         str   = "",   # ex: "04/2026"
@@ -1511,6 +1564,7 @@ def inserir_fatura(
 
     # Verifica se ja existe fatura para reusar status/dt_pagamento
     existing_status = "Aguardando pagamento"
+    id_cli = None
     try:
         id_cli = _resolver_id_cliente_por_uc(uc)
         m = _re_ih.match(r"^(\d{1,2})/(\d{4})$", str(mes_ref or "").strip())
@@ -1578,6 +1632,23 @@ def inserir_fatura(
     except Exception as e:
         print(f"  [DB] ERRO ao inserir em tb_faturas: {e}")
         raise
+
+    # Writeback automático: atualiza proxima_leitura no cadastro do cliente.
+    # Prioridade: campo extraído do PDF Equatorial ("PROXIMA LEITURA"); se
+    # ausente, aproxima por dt_leitura_atual + n_dias (1 ciclo da Equatorial).
+    try:
+        dt_iso = _parse_data_br_iso(str(proxima_leitura)) if proxima_leitura else None
+        if not dt_iso and data_leitura_atual:
+            base_iso = _parse_data_br_iso(str(data_leitura_atual))
+            if base_iso:
+                from datetime import datetime as _dt3, timedelta as _td3
+                ciclo = int(n_dias) if n_dias else 30
+                dt_iso = (_dt3.fromisoformat(base_iso) + _td3(days=ciclo)).strftime("%Y-%m-%d")
+        if dt_iso and id_cli:
+            _db().patch("tb_clientes", {"id_cliente": id_cli},
+                        {"proxima_leitura": dt_iso})
+    except Exception as _e:
+        print(f"  [DB] Aviso: writeback proxima_leitura falhou: {_e}")
 
 
 def _resolver_id_cliente_por_uc(uc: str) -> Optional[int]:
@@ -2178,6 +2249,47 @@ def tb_get_faturas_pendentes_ordenadas() -> list:
     return [_enriquecer_fatura(r) for r in rows]
 
 
+def tb_sync_proxima_leitura_por_fatura() -> dict:
+    """Atualiza proxima_leitura em tb_clientes para cada cliente, projetando
+    a próxima leitura como dt_leitura_atual + n_dias (1 ciclo Equatorial) da
+    fatura mais recente.
+
+    Retorna um dict com contagens: {'atualizados': N, 'sem_data': M, 'erros': K}
+    """
+    from datetime import datetime as _dt_s, timedelta as _td_s
+    db = _db()
+    rows = db.select(
+        "tb_faturas",
+        columns="id_cliente,dt_leitura_atual,n_dias,ano_referencia,mes_referencia",
+        order="id_cliente.asc,ano_referencia.desc,mes_referencia.desc",
+    )
+
+    # Para cada cliente, pega a fatura mais recente (já ordenada desc)
+    mais_recente: dict[int, str] = {}
+    for r in rows:
+        id_c = r.get("id_cliente")
+        dt_atual = r.get("dt_leitura_atual")
+        if not id_c or not dt_atual or id_c in mais_recente:
+            continue
+        try:
+            ciclo = int(r.get("n_dias") or 0) or 30
+            proj = (_dt_s.fromisoformat(str(dt_atual)) + _td_s(days=ciclo)).strftime("%Y-%m-%d")
+            mais_recente[id_c] = proj
+        except (ValueError, TypeError):
+            continue
+
+    atualizados = 0
+    erros = 0
+    for id_c, dt in mais_recente.items():
+        try:
+            db.patch("tb_clientes", {"id_cliente": id_c}, {"proxima_leitura": dt})
+            atualizados += 1
+        except Exception:
+            erros += 1
+
+    return {"atualizados": atualizados, "sem_data": len(rows) - len(mais_recente), "erros": erros}
+
+
 def tb_marcar_fatura_pago(
     id_fatura: int, dt_pagamento: str,
     vlr_pago: float = None,
@@ -2304,6 +2416,71 @@ def tb_resumo_faturas_por_periodo(ano: int, mes: int = None) -> dict:
         if st == "pago":
             out["pago"]["soma_pago"] += float(r.get("vlr_pago") or r.get("vlr_total_com") or 0)
     return out
+
+
+# ==================================================================
+#  DOCUMENTOS DE CLIENTES
+# ==================================================================
+
+def storage_delete_arquivo(storage_path: str) -> None:
+    """Remove arquivo do Supabase Storage. Nao levanta excecao se nao existir."""
+    import httpx
+    url, key = _storage_cfg()
+    base = f"{url}/storage/v1"
+    parts = storage_path.split("/", 1)
+    bucket = parts[0]
+    file_path = parts[1] if len(parts) > 1 else storage_path
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    try:
+        httpx.delete(f"{base}/object/{bucket}/{file_path}", headers=headers, timeout=15)
+    except Exception:
+        pass
+
+
+def tb_get_outras_ucs(id_cliente: int, desc_cpf: str = "", desc_nome: str = "") -> list:
+    """Retorna outros registros de cliente com mesmo CPF (ou mesmo nome se sem CPF),
+    excluindo o id_cliente informado. Usado para listar múltiplas UCs da mesma pessoa."""
+    db = _db()
+    candidatos = []
+    if desc_cpf and desc_cpf.strip():
+        cpf = desc_cpf.strip()
+        rows = db.select("tb_clientes", raw_params={"desc_cpf": f"eq.{cpf}"})
+        candidatos = [r for r in (rows or []) if r.get("id_cliente") != id_cliente]
+    if not candidatos and desc_nome and desc_nome.strip():
+        nome = desc_nome.strip()
+        rows = db.select("tb_clientes", raw_params={"desc_nome": f"eq.{nome}"})
+        candidatos = [r for r in (rows or []) if r.get("id_cliente") != id_cliente]
+    return candidatos
+
+
+def tb_get_documentos_cliente(id_cliente: int) -> list:
+    """Lista documentos salvos de um cliente, mais recente primeiro."""
+    try:
+        rows = _db().select(
+            "tb_documentos_cliente",
+            filtros={"id_cliente": id_cliente},
+            order="created_at.desc",
+        )
+        return rows or []
+    except Exception:
+        return []
+
+
+def tb_save_documento_cliente(id_cliente: int, nome_arquivo: str,
+                               tipo_doc: str, storage_path: str) -> dict:
+    """Insere registro de documento na tabela tb_documentos_cliente."""
+    row = {
+        "id_cliente": id_cliente,
+        "nome_arquivo": nome_arquivo,
+        "tipo_doc": tipo_doc,
+        "storage_path": storage_path,
+    }
+    return _db().upsert_returning("tb_documentos_cliente", row)
+
+
+def tb_delete_documento_cliente(id_doc: int) -> None:
+    """Remove registro de documento pelo id."""
+    _db().delete("tb_documentos_cliente", {"id": id_doc})
 
 
 if __name__ == "__main__":

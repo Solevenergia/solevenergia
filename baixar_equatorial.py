@@ -22,6 +22,13 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 
+# Windows: stdout/stderr default cp1252 quebra emojis quando redirecionado pra arquivo
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 except ImportError:
@@ -89,6 +96,12 @@ class CredenciaisRejeitadas(Exception):
     pass
 
 
+# Excecao especial: portal nao tem fatura disponivel para esta UC neste periodo
+# (Equatorial ainda nao emitiu). Diferente de timeout — nao adianta re-tentar.
+class SemFaturaDisponivel(Exception):
+    pass
+
+
 # ─── CARREGA CLIENTES ─────────────────────────────────────────────────────────
 def carregar_clientes() -> dict:
     from db import carregar_clientes as _db_carregar
@@ -106,6 +119,7 @@ def buscar_credenciais_usina(uc: str) -> dict:
         tb_get_cliente_por_uc,
         tb_get_vinculo_ativo_do_cliente,
         tb_get_usina,
+        tb_get_titular,
     )
 
     cliente_tb = tb_get_cliente_por_uc(uc)
@@ -128,10 +142,30 @@ def buscar_credenciais_usina(uc: str) -> dict:
     if not usina:
         return {}
 
+    # CPF/DN/nome do titular vivem em tb_titulares (referenciada por id_titular).
+    # Os campos antigos desc_cpf_titular/dt_nascimento_titular/desc_titular_uc
+    # na tb_usinas ficaram NULL apos a migracao — usar tb_titulares como fonte
+    # primaria e cair nos campos antigos so como fallback.
+    cpf  = (usina.get("desc_cpf_titular") or "").strip()
+    dn   = (usina.get("dt_nascimento_titular") or "").strip()
+    nome = (usina.get("desc_titular_uc") or "").strip()
+
+    id_titular = usina.get("id_titular")
+    if id_titular and (not cpf or not dn):
+        titular = tb_get_titular(id_titular)
+        if titular:
+            if not cpf:
+                cpf = (titular.get("desc_cpf_cnpj") or "").strip()
+            if not dn:
+                dn = (titular.get("dt_nascimento") or "").strip()
+            if not nome:
+                nome = (titular.get("desc_nome") or "").strip()
+
     return {
-        "cpf":             usina.get("desc_cpf_titular", ""),
-        "data_nascimento": usina.get("dt_nascimento_titular", ""),
-        "nome_titular":    usina.get("desc_titular_uc", ""),
+        "id_usina":        id_usina,
+        "cpf":             cpf,
+        "data_nascimento": dn,
+        "nome_titular":    nome,
         "nome_usina":      usina.get("desc_nome", ""),
     }
 
@@ -140,6 +174,337 @@ def buscar_credenciais_usina(uc: str) -> dict:
 def mes_atual_formatado() -> str:
     """Retorna mes atual no formato MM/AAAA."""
     return datetime.now().strftime("%m/%Y")
+
+
+# ─── NORMALIZA DATA DE NASCIMENTO ─────────────────────────────────────────────
+def _normalizar_dn(data_nascimento: str) -> str:
+    """Valida e converte data de nascimento para DD/MM/AAAA.
+    Lança NotImplementedError se inválida."""
+    dn = (data_nascimento or "").strip()
+    if not dn or not any(c.isdigit() for c in dn):
+        raise NotImplementedError(
+            f"Data de nascimento invalida ou nao cadastrada para a usina: {repr(dn)}"
+        )
+    if len(dn) == 10 and dn[4] == "-":
+        a, m, d = dn.split("-")
+        dn = f"{d}/{m}/{a}"
+    return dn
+
+
+# ─── ETAPAS 1-3: LOGIN (UC + CPF + DATA NASC.) ────────────────────────────────
+def _login_portal(page, uc_login: str, cpf: str, dn: str) -> None:
+    """Realiza login completo no portal Equatorial GO.
+    Assume que page já está na URL do portal.
+    Lança CredenciaisRejeitadas se portal rejeitar silenciosamente.
+    Lança PWTimeout em outras falhas.
+    """
+    cpf_limpo = "".join(filter(str.isdigit, cpf))
+    print(f"  🔐 Login: UC {uc_login} | CPF {cpf_limpo[:3]}.***.***-{cpf_limpo[-2:]}...")
+
+    # Campo UC: type() caractere a caractere para acionar eventos JS
+    page.click("#WEBDOOR_headercorporativogo_txtUC")
+    page.type("#WEBDOOR_headercorporativogo_txtUC", uc_login, delay=80)
+    page.wait_for_timeout(300)
+
+    # Campo CPF: digita APENAS digitos — a mascara JS do portal insere pontos e traco
+    page.click("#WEBDOOR_headercorporativogo_txtDocumento")
+    page.type("#WEBDOOR_headercorporativogo_txtDocumento", cpf_limpo, delay=80)
+    page.wait_for_timeout(300)
+
+    salvar_screenshot_erro(page, f"{uc_login}_1_preclick")
+
+    # Clica ENTRAR — tenta multiplos seletores para robustez
+    clicou_entrar = False
+    for _sel in [
+        "button.button:has-text('ENTRAR')",
+        "button:has-text('ENTRAR')",
+        "input[type='submit'][value*='ENTRAR']",
+        "input[type='submit'][value*='Entrar']",
+        "a:has-text('ENTRAR')",
+        "#WEBDOOR_headercorporativogo_btnEntrar",
+        "button[onclick*='ValidarCampos']",
+    ]:
+        try:
+            el = page.locator(_sel).first
+            el.wait_for(state="visible", timeout=3_000)
+            el.click()
+            clicou_entrar = True
+            print(f"  ✔️  Botao ENTRAR clicado via: {_sel}")
+            break
+        except Exception:
+            continue
+
+    if not clicou_entrar:
+        raise PWTimeout("Botao ENTRAR nao encontrado com nenhum seletor conhecido")
+
+    page.wait_for_timeout(5000)  # aguarda postback ASP.NET
+    salvar_screenshot_erro(page, f"{uc_login}_2_postclick")
+
+    # ── Etapa 2: data de nascimento ───────────────────────────────────────────
+    print(f"  📅 Validando data de nascimento: {dn}...")
+
+    # Aguarda o campo de data aparecer (confirma que o login da 1ª etapa passou)
+    try:
+        campo_nasc = page.locator(
+            "input[placeholder*='DD/MM'], input[placeholder*='dd/mm'], "
+            "input[id*='nasc'], input[id*='Nasc'], input[name*='nasc'], "
+            "input[id*='Data'], input[id*='data']"
+        ).first
+        campo_nasc.wait_for(state="visible", timeout=15_000)
+    except PWTimeout:
+        entrar_ainda_visivel = False
+        try:
+            entrar_ainda_visivel = page.locator("button:has-text('ENTRAR')").is_visible(timeout=2_000)
+        except Exception:
+            pass
+        salvar_screenshot_erro(page, f"{uc_login}_2_postclick")
+        if entrar_ainda_visivel:
+            cpf_exib = cpf[:3] + ".***.***-" + cpf[-2:] if len(cpf) >= 5 else cpf
+            print(f"  ❌ Portal rejeitou o CPF {cpf_exib} para a UC {uc_login}")
+            raise CredenciaisRejeitadas(f"CPF rejeitado para UC {uc_login}")
+        try:
+            erros = page.locator(".error, .erro, .mensagem-erro, [id*='lblErro'], [id*='lblMensagem']")
+            if erros.count() > 0:
+                print(f"  ❌ Mensagem do portal: {erros.first.text_content()}")
+        except Exception:
+            pass
+        raise PWTimeout("Campo de data de nascimento nao apareceu — login da 1ª etapa falhou")
+
+    # Preenche a data — tenta fill(), depois type() com barras, depois JS direto
+    campo_nasc.click()
+    page.wait_for_timeout(300)
+    preencheu_data = False
+
+    try:
+        campo_nasc.fill(dn)
+        val = campo_nasc.input_value()
+        if val and len("".join(filter(str.isdigit, val))) >= 8:
+            preencheu_data = True
+            print(f"  ✔️  Data via fill(): {val}")
+    except Exception:
+        pass
+
+    if not preencheu_data:
+        try:
+            campo_nasc.triple_click()
+            page.keyboard.press("Control+a")
+            page.keyboard.press("Delete")
+            page.wait_for_timeout(200)
+            campo_nasc.type(dn, delay=120)
+            val = campo_nasc.input_value()
+            if val and len("".join(filter(str.isdigit, val))) >= 8:
+                preencheu_data = True
+                print(f"  ✔️  Data via type(): {val}")
+        except Exception:
+            pass
+
+    if not preencheu_data:
+        try:
+            page.evaluate(
+                """(val) => {
+                    const inputs = document.querySelectorAll('input');
+                    for (const el of inputs) {
+                        const ph = (el.placeholder || '').toUpperCase();
+                        if (ph.includes('DD') || ph.includes('NASC') || ph.includes('DATA')) {
+                            el.value = val;
+                            el.dispatchEvent(new Event('input',  { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                            el.dispatchEvent(new Event('blur',   { bubbles: true }));
+                            break;
+                        }
+                    }
+                }""",
+                dn,
+            )
+            preencheu_data = True
+            print(f"  ✔️  Data via JavaScript: {dn}")
+        except Exception as _e:
+            print(f"  ⚠️  Falhou ao preencher data: {_e}")
+
+    page.wait_for_timeout(500)
+    salvar_screenshot_erro(page, f"{uc_login}_3_nasc")
+
+    # Clica VALIDAR — tenta multiplos seletores
+    clicou_validar = False
+    for _sel in [
+        "button:has-text('VALIDAR')",
+        "button:has-text('Validar')",
+        "input[value*='VALIDAR']",
+        "input[value*='Validar']",
+        "#WEBDOOR_headercorporativogo_btnValidar",
+    ]:
+        try:
+            el = page.locator(_sel).first
+            el.wait_for(state="visible", timeout=3_000)
+            el.click()
+            clicou_validar = True
+            print(f"  ✔️  Botao VALIDAR clicado via: {_sel}")
+            break
+        except Exception:
+            continue
+
+    if not clicou_validar:
+        page.get_by_text("VALIDAR").first.click()
+    page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
+
+
+# ─── ETAPA 4: FECHA POPUP DE PROPAGANDA ───────────────────────────────────────
+def _fechar_popup_propaganda(page) -> None:
+    """No-op se popup_promocao não aparecer."""
+    try:
+        popup = page.locator("#popup_promocao")
+        if popup.is_visible(timeout=6_000):
+            print(f"  🗙  Fechando popup de propaganda...")
+            fechou = False
+            for sel in [
+                "#popup_promocao button.close",
+                "#popup_promocao [data-dismiss='modal']",
+                "#popup_promocao button:has-text('×')",
+                "#popup_promocao button:has-text('Fechar')",
+                "#popup_promocao button:has-text('OK')",
+            ]:
+                try:
+                    btn = page.locator(sel).first
+                    if btn.is_visible(timeout=1_000):
+                        btn.click()
+                        fechou = True
+                        break
+                except PWTimeout:
+                    continue
+            if not fechou:
+                page.keyboard.press("Escape")
+            page.wait_for_timeout(1_000)
+    except PWTimeout:
+        pass
+
+
+# ─── DETECTA SE A SESSAO AINDA ESTA ATIVA ─────────────────────────────────────
+def _sessao_ativa(page) -> bool:
+    """Heurística: se o campo de login (#txtUC) está visível, perdeu sessão."""
+    try:
+        if page.locator("#WEBDOOR_headercorporativogo_txtUC").is_visible(timeout=1_500):
+            return False
+    except Exception:
+        pass
+    return True
+
+
+# ─── ETAPAS 5-10: BAIXA UMA UC ASSUMINDO SESSAO ATIVA ────────────────────────
+def _baixar_pela_sessao(
+    page,
+    uc: str,
+    uc_dropdown: str,
+    uc_nova_fmt: str | None,
+    nome: str,
+    mes_ref: str,
+    pasta_saida: str,
+) -> str | None:
+    """Navega Contas → Segunda Via, troca dropdown, emite e baixa o PDF.
+    Assume que o portal já está logado e na sessão do CPF titular.
+    Retorna caminho do arquivo ou None.
+    """
+    # Navega Contas → Segunda Via de Fatura
+    print(f"  📂 Navegando para Segunda Via de Fatura...")
+    page.get_by_text("Contas").first.click()
+    page.wait_for_timeout(800)
+    page.get_by_text("Segunda Via de Fatura").first.click()
+    page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
+
+    # Preenche o formulario de emissao
+    print(f"  🗓️  Selecionando UC {uc_dropdown}, tipo=completa, motivo=Outros...")
+    page.select_option("#CONTENT_comboBoxUC", value=uc_dropdown)
+    page.wait_for_timeout(300)
+    page.select_option("#CONTENT_cbTipoEmissao", value="completa")
+    page.wait_for_timeout(300)
+    page.select_option("#CONTENT_cbMotivo", value="ESV05")
+    page.wait_for_timeout(300)
+
+    # Emite → navega para SegundaViaDownload.aspx
+    print(f"  ⬇️  Emitindo fatura completa...")
+    page.click("#CONTENT_btEnviar")
+    page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
+    page.wait_for_timeout(2000)
+
+    # Detecta se o portal nao retornou nenhuma fatura (UC sem fatura emitida
+    # ainda para o periodo solicitado). Espera curta (5s) em vez de timeout
+    # padrao de 30s — se nao tem Download visivel, nao vai aparecer.
+    try:
+        page.locator("a:has-text('Download')").first.wait_for(state="visible", timeout=5_000)
+    except PWTimeout:
+        # Verifica se ha mensagem explicita de "sem fatura"
+        msg = ""
+        try:
+            for sel in [".message", ".alert", "[id*='lblMensagem']", "[id*='lblErro']", "p.text-center"]:
+                els = page.locator(sel)
+                if els.count() > 0:
+                    txt = (els.first.text_content() or "").strip()
+                    if txt:
+                        msg = txt[:120]
+                        break
+        except Exception:
+            pass
+        print(f"  📭 Portal sem fatura disponivel para UC {uc}" + (f" — {msg}" if msg else ""))
+        salvar_screenshot_erro(page, f"{uc}_sem_fatura")
+        raise SemFaturaDisponivel(f"UC {uc}: portal nao retornou fatura para {mes_ref}")
+
+    # Clica Download → modal de confirmacao
+    print(f"  📥 Clicando em Download na tabela...")
+
+    nome_curto  = _primeiro_ultimo(nome)
+    nome_camel  = _camel_case(nome_curto)
+    uc_pasta    = uc_nova_fmt or uc
+    nome_pasta  = _sanitizar_nome(f"{nome_camel}-{uc_pasta}")
+    pasta_cliente = os.path.join(pasta_saida, nome_pasta)
+    os.makedirs(pasta_cliente, exist_ok=True)
+
+    ts = datetime.now().strftime("%H%M%S")
+    caminho_temp = os.path.join(pasta_cliente, f"_temp_{ts}.pdf")
+
+    page.locator("a:has-text('Download')").first.click()
+
+    btn_ok = page.locator("#CONTENT_btnModal")
+    btn_ok.wait_for(timeout=15_000)
+    page.wait_for_timeout(500)
+
+    print(f"  ✔️  Confirmando OK no modal...")
+    with page.expect_download(timeout=TIMEOUT_DOWNLOAD) as download_info:
+        btn_ok.click()
+
+    download = download_info.value
+    download.save_as(caminho_temp)
+
+    # Renomeia com mes de referencia real do PDF
+    mes_str_final = _mes_para_yyyymm(mes_ref)
+    mes_ref_pdf_extraido = ""
+    try:
+        from extrair_equatorial import extrair_equatorial as _ext_eq
+        _eq_data = _ext_eq(caminho_temp, verbose=False)
+        mes_ref_pdf_extraido = _eq_data.get("mes_referencia", "").strip()
+        if mes_ref_pdf_extraido:
+            mes_str_final = _mes_para_yyyymm(mes_ref_pdf_extraido)
+            print(f"  📅 Mes de referencia da fatura: {mes_ref_pdf_extraido} → prefixo {mes_str_final}")
+    except Exception as _e:
+        print(f"  ⚠️  Nao foi possivel extrair mes da fatura ({_e}); usando {mes_str_final}")
+
+    _id_cli_eq = None
+    try:
+        from db import _resolver_id_cliente_por_uc
+        _id_cli_eq = _resolver_id_cliente_por_uc(uc)
+    except Exception as _e_eq_res:
+        print(f"  ⚠️  Resolver id_cliente (Equatorial) falhou: {_e_eq_res}")
+
+    if _id_cli_eq:
+        nome_arquivo = f"{mes_str_final}_Equatorial_{nome_camel}_{_id_cli_eq}.pdf"
+    else:
+        nome_arquivo = f"{mes_str_final}-Equatorial{nome_camel}.pdf"
+    caminho_destino = os.path.join(pasta_cliente, nome_arquivo)
+
+    if os.path.exists(caminho_destino):
+        os.remove(caminho_destino)
+    shutil.move(caminho_temp, caminho_destino)
+
+    print(f"  ✅ Fatura salva: {caminho_destino}")
+    return caminho_destino
 
 
 # ─── BAIXA FATURA DE UM CLIENTE ───────────────────────────────────────────────
@@ -160,6 +525,9 @@ def baixar_fatura(
     Faz login no portal Equatorial com CPF + data de nascimento do titular
     da usina e baixa a fatura da UC do cliente.
 
+    Mantida para compatibilidade. Internamente delega para
+    _login_portal + _baixar_pela_sessao (cada chamada loga 1×).
+
     uc          = UC para login (sem zeros a esquerda, sem chars): '379437901261'
     uc_arquivo  = UC original do cliente (para fallback de nome de pasta)
     uc_dropdown = UC para o select da Segunda Via (15 digitos c/ zeros): '000379437901261'
@@ -171,315 +539,22 @@ def baixar_fatura(
     uc_dropdown = uc_dropdown or uc_arquivo
 
     print(f"  🌐 Acessando portal Equatorial GO...")
-
-    # Normaliza data de nascimento para DD/MM/AAAA
-    dn = (data_nascimento or "").strip()
-    # Rejeita valores invalidos ("?", texto, etc.)
-    if not dn or not any(c.isdigit() for c in dn):
-        raise NotImplementedError(
-            f"Data de nascimento invalida ou nao cadastrada para a usina: {repr(dn)}"
-        )
-    if len(dn) == 10 and dn[4] == "-":
-        a, m, d = dn.split("-")
-        dn = f"{d}/{m}/{a}"
+    dn = _normalizar_dn(data_nascimento)
 
     try:
-        # ── 1. Abre a pagina de login ─────────────────────────────────────────
         page.goto(PORTAL_URL, timeout=TIMEOUT_PADRAO)
-        page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
-        page.wait_for_timeout(2000)  # aguarda JS da mascara inicializar
-
-        # ── 2. Preenche UC + CPF e clica ENTRAR ──────────────────────────────
-        cpf_limpo = "".join(filter(str.isdigit, cpf))
-        print(f"  🔐 Login: UC {uc} | CPF {cpf_limpo[:3]}.***.***-{cpf_limpo[-2:]}...")
-
-        # Campo UC: type() caractere a caractere para acionar eventos JS
-        page.click("#WEBDOOR_headercorporativogo_txtUC")
-        page.type("#WEBDOOR_headercorporativogo_txtUC", uc, delay=80)
-        page.wait_for_timeout(300)
-
-        # Campo CPF: digita APENAS digitos — a mascara JS do portal insere pontos e traco
-        # Digitar o CPF ja formatado (com . e -) causa dupla-formatacao pela mascara
-        page.click("#WEBDOOR_headercorporativogo_txtDocumento")
-        page.type("#WEBDOOR_headercorporativogo_txtDocumento", cpf_limpo, delay=80)
-        page.wait_for_timeout(300)
-
-        # Screenshot de debug antes de clicar (para diagnostico)
-        salvar_screenshot_erro(page, f"{uc}_1_preclick")
-
-        # Clica ENTRAR — tenta multiplos seletores para robustez
-        clicou_entrar = False
-        for _sel in [
-            "button.button:has-text('ENTRAR')",
-            "button:has-text('ENTRAR')",
-            "input[type='submit'][value*='ENTRAR']",
-            "input[type='submit'][value*='Entrar']",
-            "a:has-text('ENTRAR')",
-            "#WEBDOOR_headercorporativogo_btnEntrar",
-            "button[onclick*='ValidarCampos']",
-        ]:
-            try:
-                el = page.locator(_sel).first
-                el.wait_for(state="visible", timeout=3_000)
-                el.click()
-                clicou_entrar = True
-                print(f"  ✔️  Botao ENTRAR clicado via: {_sel}")
-                break
-            except Exception:
-                continue
-
-        if not clicou_entrar:
-            raise PWTimeout("Botao ENTRAR nao encontrado com nenhum seletor conhecido")
-
-        page.wait_for_timeout(5000)  # aguarda postback ASP.NET
-
-        # Screenshot de debug apos clicar (mostra se houve avanco ou erro)
-        salvar_screenshot_erro(page, f"{uc}_2_postclick")
-
-        # ── 3. Preenche data de nascimento e clica VALIDAR ────────────────────
-        # A pagina de data de nascimento e um postback da MESMA URL (LoginGO.aspx)
-        # — nao muda URL. Aguarda o campo aparecer como indicador de sucesso do login.
-        print(f"  📅 Validando data de nascimento: {dn}...")
-        dn_digits = "".join(filter(str.isdigit, dn))  # so numeros; mascara JS adiciona barras
-
-        # Aguarda o campo de data aparecer (confirma que o login da 1ª etapa passou)
-        try:
-            campo_nasc = page.locator(
-                "input[placeholder*='DD/MM'], input[placeholder*='dd/mm'], "
-                "input[id*='nasc'], input[id*='Nasc'], input[name*='nasc'], "
-                "input[id*='Data'], input[id*='data']"
-            ).first
-            campo_nasc.wait_for(state="visible", timeout=15_000)
-        except PWTimeout:
-            # Verifica se ENTRAR ainda esta visivel (indica credenciais rejeitadas pelo portal)
-            entrar_ainda_visivel = False
-            try:
-                entrar_ainda_visivel = page.locator("button:has-text('ENTRAR')").is_visible(timeout=2_000)
-            except Exception:
-                pass
-            salvar_screenshot_erro(page, f"{uc}_2_postclick")
-            if entrar_ainda_visivel:
-                cpf_exib = cpf[:3] + ".***.***-" + cpf[-2:] if len(cpf) >= 5 else cpf
-                print(f"  ❌ Portal rejeitou o CPF {cpf_exib} para a UC {uc}")
-                raise CredenciaisRejeitadas(f"CPF rejeitado para UC {uc}")
-            # Tenta extrair mensagem de erro da pagina
-            try:
-                erros = page.locator(".error, .erro, .mensagem-erro, [id*='lblErro'], [id*='lblMensagem']")
-                if erros.count() > 0:
-                    print(f"  ❌ Mensagem do portal: {erros.first.text_content()}")
-            except Exception:
-                pass
-            raise PWTimeout("Campo de data de nascimento nao apareceu — login da 1ª etapa falhou")
-
-        # Preenche a data — tenta fill(), depois type() com barras, depois JS direto
-        campo_nasc.click()
-        page.wait_for_timeout(300)
-
-        preencheu_data = False
-
-        # Tentativa 1: fill() direto com data formatada "DD/MM/YYYY"
-        try:
-            campo_nasc.fill(dn)
-            val = campo_nasc.input_value()
-            if val and len("".join(filter(str.isdigit, val))) >= 8:
-                preencheu_data = True
-                print(f"  ✔️  Data via fill(): {val}")
-        except Exception:
-            pass
-
-        # Tentativa 2: limpa e digita caractere a caractere com barras
-        if not preencheu_data:
-            try:
-                campo_nasc.triple_click()
-                page.keyboard.press("Control+a")
-                page.keyboard.press("Delete")
-                page.wait_for_timeout(200)
-                campo_nasc.type(dn, delay=120)  # digita "DD/MM/YYYY" com barras
-                val = campo_nasc.input_value()
-                if val and len("".join(filter(str.isdigit, val))) >= 8:
-                    preencheu_data = True
-                    print(f"  ✔️  Data via type(): {val}")
-            except Exception:
-                pass
-
-        # Tentativa 3: JavaScript direto + dispara eventos de input/change
-        if not preencheu_data:
-            try:
-                page.evaluate(
-                    """(val) => {
-                        const inputs = document.querySelectorAll('input');
-                        for (const el of inputs) {
-                            const ph = (el.placeholder || '').toUpperCase();
-                            if (ph.includes('DD') || ph.includes('NASC') || ph.includes('DATA')) {
-                                el.value = val;
-                                el.dispatchEvent(new Event('input',  { bubbles: true }));
-                                el.dispatchEvent(new Event('change', { bubbles: true }));
-                                el.dispatchEvent(new Event('blur',   { bubbles: true }));
-                                break;
-                            }
-                        }
-                    }""",
-                    dn,
-                )
-                preencheu_data = True
-                print(f"  ✔️  Data via JavaScript: {dn}")
-            except Exception as _e:
-                print(f"  ⚠️  Falhou ao preencher data: {_e}")
-
-        page.wait_for_timeout(500)
-
-        # Screenshot de debug antes de validar nascimento
-        salvar_screenshot_erro(page, f"{uc}_3_nasc")
-
-        # Clica VALIDAR — tenta multiplos seletores
-        clicou_validar = False
-        for _sel in [
-            "button:has-text('VALIDAR')",
-            "button:has-text('Validar')",
-            "input[value*='VALIDAR']",
-            "input[value*='Validar']",
-            "#WEBDOOR_headercorporativogo_btnValidar",
-        ]:
-            try:
-                el = page.locator(_sel).first
-                el.wait_for(state="visible", timeout=3_000)
-                el.click()
-                clicou_validar = True
-                print(f"  ✔️  Botao VALIDAR clicado via: {_sel}")
-                break
-            except Exception:
-                continue
-
-        if not clicou_validar:
-            # Ultimo fallback: clica pelo texto visivel
-            page.get_by_text("VALIDAR").first.click()
-        page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
-
-        # ── 4. Fecha popup de propaganda se aparecer ──────────────────────────
-        # Popup ID: popup_promocao — fecha pelo X (button.close) ou botao OK
-        try:
-            popup = page.locator("#popup_promocao")
-            if popup.is_visible(timeout=6_000):
-                print(f"  🗙  Fechando popup de propaganda...")
-                # Tenta o X de fechar (button.close dentro do popup)
-                fechou = False
-                for sel in [
-                    "#popup_promocao button.close",
-                    "#popup_promocao [data-dismiss='modal']",
-                    "#popup_promocao button:has-text('×')",
-                    "#popup_promocao button:has-text('Fechar')",
-                    "#popup_promocao button:has-text('OK')",
-                ]:
-                    try:
-                        btn = page.locator(sel).first
-                        if btn.is_visible(timeout=1_000):
-                            btn.click()
-                            fechou = True
-                            break
-                    except PWTimeout:
-                        continue
-                if not fechou:
-                    # Fallback: pressiona Escape para fechar modal Bootstrap
-                    page.keyboard.press("Escape")
-                page.wait_for_timeout(1_000)
-        except PWTimeout:
-            pass  # popup nao apareceu — ok
-
-        # ── 5. Navega: Contas → Segunda Via de Fatura ────────────────────────
-        print(f"  📂 Navegando para Segunda Via de Fatura...")
-        page.get_by_text("Contas").first.click()
-        page.wait_for_timeout(800)
-        page.get_by_text("Segunda Via de Fatura").first.click()
-        page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
-
-        # ── 6. Preenche o formulario de emissao ──────────────────────────────
-        # uc_dropdown ja vem com zeros a esquerda do processar_uc (ex: 000379437901261)
-
-        print(f"  🗓️  Selecionando UC {uc_dropdown}, tipo=completa, motivo=Outros...")
-        page.select_option("#CONTENT_comboBoxUC", value=uc_dropdown)
-        page.wait_for_timeout(300)
-        page.select_option("#CONTENT_cbTipoEmissao", value="completa")
-        page.wait_for_timeout(300)
-        page.select_option("#CONTENT_cbMotivo", value="ESV05")  # Outros
-        page.wait_for_timeout(300)
-
-        # ── 7. Clica em Emitir → navega para SegundaViaDownload.aspx ─────────
-        print(f"  ⬇️  Emitindo fatura completa...")
-        page.click("#CONTENT_btEnviar")
         page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
         page.wait_for_timeout(2000)
 
-        # ── 8. Clica "Download" na tabela → abre modal de confirmacao ───────────
-        print(f"  📥 Clicando em Download na tabela...")
+        _login_portal(page, uc, cpf, dn)
+        _fechar_popup_propaganda(page)
 
-        # Pasta: {pasta_usina}\DaniloLemes-0003.968.769.012-52
-        nome_curto  = _primeiro_ultimo(nome)           # 'DANILO LEMES'
-        nome_camel  = _camel_case(nome_curto)          # 'DaniloLemes'
-        uc_pasta    = uc_nova_fmt or uc_arquivo or uc  # '0003.968.769.012-52'
-        nome_pasta  = _sanitizar_nome(f"{nome_camel}-{uc_pasta}")
-        pasta_cliente = os.path.join(pasta_saida, nome_pasta)
-        os.makedirs(pasta_cliente, exist_ok=True)
-
-        # Salva primeiro em nome temporario — o mes real so e conhecido apos
-        # extrair o PDF (mes_referencia da propria fatura, ex: "4/2026" → "202604")
-        ts = datetime.now().strftime("%H%M%S")
-        caminho_temp = os.path.join(pasta_cliente, f"_temp_{ts}.pdf")
-
-        page.locator("a:has-text('Download')").first.click()
-
-        # Aguarda modal "Emissao de Segunda Via da Fatura Completa" com botao OK
-        btn_ok = page.locator("#CONTENT_btnModal")
-        btn_ok.wait_for(timeout=15_000)
-        page.wait_for_timeout(500)
-
-        # ── 9. Clica OK no modal → inicia download do PDF ─────────────────────
-        print(f"  ✔️  Confirmando OK no modal...")
-        with page.expect_download(timeout=TIMEOUT_DOWNLOAD) as download_info:
-            btn_ok.click()
-
-        download = download_info.value
-        download.save_as(caminho_temp)
-
-        # ── 10. Renomeia com mes de referencia real do PDF ────────────────────
-        # Usa mes_referencia da propria fatura (ex: "4/2026") → YYYYMM ("202604")
-        # Formato final novo: YYYYMM_Equatorial_PrimeiroUltimo_idFatura.pdf
-        mes_str_final = _mes_para_yyyymm(mes_ref)  # fallback com o mes do parametro
-        mes_ref_pdf_extraido = ""
-        try:
-            from extrair_equatorial import extrair_equatorial as _ext_eq
-            _eq_data = _ext_eq(caminho_temp, verbose=False)
-            mes_ref_pdf_extraido = _eq_data.get("mes_referencia", "").strip()
-            if mes_ref_pdf_extraido:
-                mes_str_final = _mes_para_yyyymm(mes_ref_pdf_extraido)
-                print(f"  📅 Mes de referencia da fatura: {mes_ref_pdf_extraido} → prefixo {mes_str_final}")
-        except Exception as _e:
-            print(f"  ⚠️  Nao foi possivel extrair mes da fatura ({_e}); usando {mes_str_final}")
-
-        # Resolve id_cliente para usar no nome do arquivo
-        _id_cli_eq = None
-        try:
-            from db import _resolver_id_cliente_por_uc
-            _id_cli_eq = _resolver_id_cliente_por_uc(uc)
-        except Exception as _e_eq_res:
-            print(f"  ⚠️  Resolver id_cliente (Equatorial) falhou: {_e_eq_res}")
-
-        if _id_cli_eq:
-            nome_arquivo = f"{mes_str_final}_Equatorial_{nome_camel}_{_id_cli_eq}.pdf"
-        else:
-            # Fallback para padrao antigo se id_cliente nao pode ser resolvido
-            nome_arquivo = f"{mes_str_final}-Equatorial{nome_camel}.pdf"
-        caminho_destino = os.path.join(pasta_cliente, nome_arquivo)
-
-        # Remove destino se ja existir (overwrite seguro)
-        if os.path.exists(caminho_destino):
-            os.remove(caminho_destino)
-        shutil.move(caminho_temp, caminho_destino)
-
-        print(f"  ✅ Fatura salva: {caminho_destino}")
-        return caminho_destino
+        return _baixar_pela_sessao(
+            page, uc_arquivo, uc_dropdown, uc_nova_fmt,
+            nome, mes_ref, pasta_saida,
+        )
 
     except CredenciaisRejeitadas:
-        # Propaga sem retry — processar_uc tratara o fallback de CPF
         raise
     except NotImplementedError as e:
         print(f"  ⚠️  {e}")
@@ -488,7 +563,7 @@ def baixar_fatura(
         print(f"  ❌ Timeout ao navegar no portal: {e}")
         salvar_screenshot_erro(page, uc)
         if tentativa < 3:
-            espera = 10 * tentativa  # 10s, 20s entre tentativas
+            espera = 10 * tentativa
             print(f"  🔄 Tentando novamente ({tentativa + 1}/3) em {espera}s...")
             time.sleep(espera)
             return baixar_fatura(page, uc, cpf, data_nascimento, nome, mes_ref, pasta_saida, tentativa + 1, uc_arquivo, uc_dropdown, uc_nova_fmt)
@@ -676,6 +751,236 @@ def processar_uc(playwright, uc: str, cliente: dict, mes_ref: str, headless: boo
     finally:
         context.close()
         browser.close()
+
+
+# ─── PROCESSA TODAS AS UCs DE UMA USINA COM UM UNICO LOGIN ────────────────────
+def processar_usina(
+    playwright,
+    clientes_da_usina: list,
+    creds_usina: dict,
+    mes_ref: str,
+    headless: bool,
+    forcar: bool = False,
+) -> dict:
+    """
+    Abre 1 browser/contexto e faz 1 login no portal. Reaproveita a sessao
+    para baixar varias UCs da mesma usina (mesmo CPF titular) via troca
+    do dropdown #CONTENT_comboBoxUC na pagina Segunda Via.
+
+    clientes_da_usina: lista de tuplas (uc, cliente_dict).
+    creds_usina:       dict com 'cpf', 'data_nascimento', 'nome_usina'.
+
+    Retorna: {'sucesso': [ucs], 'falha': [ucs], 'ignorado': [ucs]}.
+    """
+    resumo = {"sucesso": [], "falha": [], "ignorado": [], "sem_fatura": []}
+    if not clientes_da_usina:
+        return resumo
+
+    cpf_usina  = creds_usina.get("cpf", "")
+    dn_raw     = creds_usina.get("data_nascimento", "")
+    nome_usina = creds_usina.get("nome_usina", "")
+
+    if not cpf_usina or not dn_raw or not any(c.isdigit() for c in str(dn_raw)):
+        print(f"  ⚠️  Usina '{nome_usina}' sem CPF/data de nascimento — pulando {len(clientes_da_usina)} UCs")
+        resumo["falha"].extend([uc for uc, _ in clientes_da_usina])
+        return resumo
+
+    try:
+        dn = _normalizar_dn(dn_raw)
+    except NotImplementedError as e:
+        print(f"  ⚠️  {e}")
+        resumo["falha"].extend([uc for uc, _ in clientes_da_usina])
+        return resumo
+
+    # Pasta de destino da usina
+    pasta_saida = os.path.join(BASE_PASTA_USINAS, nome_usina) if nome_usina else PASTA_FATURAS
+
+    # Resolve UCs (login/dropdown/formatada) para todos os clientes da usina
+    enriquecidos = []
+    for uc, cliente in clientes_da_usina:
+        ucs_info = buscar_uc_nova(uc)
+        enriquecidos.append({
+            "uc":         uc,
+            "cliente":    cliente,
+            "uc_login":   ucs_info.get("login", uc),
+            "uc_dropdown": ucs_info.get("dropdown", uc),
+            "uc_nova_fmt": ucs_info.get("formatada", uc),
+        })
+
+    # Filtra os ja baixados antes de abrir browser
+    pendentes = []
+    for r in enriquecidos:
+        if not forcar:
+            existente = ja_baixado(
+                r["uc"], mes_ref,
+                nome=r["cliente"].get("nome", ""),
+                nome_usina=nome_usina,
+                uc_nova_fmt=r["uc_nova_fmt"],
+            )
+            if existente:
+                print(f"  ⏭️  {r['cliente'].get('nome', r['uc'])} — ja baixado: {existente}")
+                resumo["ignorado"].append(r["uc"])
+                continue
+        pendentes.append(r)
+
+    if not pendentes:
+        print(f"  ✅ Usina '{nome_usina}' — todos os {len(enriquecidos)} clientes ja baixados.")
+        return resumo
+
+    print(f"\n🏭 Usina: {nome_usina} | {len(pendentes)} UC(s) pendente(s) | 1 login compartilhado")
+
+    browser = playwright.chromium.launch(
+        headless=headless,
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+            "--disable-infobars",
+            "--window-size=1280,900",
+        ],
+    )
+    context = browser.new_context(
+        accept_downloads=True,
+        viewport={"width": 1280, "height": 900},
+        user_agent=(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        ),
+        locale="pt-BR",
+        timezone_id="America/Sao_Paulo",
+        extra_http_headers={"Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"},
+    )
+    context.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        Object.defineProperty(navigator, 'plugins', { get: () => [1,2,3,4,5] });
+        Object.defineProperty(navigator, 'languages', { get: () => ['pt-BR', 'pt', 'en-US'] });
+        window.chrome = { runtime: {} };
+    """)
+    page = context.new_page()
+
+    MAX_TENTATIVAS_LOGIN = 4
+    logado = False
+
+    def _fazer_login(uc_para_login: str) -> bool:
+        """Tenta fazer login. Retorna True se sucesso."""
+        for tentativa in range(1, MAX_TENTATIVAS_LOGIN + 1):
+            try:
+                page.goto(PORTAL_URL, timeout=TIMEOUT_PADRAO)
+                page.wait_for_load_state("networkidle", timeout=TIMEOUT_PADRAO)
+                page.wait_for_timeout(2000)
+                _login_portal(page, uc_para_login, cpf_usina, dn)
+                _fechar_popup_propaganda(page)
+                print(f"  ✅ Login da usina '{nome_usina}' OK (tentativa {tentativa})")
+                return True
+            except CredenciaisRejeitadas:
+                if tentativa < MAX_TENTATIVAS_LOGIN:
+                    espera = 5 + tentativa * 2
+                    print(f"  🔁 Rejeicao silenciosa — tentativa {tentativa}/{MAX_TENTATIVAS_LOGIN}, aguardando {espera}s")
+                    time.sleep(espera)
+                else:
+                    print(f"  ❌ Portal rejeitou {MAX_TENTATIVAS_LOGIN}× o CPF do titular ({nome_usina})")
+            except Exception as e:
+                print(f"  ❌ Erro no login da usina '{nome_usina}': {type(e).__name__}: {e}")
+                return False
+        return False
+
+    # Acumula PDFs baixados para gerar cobrancas DEPOIS de fechar o browser.
+    # Motivo: gerar_cobranca renderiza HTML via Playwright async, que conflita
+    # com a sessao Playwright sync ainda aberta (loop asyncio).
+    baixados_para_cobranca = []  # lista de (pdf_path, nome, uc)
+
+    try:
+        # Login inicial usando a UC do primeiro cliente do grupo
+        logado = _fazer_login(pendentes[0]["uc_login"])
+        if not logado:
+            resumo["falha"].extend([r["uc"] for r in pendentes])
+            return resumo
+
+        for r in pendentes:
+            uc = r["uc"]
+            cliente = r["cliente"]
+            nome = cliente.get("nome", uc)
+
+            print(f"\n  --- Cliente: {nome} | UC: {uc} ---")
+
+            # Se sessao caiu (timeout do portal entre downloads), reloga
+            if not _sessao_ativa(page):
+                print(f"  ⚠️  Sessao expirou — re-logando...")
+                logado = _fazer_login(r["uc_login"])
+                if not logado:
+                    print(f"  ❌ Re-login falhou — abortando UCs restantes da usina")
+                    restantes = [x["uc"] for x in pendentes[pendentes.index(r):]]
+                    resumo["falha"].extend(restantes)
+                    return resumo
+
+            # Tenta baixar; se der PWTimeout (botao Download nao apareceu,
+            # sessao expirou, etc.), reloga e tenta de novo (max 1 retry).
+            # SemFaturaDisponivel = portal nao tem fatura — nao adianta retentar.
+            resultado = None
+            sem_fatura = False
+            MAX_RETRY_DOWNLOAD = 1  # tentativas extras alem da primeira
+            for tentativa_download in range(MAX_RETRY_DOWNLOAD + 1):
+                try:
+                    resultado = _baixar_pela_sessao(
+                        page, uc, r["uc_dropdown"], r["uc_nova_fmt"],
+                        nome, mes_ref, pasta_saida,
+                    )
+                    break  # sucesso
+                except SemFaturaDisponivel:
+                    sem_fatura = True
+                    resultado = None
+                    break  # nao retenta
+                except PWTimeout as e:
+                    print(f"  ❌ Timeout na UC {uc} (tentativa {tentativa_download+1}/{MAX_RETRY_DOWNLOAD+1}): {e}")
+                    salvar_screenshot_erro(page, uc)
+                    if tentativa_download >= MAX_RETRY_DOWNLOAD:
+                        resultado = None
+                        break
+                    print(f"  🔁 Re-logando e tentando novamente a UC {uc}...")
+                    if not _fazer_login(r["uc_login"]):
+                        print(f"  ❌ Re-login durante retry falhou — desistindo da UC {uc}")
+                        resultado = None
+                        break
+                except Exception as e:
+                    print(f"  ❌ Erro inesperado UC {uc}: {type(e).__name__}: {e}")
+                    salvar_screenshot_erro(page, uc)
+                    resultado = None
+                    break
+
+            if resultado:
+                resumo["sucesso"].append(uc)
+                baixados_para_cobranca.append((resultado, nome, uc))
+            elif sem_fatura:
+                resumo["sem_fatura"].append(uc)
+            else:
+                resumo["falha"].append(uc)
+
+            # Pausa curta entre downloads na mesma sessao
+            time.sleep(2)
+    finally:
+        try:
+            context.close()
+        except Exception:
+            pass
+        try:
+            browser.close()
+        except Exception:
+            pass
+
+    # Browser FECHADO — agora gera cobrancas CONTALEV (Playwright async pode rodar)
+    if baixados_para_cobranca:
+        print(f"\n📊 Gerando {len(baixados_para_cobranca)} cobranca(s) CONTALEV...")
+        for pdf_path, nome, uc in baixados_para_cobranca:
+            try:
+                pasta_cli  = os.path.dirname(pdf_path)
+                mes_str    = mes_ref.replace("/", "")
+                nome_camel = _camel_case(_primeiro_ultimo(nome))
+                gerar_cobranca_cliente(pdf_path, pasta_cli, mes_str, nome_camel, uc)
+            except Exception as e:
+                print(f"  ⚠️  Cobranca CONTALEV falhou para UC {uc} (PDF Equatorial OK): {e}")
+
+    return resumo
 
 
 # ─── GERA COBRANCA CONTALEV APOS DOWNLOAD ─────────────────────────────────────
@@ -885,7 +1190,17 @@ def gerar_cobranca_cliente(
                 difci=dados_calc.get("difci", 0),
                 ecnisenta=dados_calc.get("ecnisenta", 0),
                 anterior_leitura=equatorial.get("data_leitura_anterior", ""),
+                proxima_leitura=equatorial.get("proxima_leitura", ""),
                 n_dias=int(equatorial.get("n_dias", 0) or 0),
+                # SCEE — dados da geração solar extraídos do PDF Equatorial
+                scee_ciclo_mes=equatorial.get("scee_ciclo_mes", "") or equatorial.get("ciclo_geracao_mes", ""),
+                scee_uc_geradora=equatorial.get("scee_uc_geradora", ""),
+                scee_pct_rateio=equatorial.get("scee_pct_rateio", 0) or 0,
+                scee_geracao_usina_kwh=equatorial.get("geracao_ciclo_kwh", 0) or 0,
+                scee_excedente_kwh=equatorial.get("excedente_recebido_kwh", 0) or 0,
+                scee_credito_kwh=equatorial.get("credito_recebido_kwh", 0) or 0,
+                scee_saldo_exp_30d_kwh=equatorial.get("saldo_expirar_30d_kwh", 0) or 0,
+                scee_saldo_exp_60d_kwh=equatorial.get("saldo_expirar_60d_kwh", 0) or 0,
             )
             print(f"  📋 Historico registrado: {cliente['nome']} — {equatorial.get('mes_referencia', '')}")
         except Exception as e:
@@ -956,7 +1271,9 @@ Exemplos:
         """
     )
     parser.add_argument("--uc",       type=str,              help="UC especifica")
+    parser.add_argument("--ucs",      type=str, default=None,help="Lista de UCs separadas por virgula (ex: 000123,000456)")
     parser.add_argument("--todos",    action="store_true",   help="Baixa de todos os clientes")
+    parser.add_argument("--usina",    type=int, default=None,help="Baixa so as UCs de uma usina especifica (id_usina)")
     parser.add_argument("--mes",      type=str, default=None,help="Mes referencia MM/AAAA (padrao: mes atual)")
     parser.add_argument("--headless", action="store_true",   help="Executa sem abrir janela do browser")
     parser.add_argument("--forcar",   action="store_true",   help="Re-baixa mesmo se ja existir")
@@ -966,7 +1283,7 @@ Exemplos:
 
     clientes = carregar_clientes()
 
-    if not args.uc and not args.todos:
+    if not args.uc and not args.ucs and not args.todos and not args.usina:
         parser.print_help()
         sys.exit(0)
 
@@ -976,6 +1293,32 @@ Exemplos:
             print(f"❌ UC {args.uc} nao encontrada no Supabase")
             sys.exit(1)
         ucs = [args.uc]
+    elif args.ucs:
+        # Aceita formatos: '000123,000456' ou '0003.951.199.012-66,0000.302.762.01227'
+        ucs_pedidas = [u.strip() for u in args.ucs.split(",") if u.strip()]
+        # Indexa clientes por digitos para resolver formatos com pontos/hifens
+        por_digitos = {"".join(c for c in k if c.isdigit()).zfill(15): k for k in clientes}
+        ucs = []
+        nao_achadas = []
+        for u in ucs_pedidas:
+            digits = "".join(c for c in u if c.isdigit()).zfill(15)
+            chave = por_digitos.get(digits)
+            if chave:
+                ucs.append(chave)
+            else:
+                nao_achadas.append(u)
+        if nao_achadas:
+            print(f"⚠️  UCs nao encontradas no Supabase (serao ignoradas): {nao_achadas}")
+        if not ucs:
+            print(f"❌ Nenhuma UC encontrada na lista informada")
+            sys.exit(1)
+        print(f"📍 Filtro: --ucs → {len(ucs)} UC(s) encontrada(s)")
+    elif args.usina:
+        ucs = [uc for uc in clientes if buscar_credenciais_usina(uc).get("id_usina") == args.usina]
+        if not ucs:
+            print(f"❌ Nenhum cliente vinculado a usina id={args.usina}")
+            sys.exit(1)
+        print(f"📍 Filtro: usina id={args.usina} → {len(ucs)} UC(s)")
     else:
         ucs = list(clientes.keys())
 
@@ -983,15 +1326,45 @@ Exemplos:
     print(f"   Mes: {mes_ref} | Clientes: {len(ucs)} | Headless: {args.headless}")
     print()
 
-    resultados = {"sucesso": [], "falha": [], "ignorado": []}
+    resultados = {"sucesso": [], "falha": [], "ignorado": [], "sem_fatura": []}
+
+    # ── Agrupa UCs por usina (mesmo CPF do titular = 1 login compartilhado) ──
+    grupos_usina = {}   # id_usina -> {"creds": dict, "clientes": [(uc, cliente), ...]}
+    sem_usina    = []   # [(uc, cliente), ...] — caem no fluxo legado (1 browser/UC)
+
+    for uc in ucs:
+        cliente = clientes[uc]
+        creds = buscar_credenciais_usina(uc)
+        id_usina = creds.get("id_usina")
+        if id_usina and creds.get("cpf"):
+            grupo = grupos_usina.setdefault(id_usina, {"creds": creds, "clientes": []})
+            grupo["clientes"].append((uc, cliente))
+        else:
+            sem_usina.append((uc, cliente))
+
+    print(f"📦 Agrupamento: {len(grupos_usina)} usina(s) com login compartilhado | {len(sem_usina)} UC(s) avulsa(s)")
 
     with sync_playwright() as playwright:
-        for i, uc in enumerate(ucs, 1):
-            print(f"[{i}/{len(ucs)}]", end="")
-            cliente = clientes[uc]
-            nome = cliente.get("nome", uc)
+        # 1) Processa por grupo de usina (1 login por usina, várias UCs)
+        for id_usina, grupo in grupos_usina.items():
+            r = processar_usina(
+                playwright,
+                grupo["clientes"],
+                grupo["creds"],
+                mes_ref,
+                args.headless,
+                forcar=args.forcar,
+            )
+            resultados["sucesso"].extend(r["sucesso"])
+            resultados["falha"].extend(r["falha"])
+            resultados["ignorado"].extend(r["ignorado"])
+            resultados["sem_fatura"].extend(r.get("sem_fatura", []))
 
-            # Verifica se ja existe (busca usina para montar caminho correto)
+        # 2) Fallback: UCs sem usina vinculada usam o fluxo antigo (1 browser por UC)
+        for i, (uc, cliente) in enumerate(sem_usina, 1):
+            nome = cliente.get("nome", uc)
+            print(f"\n[avulsa {i}/{len(sem_usina)}] {nome} | UC {uc}")
+
             if not args.forcar:
                 _ucs  = buscar_uc_nova(uc)
                 _creds = buscar_credenciais_usina(uc)
@@ -1002,27 +1375,32 @@ Exemplos:
                     uc_nova_fmt=_ucs.get("formatada", uc),
                 )
                 if existente:
-                    print(f"\n  ⏭️  {nome} — ja baixado: {existente}")
+                    print(f"  ⏭️  {nome} — ja baixado: {existente}")
                     resultados["ignorado"].append(uc)
                     continue
 
             caminho = processar_uc(playwright, uc, cliente, mes_ref, args.headless)
-
             if caminho:
                 resultados["sucesso"].append(uc)
             else:
                 resultados["falha"].append(uc)
 
-            # Pausa entre clientes para nao sobrecarregar o portal
-            if i < len(ucs):
+            if i < len(sem_usina):
                 time.sleep(3)
 
     # ── Resumo ────────────────────────────────────────────────────────────────
     print(f"\n{'═'*55}")
     print(f"  RESUMO — {mes_ref}")
-    print(f"  ✅ Baixados:  {len(resultados['sucesso'])}")
-    print(f"  ❌ Falhas:    {len(resultados['falha'])}")
-    print(f"  ⏭️  Ignorados: {len(resultados['ignorado'])} (ja existiam)")
+    print(f"  ✅ Baixados:    {len(resultados['sucesso'])}")
+    print(f"  ❌ Falhas:      {len(resultados['falha'])}")
+    print(f"  📭 Sem fatura:  {len(resultados['sem_fatura'])} (portal ainda nao emitiu)")
+    print(f"  ⏭️  Ignorados:   {len(resultados['ignorado'])} (ja existiam)")
+
+    if resultados["sem_fatura"]:
+        print(f"\n  UCs sem fatura disponivel no portal:")
+        for uc in resultados["sem_fatura"]:
+            nome = clientes[uc].get("nome", uc)
+            print(f"    • {uc} — {nome}")
 
     if resultados["falha"]:
         print(f"\n  UCs com falha:")
