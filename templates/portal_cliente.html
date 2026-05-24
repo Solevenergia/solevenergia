@@ -1,477 +1,530 @@
+{#
+  ============================================================
+  Solev · Portal do cliente · Tela única
+  Implementação do handoff Claude Design (high-fidelity).
+  ============================================================
+#}
 <!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>Solev · {{ cliente.primeiro_nome }}</title>
 <meta name="theme-color" content="#0E1B2E">
-<title>SoLev Energia · Sua fatura</title>
+
+<!-- Open Graph (preview rico no WhatsApp/Facebook/Telegram) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="SOLEV ENERGIA">
+<meta property="og:title" content="Sua fatura SOLEV está pronta">
+<meta property="og:description" content="{{ cliente.primeiro_nome }} · {{ valor_total }}{% if venc_br and venc_br != '—' %} · venc {{ venc_br }}{% endif %}">
+<meta property="og:image" content="{{ url_for('static', filename='solev-sua-fatura-1200x630.png', _external=True) }}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="SOLEV ENERGIA — Sua fatura">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Sua fatura SOLEV está pronta">
+<meta name="twitter:description" content="{{ valor_total }}{% if venc_br and venc_br != '—' %} · venc {{ venc_br }}{% endif %}">
+<meta name="twitter:image" content="{{ url_for('static', filename='solev-sua-fatura-1200x630.png', _external=True) }}">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --ink:        #0E1B2E;
-    --ink-soft:   #2A3D5A;
-    --accent:     #E8732A;
-    --accent-deep:#C25C1C;
-    --paper:      #F2E8D4;
-    --paper-soft: #F7F1E4;
-    --success:    #198754;
-    --warn:       #FFC107;
-    --danger:     #DC3545;
-    --muted:      rgba(14,27,46,0.55);
+    --ink:           #0E1B2E;
+    --ink-soft:      #2A3D5A;
+    --accent:        #E8732A;
+    --accent-soft:   #F5A867;
+    --accent-deep:   #C25C1C;
+    --paper:         #F2E8D4;
+    --paper-soft:    #F7F1E4;
+    --white:         #FFFFFF;
+    --muted:         #9A8E7A;
+    --success:       #1F6B3C;
   }
-
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; padding: 0; }
-  body {
-    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: linear-gradient(180deg, #0E1B2E 0%, #1a2d4d 100%);
-    color: var(--paper);
-    min-height: 100vh;
-    padding-bottom: 40px;
-  }
-
-  .container {
-    max-width: 480px;
-    margin: 0 auto;
-    padding: 16px;
-  }
-
-  /* Header */
-  .header {
-    text-align: center;
-    padding: 24px 0 16px;
-  }
-  .header .logo {
-    font-family: 'Sora', sans-serif;
-    font-weight: 800;
-    font-size: 24px;
-    color: var(--accent);
-    letter-spacing: -0.5px;
-  }
-  .header .logo span { color: var(--paper); font-weight: 300; }
-
-  /* Greeting */
-  .greeting {
-    text-align: center;
-    font-family: 'Sora', sans-serif;
-    font-weight: 600;
-    font-size: 20px;
-    margin-bottom: 4px;
-  }
-  .subgreeting {
-    text-align: center;
-    color: var(--muted);
-    color: rgba(242,232,212,0.65);
-    font-size: 13px;
-    margin-bottom: 24px;
-  }
-
-  /* Cards */
-  .card {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 16px;
-    padding: 20px;
-    margin-bottom: 12px;
-    backdrop-filter: blur(10px);
-  }
-  .card.primary {
-    background: linear-gradient(135deg, #E8732A 0%, #C25C1C 100%);
-    border: none;
-    color: #fff;
-  }
-  .card.economia {
-    background: linear-gradient(135deg, rgba(25,135,84,0.25) 0%, rgba(25,135,84,0.1) 100%);
-    border: 1px solid rgba(25,135,84,0.3);
-  }
-
-  .card-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: rgba(255,255,255,0.7);
-    margin-bottom: 6px;
-    font-weight: 600;
-  }
-  .card.primary .card-label { color: rgba(255,255,255,0.85); }
-
-  .card-value {
-    font-family: 'Sora', sans-serif;
-    font-weight: 700;
-    font-size: 36px;
-    line-height: 1;
-    letter-spacing: -1px;
-  }
-  .card-sub {
-    font-size: 14px;
-    margin-top: 6px;
-    opacity: 0.85;
-  }
-
-  /* Status badge */
-  .status-badge {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-top: 8px;
-  }
-  .status-badge.pago    { background: rgba(25,135,84,0.9);  color: #fff; }
-  .status-badge.urgente { background: rgba(255,193,7,0.95); color: #000; }
-  .status-badge.atrasado{ background: rgba(220,53,69,0.95); color: #fff; }
-  .status-badge.ok      { background: rgba(255,255,255,0.2); color: #fff; }
-
-  /* Economy split */
-  .economia-row {
-    display: flex;
-    gap: 12px;
-    align-items: center;
-  }
-  .economia-row > div { flex: 1; }
-  .economia-row .small-label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    opacity: 0.7;
-    margin-bottom: 4px;
-  }
-  .economia-row .small-value {
-    font-family: 'Sora', sans-serif;
-    font-weight: 700;
-    font-size: 18px;
-  }
-
-  /* PIX */
-  .pix-key-display {
-    background: rgba(255,255,255,0.08);
-    padding: 12px;
-    border-radius: 10px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
-    word-break: break-all;
-    text-align: center;
-    margin: 12px 0;
-    border: 1px dashed rgba(255,255,255,0.2);
-  }
-
-  /* Buttons */
-  .btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    width: 100%;
-    padding: 14px;
-    border: none;
-    border-radius: 12px;
-    font-family: inherit;
-    font-weight: 600;
-    font-size: 15px;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    text-decoration: none;
-    margin-bottom: 8px;
-  }
-  .btn-primary {
-    background: #fff;
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    min-height: 100%;
+    font-family: 'Manrope', system-ui, sans-serif;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(232,115,42,0.07) 0%, transparent 60%),
+      var(--paper-soft);
     color: var(--ink);
+    -webkit-font-smoothing: antialiased;
   }
-  .btn-primary:active { transform: scale(0.98); }
-  .btn-outline {
-    background: rgba(255,255,255,0.08);
-    color: var(--paper);
-    border: 1px solid rgba(255,255,255,0.2);
-  }
-  .btn-outline:active { background: rgba(255,255,255,0.15); }
-  .btn-success { background: #25D366; color: #fff; }
-  .btn-pdf { background: rgba(220,53,69,0.9); color: #fff; }
 
-  /* Histórico */
-  .historico-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
-    text-decoration: none;
-    color: inherit;
-  }
-  .historico-item:last-child { border-bottom: none; }
-  .historico-item.atual {
-    background: rgba(232,115,42,0.1);
-    padding: 12px 12px;
-    margin: 0 -12px;
-    border-radius: 8px;
-    border-bottom: none;
-  }
-  .historico-mes { font-weight: 600; font-size: 14px; }
-  .historico-economia { font-size: 11px; opacity: 0.65; }
-  .historico-valor { font-family: 'Sora', sans-serif; font-weight: 600; font-size: 14px; }
-  .historico-status {
-    font-size: 10px;
-    text-transform: uppercase;
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-left: 8px;
-  }
-  .historico-status.pago     { background: rgba(25,135,84,0.3); color: #5dd585; }
-  .historico-status.pendente { background: rgba(255,193,7,0.3); color: #ffd966; }
-
-  /* Toast */
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%) translateY(100px);
+  /* Mobile: screen ocupa tudo. Desktop: centraliza em tubo de 393px */
+  main.screen {
+    width: 100%; min-height: 100vh;
     background: var(--ink);
     color: var(--paper);
-    padding: 12px 20px;
-    border-radius: 30px;
-    font-weight: 600;
-    font-size: 14px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    border: 1px solid rgba(255,255,255,0.15);
-    z-index: 9999;
-    opacity: 0;
-    transition: all 0.3s ease;
+    position: relative;
+    overflow-x: hidden;
+    padding-bottom: 32px;
   }
-  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  .toast.success { background: #198754; border-color: rgba(25,135,84,0.5); color: #fff; }
-
-  .footer {
-    text-align: center;
-    padding: 20px 0;
-    font-size: 12px;
-    color: rgba(242,232,212,0.45);
+  @media (min-width: 768px) {
+    body {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; padding: 24px 0;
+    }
+    main.screen {
+      width: 393px;
+      min-height: auto;
+      max-height: 92vh;
+      border-radius: 24px;
+      overflow-y: auto;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.15);
+    }
   }
-  .footer a { color: rgba(242,232,212,0.7); text-decoration: none; }
 
-  /* Bank buttons grid */
-  .bancos-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+  /* Sun glow */
+  .sun-glow {
+    position: absolute; top: 70px; right: -120px;
+    width: 340px; height: 340px; border-radius: 100px;
+    background: radial-gradient(circle, rgba(232,115,42,0.42) 0%, transparent 62%);
+    filter: blur(14px); pointer-events: none;
+  }
+  .dot-a { position: absolute; top: 200px; left: 24px;
+    width: 6px; height: 6px; border-radius: 100px;
+    background: rgba(245,168,103,0.4); }
+  .dot-b { position: absolute; top: 240px; left: 60px;
+    width: 3px; height: 3px; border-radius: 100px;
+    background: rgba(245,168,103,0.3); }
+
+  /* Wordmark inline (cópia de _solev_brand.html simplificada) */
+  .wm {
+    font-family: 'Sora', sans-serif;
+    letter-spacing: -0.045em;
+    line-height: 1;
+    display: inline-flex; align-items: baseline;
+    white-space: nowrap;
+    color: var(--paper);
+    font-size: 22px;
+  }
+  .wm-b { font-weight: 800; }
+  .wm-l { font-weight: 300; }
+  .wm-o {
+    display: inline-block;
+    width: 0.66em; height: 0.66em;
+    transform: translateY(0.05em);
+    margin: 0 -0.07em 0 -0.02em;
+  }
+  .wm-o svg { display: block; width: 100%; height: 100%; }
+
+  /* Top bar */
+  .topbar {
+    padding: 14px 20px 0;
+    position: relative; z-index: 2;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .topbar-actions { display: flex; gap: 10px; }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 100px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; border: 0; cursor: pointer;
+  }
+  .icon-btn.bell { background: rgba(242,232,212,0.10); color: var(--paper); }
+  .icon-btn.avatar {
+    background: var(--accent); color: var(--ink);
+    font-family: 'Sora', sans-serif; font-weight: 700; font-size: 11px;
+  }
+  .icon-btn .dot {
+    position: absolute; top: 6px; right: 7px;
+    width: 7px; height: 7px; border-radius: 100px;
+    background: var(--accent); border: 2px solid var(--ink);
+  }
+
+  /* Welcome */
+  .welcome {
+    padding: 36px 20px 32px;
+    position: relative; z-index: 2;
+  }
+  .welcome .greeting {
+    font-family: 'Sora', sans-serif; font-weight: 300;
+    font-size: 18px; letter-spacing: -0.005em;
+    color: rgba(242,232,212,0.72);
+  }
+  .welcome .name {
+    font-family: 'Sora', sans-serif; font-weight: 800;
+    font-size: 40px; letter-spacing: -0.04em; line-height: 1;
+    margin-top: 4px;
+  }
+  .welcome .sub {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 14px;
+  }
+  .welcome .sub-dot {
+    width: 6px; height: 6px; border-radius: 100px;
+    background: var(--accent-soft); flex-shrink: 0;
+  }
+  .welcome .sub-text {
+    font-family: 'Sora', sans-serif; font-weight: 300;
+    font-style: italic; font-size: 13px;
+    color: rgba(245,168,103,0.95);
+    letter-spacing: -0.005em;
+  }
+
+  /* Light section */
+  .light {
+    background: var(--paper);
+    border-radius: 24px 24px 0 0;
+    padding: 20px 14px 28px;
+    color: var(--ink);
+    position: relative; z-index: 2;
+  }
+
+  /* Bill card */
+  .bill {
+    background: var(--white);
+    border-radius: 18px;
+    padding: 18px;
+  }
+  .bill .eyebrow {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--accent-deep);
+  }
+  .bill .value {
+    display: flex; align-items: baseline; gap: 4px;
+    margin-top: 6px;
+  }
+  .bill .currency {
+    font-family: 'Sora', sans-serif; font-weight: 500;
+    font-size: 18px; color: rgba(14,27,46,0.55);
+  }
+  .bill .amount {
+    font-family: 'Sora', sans-serif; font-weight: 800;
+    font-size: 42px; letter-spacing: -0.04em; line-height: 1;
+  }
+  .bill .due {
+    font-size: 12px; color: rgba(14,27,46,0.62);
     margin-top: 8px;
   }
-  .banco-btn {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 10px;
-    padding: 12px 6px;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--paper);
+  .bill .due strong { color: var(--ink); font-weight: 700; }
+
+  /* PIX button (HERO) */
+  .pix-btn {
+    width: 100%; margin-top: 18px;
+    padding: 14px 16px;
+    background: var(--accent); color: var(--ink);
+    border: 0; border-radius: 14px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer;
+    transition: background 0.25s ease, color 0.25s ease;
+    box-shadow:
+      0 10px 22px -6px rgba(232,115,42,0.55),
+      0 2px 4px rgba(14,27,46,0.08);
+    position: relative; overflow: hidden;
+    font-family: inherit;
+  }
+  .pix-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 85% 50%, rgba(255,255,255,0.20) 0%, transparent 55%);
+    pointer-events: none;
+  }
+  .pix-btn.copied {
+    background: var(--success); color: var(--paper);
+    box-shadow: 0 4px 12px -4px rgba(31,107,60,0.4);
+  }
+  .pix-btn.copied::before { display: none; }
+  .pix-btn:disabled {
+    background: rgba(14,27,46,0.10); color: rgba(14,27,46,0.4);
+    box-shadow: none; cursor: not-allowed;
+  }
+  .pix-btn:disabled::before { display: none; }
+  .pix-glyph {
+    display: flex; align-items: center; justify-content: center;
+    width: 38px; height: 38px; border-radius: 10px;
+    background: rgba(14,27,46,0.12);
+    flex-shrink: 0; position: relative; z-index: 1;
+  }
+  .pix-btn.copied .pix-glyph { background: rgba(242,232,212,0.15); }
+  .pix-label { flex: 1; text-align: left; position: relative; z-index: 1; }
+  .pix-label .top {
+    font-family: 'Sora', sans-serif; font-weight: 700;
+    font-size: 14px; letter-spacing: -0.005em; line-height: 1.15;
+  }
+  .pix-label .bottom {
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.10em; opacity: 0.7;
+    margin-top: 3px; text-transform: uppercase;
+  }
+
+  /* Secondary buttons */
+  .secondary {
+    margin-top: 10px;
+    display: flex; gap: 8px;
+  }
+  .secondary > * {
+    flex: 1; padding: 10px 0;
+    background: transparent;
+    border: 1.2px solid rgba(14,27,46,0.14);
+    border-radius: 12px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px;
+    color: rgba(14,27,46,0.62);
+    font-family: 'Manrope', sans-serif;
+    font-size: 11px; font-weight: 500; letter-spacing: 0.02em;
     text-decoration: none;
   }
-  .banco-btn:active { background: rgba(255,255,255,0.12); }
-  .banco-icon { font-size: 20px; margin-bottom: 4px; display: block; }
+  .secondary > *:hover { background: rgba(14,27,46,0.03); }
+  .secondary > *:disabled {
+    opacity: 0.4; cursor: not-allowed;
+  }
+
+  /* Savings card */
+  .savings {
+    background: var(--ink); color: var(--paper);
+    border-radius: 18px; padding: 18px;
+    position: relative; overflow: hidden;
+    margin-top: 10px;
+  }
+  .savings-sun {
+    position: absolute; right: -36px; bottom: -42px;
+    width: 150px; height: 150px;
+    opacity: 0.16;
+  }
+  .savings-body { position: relative; z-index: 1; }
+  .savings .eyebrow {
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(242,232,212,0.6);
+  }
+  .savings .value {
+    display: flex; align-items: baseline; gap: 4px;
+    margin-top: 6px;
+  }
+  .savings .currency {
+    font-family: 'Sora', sans-serif; font-weight: 500;
+    font-size: 18px; color: rgba(245,168,103,0.85);
+  }
+  .savings .amount {
+    font-family: 'Sora', sans-serif; font-weight: 800;
+    font-size: 46px; color: var(--accent-soft);
+    letter-spacing: -0.04em; line-height: 1;
+  }
+  .savings .since {
+    font-size: 11px; color: rgba(242,232,212,0.6);
+    margin-top: 6px;
+  }
+  .savings .month-row {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid rgba(242,232,212,0.12);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .savings .month-label {
+    font-size: 11px; color: rgba(242,232,212,0.6);
+    letter-spacing: 0.04em;
+  }
+  .savings .month-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600; font-size: 13px;
+    color: var(--paper);
+  }
+
+  /* Toast (feedback de copia secundaria) */
+  .toast {
+    position: fixed; left: 50%; bottom: 24px;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--ink); color: var(--paper);
+    padding: 10px 18px; border-radius: 100px;
+    font-size: 12px; font-weight: 500;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    opacity: 0; pointer-events: none;
+    transition: transform .3s ease, opacity .3s ease;
+    z-index: 100;
+  }
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
 </style>
 </head>
 <body>
-<div class="container">
 
-  <!-- HEADER -->
-  <div class="header">
-    <div class="logo">SoLev<span>Energia</span></div>
-  </div>
+<main class="screen">
 
-  <!-- GREETING -->
-  <div class="greeting">Olá{% if apelido %}, {{ apelido.title() }}{% elif nome_cliente %}, {{ nome_cliente.split()[0].title() }}{% endif %} 👋</div>
-  <div class="subgreeting">Sua fatura de {{ mes_ref }}</div>
+  <div class="sun-glow" aria-hidden="true"></div>
+  <div class="dot-a" aria-hidden="true"></div>
+  <div class="dot-b" aria-hidden="true"></div>
 
-  <!-- VALOR PRINCIPAL -->
-  <div class="card primary">
-    <div class="card-label">Total a pagar</div>
-    <div class="card-value">{{ valor_total }}</div>
-    <div class="card-sub">Vence em <strong>{{ venc_br }}</strong></div>
-    {% if venc_status == 'pago' %}
-      <span class="status-badge pago">✓ Pago</span>
-    {% elif venc_status == 'atrasado' %}
-      <span class="status-badge atrasado">⚠ Em atraso há {{ -dias_p_vencimento }} dias</span>
-    {% elif venc_status == 'urgente' %}
-      {% if dias_p_vencimento == 0 %}
-        <span class="status-badge urgente">⏰ Vence HOJE</span>
-      {% elif dias_p_vencimento == 1 %}
-        <span class="status-badge urgente">⏰ Vence amanhã</span>
-      {% else %}
-        <span class="status-badge urgente">⏰ {{ dias_p_vencimento }} dias para vencer</span>
-      {% endif %}
-    {% elif dias_p_vencimento is not none %}
-      <span class="status-badge ok">{{ dias_p_vencimento }} dias para vencer</span>
-    {% endif %}
-  </div>
+  <header class="topbar">
+    <span class="wm" aria-label="Solev">
+      <span class="wm-b">s</span>
+      <span class="wm-o"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#F2E8D4"/><circle cx="50" cy="50" r="33" fill="#E8732A"/></svg></span>
+      <span class="wm-b">l</span>
+      <span class="wm-l">e</span>
+      <span class="wm-l">v</span>
+    </span>
+    <div class="topbar-actions">
+      <button type="button" class="icon-btn bell" aria-label="Notificações">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/>
+          <path d="M10.5 21a1.7 1.7 0 0 0 3 0"/>
+        </svg>
+        {% if cliente.tem_notificacao %}<span class="dot"></span>{% endif %}
+      </button>
+      <div class="icon-btn avatar" aria-label="{{ cliente.primeiro_nome }}">{{ cliente.iniciais }}</div>
+    </div>
+  </header>
 
-  <!-- ECONOMIA -->
-  {% if status != 'pago' %}
-  <div class="card economia">
-    <div class="card-label">💚 Sua economia com a SOLEV</div>
-    <div class="economia-row">
-      <div>
-        <div class="small-label">Este mês</div>
-        <div class="small-value">{{ economia_mes }}</div>
+  <section class="welcome">
+    <div class="greeting">{{ saudacao_horario() }},</div>
+    <div class="name">{{ cliente.primeiro_nome }}</div>
+    <div class="sub">
+      <span class="sub-dot"></span>
+      <span class="sub-text">o sol cuidou de você este mês</span>
+    </div>
+  </section>
+
+  <section class="light">
+
+    <div class="bill">
+      <div class="eyebrow">{{ fatura.mes_label }}</div>
+      <div class="value">
+        <span class="currency">R$</span>
+        <span class="amount">{{ fatura.valor_reais }},{{ fatura.valor_centavos }}</span>
       </div>
-      <div>
-        <div class="small-label">Total acumulado</div>
-        <div class="small-value">{{ economia_acum }}</div>
+      <div class="due">
+        {% if fatura.vencimento_data %}vence em <strong>{{ fatura.vencimento_data }}</strong>
+          {% if fatura.vencimento_dias is not none %}
+            {% if fatura.vencimento_dias > 1 %}· {{ fatura.vencimento_dias }} dias
+            {% elif fatura.vencimento_dias == 1 %}· amanhã
+            {% elif fatura.vencimento_dias == 0 %}· hoje
+            {% elif fatura.vencimento_dias == -1 %}· vencida ontem
+            {% else %}· vencida há {{ -fatura.vencimento_dias }} dias
+            {% endif %}
+          {% endif %}
+        {% else %}vencimento a definir{% endif %}
+      </div>
+
+      <button class="pix-btn" id="pixBtn" type="button"
+              data-pix="{{ fatura.pix_payload|e }}"
+              {% if not fatura.pix_payload %}disabled title="PIX não cadastrado para esta usina"{% endif %}>
+        <div class="pix-glyph">
+          <svg id="pixIcon" width="20" height="20" viewBox="0 0 32 32" fill="currentColor">
+            <path d="M16 4 L20.5 8.5 L16 13 L11.5 8.5 Z"/>
+            <path d="M4 16 L8.5 11.5 L13 16 L8.5 20.5 Z"/>
+            <path d="M19 16 L23.5 11.5 L28 16 L23.5 20.5 Z"/>
+            <path d="M16 19 L20.5 23.5 L16 28 L11.5 23.5 Z"/>
+          </svg>
+        </div>
+        <div class="pix-label">
+          <div class="top" id="pixTop">{% if fatura.pix_payload %}Copiar código PIX{% else %}PIX indisponível{% endif %}</div>
+          <div class="bottom" id="pixBottom">{% if fatura.pix_payload %}pague em segundos{% else %}cadastre o PIX da usina{% endif %}</div>
+        </div>
+      </button>
+
+      <div class="secondary">
+        {% if fatura.codigo_barras %}
+        <button type="button" id="barcodeBtn" data-barcode="{{ fatura.codigo_barras|e }}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <line x1="4"  y1="6" x2="4"  y2="18"/>
+            <line x1="7"  y1="6" x2="7"  y2="18"/>
+            <line x1="10" y1="6" x2="10" y2="18"/>
+            <line x1="13" y1="6" x2="13" y2="18"/>
+            <line x1="16" y1="6" x2="16" y2="18"/>
+            <line x1="20" y1="6" x2="20" y2="18"/>
+          </svg>
+          <span>código de barras</span>
+        </button>
+        {% endif %}
+        {% if fatura.pdf_url %}
+        <a href="{{ fatura.pdf_url }}" download>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 4v12M7 11l5 5 5-5M5 20h14"/>
+          </svg>
+          <span>baixar PDF</span>
+        </a>
+        {% endif %}
       </div>
     </div>
-  </div>
-  {% endif %}
 
-  <!-- PIX -->
-  {% if pix_chave and status != 'pago' %}
-  <div class="card">
-    <div class="card-label">💸 Pagar com PIX</div>
-    <p style="font-size:13px; opacity:0.75; margin: 6px 0 0;">
-      Chave aleatória ({{ pix_nome }}):
-    </p>
-    <div class="pix-key-display" id="pixChave">{{ pix_chave }}</div>
-    <button class="btn btn-primary" onclick="copiarPix()">
-      📋 Copiar chave PIX
-    </button>
-
-    <p style="font-size:12px; opacity:0.6; margin: 16px 0 4px;">
-      Ou abra direto no seu banco:
-    </p>
-    <div class="bancos-grid">
-      <a class="banco-btn" href="nubank://" onclick="abrirBanco(event, 'nubank://')">
-        <span class="banco-icon">💜</span>Nubank
-      </a>
-      <a class="banco-btn" href="itau://" onclick="abrirBanco(event, 'itau://')">
-        <span class="banco-icon">🟧</span>Itaú
-      </a>
-      <a class="banco-btn" href="bradesco://" onclick="abrirBanco(event, 'bradesco://')">
-        <span class="banco-icon">🟥</span>Bradesco
-      </a>
-      <a class="banco-btn" href="bb://" onclick="abrirBanco(event, 'bb://')">
-        <span class="banco-icon">🟨</span>BB
-      </a>
-      <a class="banco-btn" href="caixa://" onclick="abrirBanco(event, 'caixa://')">
-        <span class="banco-icon">🔷</span>Caixa
-      </a>
-      <a class="banco-btn" href="santander://" onclick="abrirBanco(event, 'santander://')">
-        <span class="banco-icon">🟥</span>Santander
-      </a>
-    </div>
-  </div>
-  {% endif %}
-
-  <!-- PDF -->
-  {% if pdf_signed_url %}
-  <div class="card">
-    <div class="card-label">📄 Fatura detalhada</div>
-    <p style="font-size:13px; opacity:0.75; margin: 6px 0 12px;">
-      Documento completo com cálculo da economia.
-    </p>
-    <a class="btn btn-pdf" href="{{ pdf_signed_url }}" target="_blank">
-      📄 Abrir fatura em PDF
-    </a>
-  </div>
-  {% endif %}
-
-  <!-- HISTÓRICO -->
-  {% if historico|length > 1 %}
-  <div class="card">
-    <div class="card-label">📊 Histórico</div>
-    {% for h in historico %}
-    {% if h.is_atual %}
-      <div class="historico-item atual">
-        <div>
-          <div class="historico-mes">{{ h.mes }} <span style="font-size:10px; opacity:0.6;">· atual</span></div>
-          <div class="historico-economia">Economia: {{ h.economia }}</div>
+    <div class="savings">
+      <svg class="savings-sun" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="50" r="50" fill="#F2E8D4"/>
+        <circle cx="50" cy="50" r="33" fill="#E8732A"/>
+      </svg>
+      <div class="savings-body">
+        <div class="eyebrow">Você já economizou</div>
+        <div class="value">
+          <span class="currency">R$</span>
+          <span class="amount">{{ economia.acumulada_reais }},{{ economia.acumulada_cents }}</span>
         </div>
-        <div>
-          <span class="historico-valor">{{ h.total }}</span>
-          <span class="historico-status {{ h.status }}">{{ h.status }}</span>
+        <div class="since">desde {{ economia.desde_data }} · {{ economia.qtd_faturas }} fatura{% if economia.qtd_faturas != 1 %}s{% endif %}</div>
+        <div class="month-row">
+          <span class="month-label">economia deste mês</span>
+          <span class="month-value">+ R$ {{ economia.mes_valor }}</span>
         </div>
       </div>
-    {% else %}
-      <a href="/c/{{ h.token }}" class="historico-item">
-        <div>
-          <div class="historico-mes">{{ h.mes }}</div>
-          <div class="historico-economia">Economia: {{ h.economia }}</div>
-        </div>
-        <div>
-          <span class="historico-valor">{{ h.total }}</span>
-          <span class="historico-status {{ h.status }}">{{ h.status }}</span>
-        </div>
-      </a>
-    {% endif %}
-    {% endfor %}
-  </div>
-  {% endif %}
+    </div>
 
-  <!-- FOOTER -->
-  <div class="footer">
-    SoLev Energia · <a href="https://wa.me/5562999999999?text=Olá!%20Tenho%20uma%20dúvida%20sobre%20minha%20fatura">WhatsApp 💬</a>
-  </div>
+  </section>
 
-</div>
+</main>
 
-<!-- Toast -->
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
-function showToast(msg, sucesso) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.remove('show', 'success');
-  if (sucesso) t.classList.add('success');
-  // forced reflow
-  void t.offsetWidth;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
+(() => {
+  const $ = (id) => document.getElementById(id);
 
-function copiarPix() {
-  const chave = document.getElementById('pixChave').textContent.trim();
-  if (!chave) return;
-  // Tenta clipboard API (precisa HTTPS ou localhost)
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(chave).then(() => {
-      showToast('✓ Chave PIX copiada!', true);
-    }).catch(() => copiarFallback(chave));
-  } else {
-    copiarFallback(chave);
+  // ── PIX copy com feedback visual ───────────────────────────
+  const btn = $('pixBtn');
+  if (btn && !btn.disabled && btn.dataset.pix) {
+    const top = $('pixTop'); const bot = $('pixBottom');
+    const PIX = btn.dataset.pix;
+
+    const ICON_PIX = '<svg id="pixIcon" width="20" height="20" viewBox="0 0 32 32" fill="currentColor"><path d="M16 4 L20.5 8.5 L16 13 L11.5 8.5 Z"/><path d="M4 16 L8.5 11.5 L13 16 L8.5 20.5 Z"/><path d="M19 16 L23.5 11.5 L28 16 L23.5 20.5 Z"/><path d="M16 19 L20.5 23.5 L16 28 L11.5 23.5 Z"/></svg>';
+    const ICON_CHECK = '<svg id="pixIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-11"/></svg>';
+
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(PIX); }
+      catch (e) {
+        // Fallback p/ browsers antigos
+        const ta = document.createElement('textarea'); ta.value = PIX;
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      btn.classList.add('copied');
+      top.textContent = 'Copiado!';
+      bot.textContent = 'cole no app do seu banco';
+      $('pixIcon').outerHTML = ICON_CHECK;
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        top.textContent = 'Copiar código PIX';
+        bot.textContent = 'pague em segundos';
+        $('pixIcon').outerHTML = ICON_PIX;
+      }, 2200);
+    });
   }
-}
 
-function copiarFallback(texto) {
-  // Fallback pra browsers antigos / contextos sem clipboard
-  const ta = document.createElement('textarea');
-  ta.value = texto;
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  try {
-    document.execCommand('copy');
-    showToast('✓ Chave PIX copiada!', true);
-  } catch (e) {
-    showToast('Não foi possível copiar — copie manualmente', false);
+  // ── Código de barras copy (toast) ──────────────────────────
+  const bcBtn = $('barcodeBtn');
+  const toast = $('toast');
+  function showToast(msg) {
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('show');
+    setTimeout(() => toast.classList.remove('show'), 2000);
   }
-  document.body.removeChild(ta);
-}
-
-function abrirBanco(ev, scheme) {
-  // Tenta abrir o app via URI scheme. Se falhar (PC ou app não instalado),
-  // o browser fica na mesma página (graças ao ev.preventDefault no fallback).
-  // Em mobile, alguns bancos respondem a esquemas customizados.
-  // Implementação simples: deixa o link tentar abrir; se nada acontecer,
-  // o usuário vê o toast com instrução manual.
-  setTimeout(() => {
-    // Se ainda estamos aqui após 500ms, o app provavelmente não abriu
-    if (document.hasFocus()) {
-      showToast('Abra seu app do banco e use a chave PIX copiada', false);
-    }
-  }, 500);
-}
+  if (bcBtn) {
+    bcBtn.addEventListener('click', async () => {
+      const code = bcBtn.dataset.barcode || '';
+      if (!code) return;
+      try { await navigator.clipboard.writeText(code); }
+      catch (e) {
+        const ta = document.createElement('textarea'); ta.value = code;
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); document.body.removeChild(ta);
+      }
+      showToast('Código de barras copiado');
+    });
+  }
+})();
 </script>
 
 </body>
