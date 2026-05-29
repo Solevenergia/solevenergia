@@ -17,16 +17,21 @@
 <meta property="og:site_name" content="SOLEV ENERGIA">
 <meta property="og:title" content="Sua fatura SOLEV está pronta">
 <meta property="og:description" content="{{ cliente.primeiro_nome }} · {{ valor_total }}{% if venc_br and venc_br != '—' %} · venc {{ venc_br }}{% endif %}">
-<meta property="og:image" content="{{ url_for('static', filename='solev-sua-fatura-1200x630.png', _external=True) }}">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="SOLEV ENERGIA — Sua fatura">
+<!-- og:image: ÚNICA, quadrada 1080×1080 estática, só com a logo no fundo areia.
+     WhatsApp/iMessage/LinkedIn pegam essa (thumb pequena privilegia a marca).
+     Pra Twitter, o twitter:image abaixo dá a versão horizontal dinâmica
+     com valor/venc (mostra banner grande em vez de thumb). -->
+<meta property="og:image" content="{{ url_for('static', filename='og_square_logo.png', _external=True) }}">
+<meta property="og:image:width" content="1080">
+<meta property="og:image:height" content="1080">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:alt" content="SOLEV ENERGIA">
 <meta property="og:url" content="{{ request.url }}">
 <meta property="og:locale" content="pt_BR">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Sua fatura SOLEV está pronta">
 <meta name="twitter:description" content="{{ valor_total }}{% if venc_br and venc_br != '—' %} · venc {{ venc_br }}{% endif %}">
-<meta name="twitter:image" content="{{ url_for('static', filename='solev-sua-fatura-1200x630.png', _external=True) }}">
+<meta name="twitter:image" content="{{ url_for('portal_cliente_og_image', token=request.view_args.token, _external=True) }}">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
