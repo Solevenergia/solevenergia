@@ -282,34 +282,17 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
     if tarifa_val <= 0:
         print("⚠️ Tarifa nao encontrada! Verifique tarifas.json ou informe manualmente.")
 
-    # Resolve bandeiras
-    ba, bv = resolver_bandeiras(mr)
-
-    # ── OVERRIDE: tarifa real da Equatorial extraída do PDF ──────────────────
-    # A Equatorial cobra bandeira em valores diferentes por região. O cadastro
-    # em tb_tarifas (Aneel padrão) só serve para faturas TOTALMENTE compensadas
-    # (onde a bandeira fica zerada). Para faturas com consumo não compensado,
-    # usar a tarifa real extraída do PDF (adc / kWh sob bandeira) evita
-    # divergência com a fatura Equatorial original.
-    _adc_am = float(equatorial.get("adc_bandeira_amarela", 0) or 0)
-    _kwh_am = float(equatorial.get("bandeira_amarela", 0) or 0)
-    ba_real = None
-    if _adc_am > 0 and _kwh_am > 0:
-        ba_real = _adc_am / _kwh_am
-        if abs(ba_real - ba) > 0.00001:
-            print(f"   Bandeira AM: tarifa do PDF = R$ {ba_real:.6f}/kWh "
-                  f"(R$ {_adc_am:.2f} ÷ {_kwh_am:.2f} kWh) — substitui tb_tarifas R$ {ba:.6f}")
-        ba = ba_real
-
-    _adc_vm = float(equatorial.get("adc_bandeira_vermelha", 0) or 0)
-    _kwh_vm = float(equatorial.get("bandeira_vermelha", 0) or 0)
-    bv_real = None
-    if _adc_vm > 0 and _kwh_vm > 0:
-        bv_real = _adc_vm / _kwh_vm
-        if abs(bv_real - bv) > 0.00001:
-            print(f"   Bandeira VM: tarifa do PDF = R$ {bv_real:.6f}/kWh "
-                  f"(R$ {_adc_vm:.2f} ÷ {_kwh_vm:.2f} kWh) — substitui tb_tarifas R$ {bv:.6f}")
-        bv = bv_real
+    # Resolve bandeiras — FONTE ÚNICA (utils.resolver_tarifa_bandeira):
+    # tarifa REAL do PDF (adc/qtd) com fallback no tb_tarifas. Mesma função que
+    # o endpoint /api/extrair e o calcular() consomem — nunca mais diverge.
+    from utils import resolver_tarifa_bandeira
+    ba_stored, bv_stored = resolver_bandeiras(mr)
+    ba, bv, _binfo = resolver_tarifa_bandeira(equatorial, ba_stored, bv_stored)
+    ba_real, bv_real = _binfo["ba_pdf"], _binfo["bv_pdf"]
+    if ba_real is not None and abs(ba_real - ba_stored) > 0.00001:
+        print(f"   Bandeira AM: tarifa do PDF = R$ {ba_real:.6f}/kWh — substitui tb_tarifas R$ {ba_stored:.6f}")
+    if bv_real is not None and abs(bv_real - bv_stored) > 0.00001:
+        print(f"   Bandeira VM: tarifa do PDF = R$ {bv_real:.6f}/kWh — substitui tb_tarifas R$ {bv_stored:.6f}")
 
     # Auto-aprendizado: atualiza tb_tarifas se a tarifa real do PDF for MAIOR
     # que a cadastrada (mantém sempre o maior valor observado como fallback).
@@ -318,14 +301,9 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
             from db import tarifa_atualizar_se_maior
             res = tarifa_atualizar_se_maior(mr, ba_real, bv_real)
             if res.get("atualizado"):
-                msgs = []
-                if "bandeira_amarela" in res:
-                    msgs.append(f"AM R$ {res['ba_antes']:.6f} → R$ {res['bandeira_amarela']:.6f}")
-                if "bandeira_vermelha" in res:
-                    msgs.append(f"VM R$ {res['bv_antes']:.6f} → R$ {res['bandeira_vermelha']:.6f}")
-                print(f"   📌 tb_tarifas[{res['mes']}] atualizado: {' | '.join(msgs)}")
+                print(f"   📌 tb_tarifas[{res.get('mes', mr)}] atualizado com valores do PDF")
             elif res.get("criado"):
-                print(f"   📌 tb_tarifas[{res['mes']}] criado com valores do PDF")
+                print(f"   📌 tb_tarifas[{res.get('mes', mr)}] criado com valores do PDF")
         except Exception as _e:
             print(f"   ⚠️ Falha ao auto-atualizar tb_tarifas: {_e}")
 

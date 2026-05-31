@@ -194,6 +194,35 @@ def gerar_qrcode_pix(valor, chave_pix=None, nome_pix=None, cidade_pix=None):
         print(f"[AVISO] Erro QR Code: {e}")
         return None
 
+# ── Bandeira tarifária (FONTE ÚNICA) ─────────────────────────
+
+def resolver_tarifa_bandeira(equatorial: dict, ba_stored: float = 0.0,
+                             bv_stored: float = 0.0):
+    """Fonte ÚNICA da tarifa de bandeira (R$/kWh) amarela e vermelha de uma fatura.
+
+    TODOS os caminhos (extrair, gerar web, montar_dados, manual, scripts) devem
+    usar esta função — assim a bandeira nunca diverge entre telas.
+
+    Prioridade:
+      1) tarifa REAL da fatura = adc_R$ / qtd_kWh da linha ADC BANDEIRA do PDF
+      2) valor cadastrado em tb_tarifas (fallback p/ 100% compensado, sem linha
+         de bandeira pra extrair)
+
+    `equatorial` é o dict cru do extrair_equatorial (tem adc_bandeira_* e
+    bandeira_* = qtd kWh). Retorna (ba, bv, info) onde info["ba_pdf"]/["bv_pdf"]
+    é a tarifa derivada do PDF (ou None) — útil p/ auto-aprendizado do tb_tarifas.
+    """
+    def _pdf(adc_key, qtd_key):
+        adc = float(equatorial.get(adc_key, 0) or 0)
+        qtd = float(equatorial.get(qtd_key, 0) or 0)
+        return (adc / qtd) if (adc > 0 and qtd > 0) else None
+
+    ba_pdf = _pdf("adc_bandeira_amarela", "bandeira_amarela")
+    bv_pdf = _pdf("adc_bandeira_vermelha", "bandeira_vermelha")
+    ba = ba_pdf if ba_pdf is not None else float(ba_stored or 0)
+    bv = bv_pdf if bv_pdf is not None else float(bv_stored or 0)
+    return ba, bv, {"ba_pdf": ba_pdf, "bv_pdf": bv_pdf}
+
 # ── Clientes ─────────────────────────────────────────────────
 
 def _buscar_cliente_por_uc(uc, clientes):

@@ -897,9 +897,9 @@ def portal_cliente(token):
 # ──────────────────────────────────────────────────────────────
 
 
-# Rota /logo/<filename> removida em 30/05/2026 — servia logos antigas da raiz
-# do projeto (logo_blue_v_colored.svg etc) que foram deletadas. Tudo usa
-# /static/logo/ ou /static/icons/ agora via Flask static serve.
+# Rota /logo/<filename> removida em 30/05/2026 — servia as logos antigas da
+# raiz do projeto (ja deletadas). Tudo usa /static/logo/ ou /static/icons/
+# agora via Flask static serve.
 
 
 # DASHBOARD
@@ -1964,15 +1964,20 @@ def api_extrair_fatura_equatorial():
             if float(cadastrada.get("tarifa_sem") or 0) > 0:
                 dados["tarifa_sem"]  = cadastrada["tarifa_sem"]
                 dados["tarifa_scee"] = cadastrada["tarifa_sem"]
-            # Bandeiras: extrator nao retorna por kWh, so o valor R$ pago;
-            # cadastrada tem a tarifa R$/kWh — sempre usar a cadastrada
-            if "bandeira_amarela" in cadastrada:
-                dados["bandeira_amarela"] = cadastrada["bandeira_amarela"]
-            if "bandeira_vermelha" in cadastrada:
-                dados["bandeira_vermelha"] = cadastrada["bandeira_vermelha"]
             dados["_tarifa_origem"] = "cadastrada"
         else:
             dados["_tarifa_origem"] = "extraida_fatura"
+
+        # Bandeira — FONTE ÚNICA (utils.resolver_tarifa_bandeira): tarifa real do
+        # PDF (adc_R$ / qtd_kWh) com fallback no tb_tarifas. Antes este endpoint
+        # usava SEMPRE a cadastrada (ex.: 0,018053 velho), ignorando o adc/qtd do
+        # PDF — era a origem do bug que reaparecia ao "Extrair dados da fatura".
+        from utils import resolver_tarifa_bandeira
+        _ba_st = float((cadastrada or {}).get("bandeira_amarela", 0) or 0)
+        _bv_st = float((cadastrada or {}).get("bandeira_vermelha", 0) or 0)
+        _ba, _bv, _binfo = resolver_tarifa_bandeira(dados, _ba_st, _bv_st)
+        dados["bandeira_amarela"]  = _ba
+        dados["bandeira_vermelha"] = _bv
 
         # 3) Datas: garantir que aliases apontem para as DATAS, nao para
         #    o numero do medidor (extrair_equatorial.py:40 tem alias errado)
