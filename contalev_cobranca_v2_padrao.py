@@ -135,22 +135,24 @@ def calcular(d):
     adc_band_verm_eq = float(d.get("adc_bandeira_vermelha", 0) or 0)
 
     # ── Tarifa R$/kWh da bandeira — RESOLUCAO (fonte unica) ──────────────
-    # Prioridade: (1) tarifa real da fatura do mes = adc_R$ / qtd_kWh da linha
-    #             ADC BANDEIRA do PDF; (2) valor armazenado em tb_tarifas (so
-    #             serve p/ cliente 100% compensado, cujo PDF nao tem linha de
-    #             bandeira pra extrair).
+    # Prioridade: (1) tarifa EXATA impressa na linha ADC do PDF; (2) adc_R$ /
+    #             qtd_kWh (aproximada); (3) valor armazenado em tb_tarifas (so
+    #             serve p/ cliente 100% compensado, cujo PDF nao tem bandeira).
     # NUNCA usar tb_tarifas quando ha consumo nao compensado — a fatura traz a
     # tarifa real do mes. Detalhes em memory business_rules_cobranca.md.
-    def _resolver_tarifa_band(adc_eq, qtd_key, stored_key):
+    def _resolver_tarifa_band(pdf_key, adc_eq, qtd_key, stored_key):
+        pdf = float(d.get(pdf_key, 0) or 0)
+        if pdf > 0:
+            return round(pdf, 6)
         qtd = float(d.get(qtd_key, 0) or 0)
         if adc_eq > 0 and qtd > 0:
-            return adc_eq / qtd
-        return float(d.get(stored_key, 0) or 0)
+            return round(adc_eq / qtd, 6)
+        return round(float(d.get(stored_key, 0) or 0), 6)
 
     tarifa_band_amar = _resolver_tarifa_band(
-        adc_band_amar_eq, "_bandeira_amarela_qtd",  "bandeira_tarifa_amar")
+        "tarifa_bandeira_amarela_pdf", adc_band_amar_eq, "_bandeira_amarela_qtd",  "bandeira_tarifa_amar")
     tarifa_band_verm = _resolver_tarifa_band(
-        adc_band_verm_eq, "_bandeira_vermelha_qtd", "bandeira_tarifa_verm")
+        "tarifa_bandeira_vermelha_pdf", adc_band_verm_eq, "_bandeira_vermelha_qtd", "bandeira_tarifa_verm")
 
     # ── MODO BANDEIRA ──────────────────────────────────────────
     # Define como a bandeira tarifaria aparece na conta:

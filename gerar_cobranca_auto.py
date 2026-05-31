@@ -40,7 +40,7 @@ TARIFAS_JSON  = os.path.join(_DIR, "tarifas.json")
 #  CHAVE PIX — Configure aqui os dados da sua conta Inter
 # ══════════════════════════════════════════════════════════════
 PIX_CHAVE        = ""           # CPF, e-mail, telefone ou chave aleatoria
-PIX_NOME         = "CONTALEV ENERGIA"
+PIX_NOME         = "SOLEV ENERGIA"
 PIX_CIDADE       = "GOIANIA"
 
 
@@ -412,6 +412,9 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
         # 5+6: qtd kWh sob bandeira — calcular() resolve a tarifa real (adc/qtd)
         "_bandeira_amarela_qtd":    equatorial.get("bandeira_amarela", 0) or 0,
         "_bandeira_vermelha_qtd":   equatorial.get("bandeira_vermelha", 0) or 0,
+        # 7+8: tarifa EXATA impressa na linha ADC do PDF (preferida pelo calcular)
+        "tarifa_bandeira_amarela_pdf":  equatorial.get("tarifa_bandeira_amarela_pdf", 0) or 0,
+        "tarifa_bandeira_vermelha_pdf": equatorial.get("tarifa_bandeira_vermelha_pdf", 0) or 0,
         # Legados (mantidos por compat — antigos chamadores)
         "bandeira_amarela":    ba * consumo if ba > 0 else 0,
         "bandeira_vermelha":   bv * consumo if bv > 0 else 0,

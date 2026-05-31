@@ -61,7 +61,7 @@ def _fmt_cep(v):
 # ── PIX ──────────────────────────────────────────────────────
 
 PIX_CHAVE  = "danilopetitpao@gmail.com"
-PIX_NOME   = "CONTALEV ENERGIA"
+PIX_NOME   = "SOLEV ENERGIA"
 PIX_CIDADE = "GOIANIA"
 
 def _is_cpf_valido(digits: str) -> bool:
@@ -204,23 +204,29 @@ def resolver_tarifa_bandeira(equatorial: dict, ba_stored: float = 0.0,
     usar esta função — assim a bandeira nunca diverge entre telas.
 
     Prioridade:
-      1) tarifa REAL da fatura = adc_R$ / qtd_kWh da linha ADC BANDEIRA do PDF
-      2) valor cadastrado em tb_tarifas (fallback p/ 100% compensado, sem linha
-         de bandeira pra extrair)
+      1) tarifa EXATA impressa na linha ADC BANDEIRA do PDF (tarifa_bandeira_*_pdf)
+      2) adc_R$ / qtd_kWh — aproximada (R$ arredondado), fallback
+      3) valor cadastrado em tb_tarifas (p/ 100% compensado, sem linha de bandeira)
 
     `equatorial` é o dict cru do extrair_equatorial (tem adc_bandeira_* e
     bandeira_* = qtd kWh). Retorna (ba, bv, info) onde info["ba_pdf"]/["bv_pdf"]
     é a tarifa derivada do PDF (ou None) — útil p/ auto-aprendizado do tb_tarifas.
     """
-    def _pdf(adc_key, qtd_key):
+    def _resolve(pdf_key, adc_key, qtd_key, stored):
+        # 1) tarifa EXATA impressa na linha ADC do PDF (preferida — limpa)
+        pdf = float(equatorial.get(pdf_key, 0) or 0)
+        if pdf > 0:
+            return round(pdf, 6), round(pdf, 6)
+        # 2) adc_R$ / qtd_kWh — aproximada (R$ vem arredondado); arredonda p/ exibir limpo
         adc = float(equatorial.get(adc_key, 0) or 0)
         qtd = float(equatorial.get(qtd_key, 0) or 0)
-        return (adc / qtd) if (adc > 0 and qtd > 0) else None
+        if adc > 0 and qtd > 0:
+            return round(adc / qtd, 6), round(adc / qtd, 6)
+        # 3) cadastrada em tb_tarifas (fallback p/ 100% compensado)
+        return round(float(stored or 0), 6), None
 
-    ba_pdf = _pdf("adc_bandeira_amarela", "bandeira_amarela")
-    bv_pdf = _pdf("adc_bandeira_vermelha", "bandeira_vermelha")
-    ba = ba_pdf if ba_pdf is not None else float(ba_stored or 0)
-    bv = bv_pdf if bv_pdf is not None else float(bv_stored or 0)
+    ba, ba_pdf = _resolve("tarifa_bandeira_amarela_pdf", "adc_bandeira_amarela", "bandeira_amarela", ba_stored)
+    bv, bv_pdf = _resolve("tarifa_bandeira_vermelha_pdf", "adc_bandeira_vermelha", "bandeira_vermelha", bv_stored)
     return ba, bv, {"ba_pdf": ba_pdf, "bv_pdf": bv_pdf}
 
 # ── Clientes ─────────────────────────────────────────────────

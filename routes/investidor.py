@@ -155,7 +155,7 @@ def _gerar_pdf_investidor(r):
     nome_arq = unicodedata.normalize('NFKD', r["investidor_nome"]).encode('ascii', 'ignore').decode('ascii')
     nome_arq = "".join(w.capitalize() for w in nome_arq.split())
     mes = r["mes_referencia"].replace("/", "")
-    output = os.path.join(_PROJECT_DIR, f"{mes}-CONTALEV{nome_arq}.pdf")
+    output = os.path.join(_PROJECT_DIR, f"{mes}-SoLev{nome_arq}.pdf")
 
     c = cv.Canvas(output, pagesize=A4)
     c.setTitle(f"Demonstrativo Investidor - {r['investidor_nome']}")
@@ -164,15 +164,21 @@ def _gerar_pdf_investidor(r):
     c.setFillColor(dark_blue)
     c.rect(0, H - 60, W, 60, fill=1, stroke=0)
     c.setFillColor(white)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(25, H - 25, "CONTALEV")
+    # Logo SOLEV (wordmark areia sobre header escuro) — regra de ouro: imagem, nao texto
+    _logo_solev = os.path.join(_PROJECT_DIR, "static", "logo", "solev-wordmark-areia.png")
+    if os.path.exists(_logo_solev):
+        c.drawImage(_logo_solev, 25, H - 44, width=130, height=30,
+                    mask='auto', preserveAspectRatio=True, anchor='sw')
+    else:
+        c.setFont("Helvetica-Bold", 16)
+        c.drawString(25, H - 25, "SOLEV")
     c.setFillColor(orange)
     c.setFont("Helvetica-Bold", 12)
     c.drawRightString(W - 25, H - 22, "DEMONSTRATIVO DE PAGAMENTO")
     c.setFillColor(HexColor("#cccccc"))
     c.setFont("Helvetica", 8)
     c.drawRightString(W - 25, H - 38, f"Ref.: {r['mes_referencia']}  |  Gerado em: {r['data_geracao']}")
-    c.drawString(25, H - 38, "O sol gera. A CONTALEV reduz.")
+    c.drawString(25, H - 38, "O sol gera. A SOLEV reduz.")
 
     y = H - 85
 
@@ -277,7 +283,7 @@ def _gerar_pdf_investidor(r):
     c.rect(0, 0, W, 30, fill=1, stroke=0)
     c.setFillColor(HexColor("#aaaaaa"))
     c.setFont("Helvetica", 6)
-    c.drawString(25, 12, "CONTALEV SERVICOS E LOCACOES LTDA  |  CNPJ: 39.955.084/0001-52  |  contatocontalev@gmail.com")
+    c.drawString(25, 12, "SOLEV ENERGIA  |  CNPJ: 66.917.468/0001-53  |  solevenergia@gmail.com  |  (62) 99988-5534")
 
     c.save()
     return output

@@ -1,5 +1,5 @@
 """
-CONTALEV — Gerador PDF Simulacao de Economia
+SOLEV — Gerador PDF Simulacao de Economia
 Layout profissional A4 · 1 pagina
 Formula: tarifa_com = tarifa × (1 - desc), desc_mostrado = (total_kwh - tc) / total_kwh
 """
@@ -18,7 +18,7 @@ import numpy as np, unicodedata, os
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
 # Logos do handoff oficial solev-logo/ (30/05/2026). Wordmark em paths
-# (não depende de fonte). Substitui logo_transparent.png e logo_white_v_colored.png.
+# (não depende de fonte). Substitui as logos antigas da raiz do projeto.
 LOGO_COLOR = os.path.join(_DIR, "static", "logo", "solev-wordmark-navy.png")   # sobre fundo claro
 LOGO_WHITE = os.path.join(_DIR, "static", "logo", "solev-wordmark-areia.png")  # sobre fundo escuro
 LOGO_JPEG  = os.path.join(_DIR, "LOGO_CONTALEV.jpeg")
@@ -128,7 +128,7 @@ def gerar_simulacao_web(d):
     nl  = unicodedata.normalize('NFKD', d["nome"]).encode('ascii', 'ignore').decode('ascii')
     na  = "".join(w.capitalize() for w in nl.split())
     mr  = d["mes_referencia"].replace("/", "")
-    out = os.path.join(_DIR, f"{mr}-CONTALEV{na}.pdf")
+    out = os.path.join(_DIR, f"{mr}-SoLev{na}.pdf")
 
     # ── Canvas e paleta ───────────────────────────────────
     ratio = _lr()
@@ -300,11 +300,11 @@ def gerar_simulacao_web(d):
     # Cabecalhos das colunas
     c.setFillColor(SL); c.roundRect(CLX, y - CH, CW, CH, 2*mm, fill=1, stroke=0)
     c.setFillColor(WH); c.setFont("Helvetica-Bold", 8)
-    c.drawCentredString(CLX + CW/2, y - CH/2 - 2, "SEM CONTALEV")
+    c.drawCentredString(CLX + CW/2, y - CH/2 - 2, "SEM SOLEV")
 
     c.setFillColor(DB); c.roundRect(CRX, y - CH, CW, CH, 2*mm, fill=1, stroke=0)
     c.setFillColor(OR); c.setFont("Helvetica-Bold", 8)
-    c.drawCentredString(CRX + CW/2, y - CH/2 - 2, "COM CONTALEV")
+    c.drawCentredString(CRX + CW/2, y - CH/2 - 2, "COM SOLEV")
     y -= CH + 3 * mm
 
     # ── Funcao: renderiza coluna de detalhamento ──────────
@@ -385,7 +385,7 @@ def gerar_simulacao_web(d):
 
     c.setFillColor(DB); c.roundRect(CRX, y - TH, CW, TH, 2*mm, fill=1, stroke=0)
     c.setFillColor(OR); c.setFont("Helvetica", 6.5)
-    c.drawString(CRX + 3*mm, y - 3.5*mm, "COM A CONTALEV")
+    c.drawString(CRX + 3*mm, y - 3.5*mm, "COM A SOLEV")
     c.setFont("Helvetica-Bold", 12)
     c.drawString(CRX + 3*mm, y - 8.5*mm, _f(tot_com))
 
@@ -471,12 +471,12 @@ def gerar_simulacao_web(d):
 
     c.setFillColor(SL); c.roundRect(MX, y - BH2, FW, BH2, 2*mm, fill=1, stroke=0)
     c.setFillColor(WH); c.setFont("Helvetica-Bold", 8)
-    c.drawString(MX + 3*mm, y - BH2/2 - 2, f"SEM CONTALEV     {_f(tot_sem)}")
+    c.drawString(MX + 3*mm, y - BH2/2 - 2, f"SEM SOLEV     {_f(tot_sem)}")
     y -= BH2 + 1.5*mm
 
     c.setFillColor(DB); c.roundRect(MX, y - BH2, FW, BH2, 2*mm, fill=1, stroke=0)
     c.setFillColor(OR); c.setFont("Helvetica-Bold", 8)
-    c.drawString(MX + 3*mm, y - BH2/2 - 2, f"COM CONTALEV     {_f(tot_com)}")
+    c.drawString(MX + 3*mm, y - BH2/2 - 2, f"COM SOLEV     {_f(tot_com)}")
     y -= BH2 + 3.5*mm
 
     # ══════════════════════════════════════════════════════
@@ -563,7 +563,7 @@ def gerar_simulacao_web(d):
     c.setFillColor(WH); c.setFont("Helvetica", 5.5)
     c.drawRightString(W - 8*mm, 9*mm, "Simulacao ilustrativa. Valores sujeitos a variacao conforme tarifas vigentes.")
     c.setFont("Helvetica", 4.5)
-    c.drawRightString(W - 8*mm, 5.5*mm, "CONTALEV © 2026 — Energia solar por assinatura")
+    c.drawRightString(W - 8*mm, 5.5*mm, "SOLEV © 2026 — Energia solar por assinatura")
 
     c.save()
     return out

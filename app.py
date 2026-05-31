@@ -429,6 +429,8 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
             # (adc_R$ / qtd), em vez do valor velho do tb_tarifas.
             "_bandeira_amarela_qtd":  equatorial.get("bandeira_amarela", 0) or 0,
             "_bandeira_vermelha_qtd": equatorial.get("bandeira_vermelha", 0) or 0,
+            "tarifa_bandeira_amarela_pdf":  equatorial.get("tarifa_bandeira_amarela_pdf", 0) or 0,
+            "tarifa_bandeira_vermelha_pdf": equatorial.get("tarifa_bandeira_vermelha_pdf", 0) or 0,
             "modo_bandeira":          cliente.get("modo_bandeira", "com_bandeira"),
             "compensacao_dic": equatorial.get("compensacao_dic", 0) or 0,
         }

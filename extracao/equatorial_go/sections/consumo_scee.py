@@ -11,6 +11,16 @@ def _adc_bandeira(prefixo: str, texto: str) -> float:
     return _n(nums[2]) if len(nums) >= 3 else 0.0
 
 
+def _tarifa_bandeira(prefixo: str, texto: str) -> float:
+    """Tarifa R$/kWh EXATA impressa na linha ADC BANDEIRA.
+    Layout: 'ADC BANDEIRA AMARELA kWh <qtd> <TARIFA> <valor_R$> ...' -> 2o numero."""
+    m = re.search(prefixo + r"[^\n]*", texto, re.IGNORECASE)
+    if not m:
+        return 0.0
+    nums = re.findall(r"\d+[.,]?\d*", m.group(0))
+    return _n(nums[1]) if len(nums) >= 3 else 0.0
+
+
 def parse_consumo_scee(texto: str, texto_completo: str) -> dict:
     r: dict = {}
 
@@ -107,6 +117,8 @@ def parse_consumo_scee(texto: str, texto_completo: str) -> dict:
     r["bandeira_vermelha"] = _n(bv.group(1)) if bv else 0.0
     r["adc_bandeira_amarela"]  = _adc_bandeira(r"ADC\s+BANDEIRA\s+AMARELA",  texto)
     r["adc_bandeira_vermelha"] = _adc_bandeira(r"ADC\s+BANDEIRA\s+VERMELHA", texto)
+    r["tarifa_bandeira_amarela_pdf"]  = _tarifa_bandeira(r"ADC\s+BANDEIRA\s+AMARELA",  texto)
+    r["tarifa_bandeira_vermelha_pdf"] = _tarifa_bandeira(r"ADC\s+BANDEIRA\s+VERMELHA", texto)
 
     # Fallback compensado por credito SCEE
     if r["compensado_kwh"] == 0 and r.get("credito_recebido_kwh", 0) > 0:

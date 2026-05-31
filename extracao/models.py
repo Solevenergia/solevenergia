@@ -84,6 +84,9 @@ class Fatura:
     adc_bandeira_vermelha: float = 0.0
     bandeira_amarela: float = 0.0
     bandeira_vermelha: float = 0.0
+    # Tarifa R$/kWh impressa na linha ADC BANDEIRA do PDF (exata — preferida no resolver)
+    tarifa_bandeira_amarela_pdf: float = 0.0
+    tarifa_bandeira_vermelha_pdf: float = 0.0
 
     # Itens financeiros (multa/juros com detalhe)
     multa: float = 0.0
