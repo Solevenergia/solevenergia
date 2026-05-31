@@ -527,36 +527,16 @@ def _criar_overlay_pdf(page_w: float = None, page_h: float = None) -> bytes:
     SX    = 12 * mm
     FS_WM = 17  # ligeiramente menor
 
-    # Wordmark SoLev — adaptado para Helvetica (Sora real nao disponivel em PDF builtin)
-    # "o" e um circulo: outer PAPER + miolo laranja (proporcao 66% como no SVG da marca)
-    OE = FS_WM
-    BASE_Y    = MID_Y - 0.30 * OE              # baseline (Helvetica desce ~0.21em abaixo do meio)
-    O_RADIUS  = 0.32 * OE                      # diametro = 0.64em
-    O_INNER_R = O_RADIUS * 0.66                # miolo laranja
-    O_CTR_Y   = BASE_Y + O_RADIUS              # base do circulo na baseline (igual aos letras)
-
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", FS_WM)
-    s_w = c.stringWidth("s", "Helvetica-Bold", FS_WM)
-    c.drawString(SX, BASE_Y, "s")
-
-    # "o" — encostado no "s" sem overlap visual
-    o_left  = SX + s_w + 0.01 * OE
-    o_cx    = o_left + O_RADIUS
-    c.setFillColor(WHITE);  c.circle(o_cx, O_CTR_Y, O_RADIUS,  fill=1, stroke=0)
-    c.setFillColor(ACCENT); c.circle(o_cx, O_CTR_Y, O_INNER_R, fill=1, stroke=0)
-
-    # "l" — bold, logo apos a borda direita do "o"
-    o_right = o_left + 2 * O_RADIUS
-    lx      = o_right + 0.01 * OE
-    c.setFillColor(WHITE)
-    c.setFont("Helvetica-Bold", FS_WM)
-    l_w = c.stringWidth("l", "Helvetica-Bold", FS_WM)
-    c.drawString(lx, BASE_Y, "l")
-
-    # "ev" em peso leve (Helvetica regular como aproximacao do Sora Light)
-    c.setFont("Helvetica", FS_WM)
-    c.drawString(lx + l_w, BASE_Y, "ev")
+    # Wordmark SoLev — areia sobre fundo INK. Vem do handoff oficial em
+    # static/logo/ (letras em paths SVG → PNG, sem dependência de fonte).
+    # Substituiu desenho manual via Helvetica + círculos (30/05/2026 audit).
+    LOGO_PATH = os.path.join(_DIR, "static", "logo", "solev-wordmark-areia.png")
+    LOGO_H_MM = 7   # altura na faixa de 11mm, com padding visual
+    LOGO_H_PT = LOGO_H_MM * mm
+    LOGO_W_PT = LOGO_H_PT * 3.08   # aspect ratio ~3.08:1 do wordmark
+    c.drawImage(LOGO_PATH, SX, MID_Y - LOGO_H_PT / 2,
+                width=LOGO_W_PT, height=LOGO_H_PT, mask='auto',
+                preserveAspectRatio=True)
 
     c.setFillColor(ACCENT)
     c.setFont("Helvetica", 7.5)
@@ -599,9 +579,12 @@ def _criar_overlay_pdf(page_w: float = None, page_h: float = None) -> bytes:
     SYM_CY   = FOOTER_H - 28 * mm
     TEXT_LFT = GROUP_X + 2 * SYM_R + GAP
 
-    # Logo: outer PAPER (visivel no fundo INK) + miolo laranja
-    c.setFillColor(PAPER);  c.circle(SYM_CX, SYM_CY, SYM_R, fill=1, stroke=0)
-    c.setFillColor(ACCENT); c.circle(SYM_CX, SYM_CY, SYM_R * 0.58, fill=1, stroke=0)
+    # Símbolo "o" areia sobre fundo INK — vem do handoff oficial em static/logo/
+    # (substituiu desenho manual via 2 círculos em 30/05/2026 audit).
+    SYM_PATH = os.path.join(_DIR, "static", "logo", "solev-symbol-areia.png")
+    SYM_SIDE = 2 * SYM_R
+    c.drawImage(SYM_PATH, SYM_CX - SYM_R, SYM_CY - SYM_R,
+                width=SYM_SIDE, height=SYM_SIDE, mask='auto')
 
     # Texto principal em PAPER (areia) sobre fundo INK
     c.setFillColor(PAPER)
