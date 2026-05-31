@@ -1,40 +1,36 @@
 {#
-  _solev_brand.html — macros canonicos da marca SoLev
+  _solev_brand.html — macros canônicos da marca SoLev
+  ────────────────────────────────────────────────────────────
+  REGRA DE OURO (ver static/logo/README.md):
+    O logo SoLev é um ARQUIVO DE IMAGEM, nunca código.
+    Estes macros SEMPRE servem o PNG/SVG fixo via <img>.
+    NÃO criar SVG/span/CSS pra desenhar — vai errar.
+  ────────────────────────────────────────────────────────────
+
+  Handoff vigente: solev-logo/ (30/05/2026). Os SVGs têm as letras
+  convertidas em paths — não dependem de fonte instalada.
+
   Uso:
     {% from '_solev_brand.html' import solev_wordmark, solev_symbol %}
-    {{ solev_wordmark(size=36) }}               — padrao sobre fundo claro
-    {{ solev_wordmark(size=36, on_dark=True) }} — sobre fundo Noite Solev
-    {{ solev_wordmark(size=24, mono=True) }}    — P&B papel timbrado
-    {{ solev_symbol(size=24) }}                 — so o "o"
+    {{ solev_wordmark(size=36) }}               — sobre fundo claro (areia/branco)
+    {{ solev_wordmark(size=36, on_dark=True) }} — sobre fundo escuro (navy)
+    {{ solev_symbol(size=24) }}                 — só o "o" (favicon, avatar) sobre claro
+    {{ solev_symbol(size=24, on_dark=True) }}   — o "o" sobre escuro
 #}
 
-{%- macro solev_wordmark(size=36, on_dark=False, mono=False) -%}
-  {#- ink = cor do texto + anel externo do "o" -#}
-  {%- set ink = '#F2E8D4' if on_dark else '#0E1B2E' -%}
-  {#- miolo laranja, ou mesmo ink quando mono (tira o laranja) -#}
-  {%- set miolo = ink if mono else '#E8732A' -%}
-  <span class="solev-wm" style="font-size:{{ size }}px;color:{{ ink }}" aria-label="SoLev Energia">
-    <span class="solev-wm-b">s</span>
-    <span class="solev-wm-o" aria-hidden="true">
-      <svg viewBox="0 0 100 100">
-        <circle cx="50" cy="50" r="50" fill="{{ ink }}"/>
-        <circle cx="50" cy="50" r="33" fill="{{ miolo }}"/>
-      </svg>
-    </span>
-    <span class="solev-wm-b">l</span>
-    <span class="solev-wm-l">e</span>
-    <span class="solev-wm-l">v</span>
-  </span>
+{%- macro solev_wordmark(size=36, on_dark=False) -%}
+  {#- on_dark=True usa wordmark areia sobre fundo escuro; default: navy sobre claro -#}
+  {%- set arq = 'solev-wordmark-areia.png' if on_dark else 'solev-wordmark-navy.png' -%}
+  <img src="/static/logo/{{ arq }}"
+       alt="SoLev Energia"
+       style="height:{{ size }}px;width:auto;display:inline-block;vertical-align:middle">
 {%- endmacro -%}
 
 
-{%- macro solev_symbol(size=36, kind='default') -%}
-  {#- kind: 'default' | 'mono' -#}
-  {%- set miolo = '#0E1B2E' if kind == 'mono' else '#E8732A' -%}
-  <span class="solev-symbol" aria-label="SoLev">
-    <svg viewBox="0 0 100 100" width="{{ size }}" height="{{ size }}">
-      <circle cx="50" cy="50" r="50" fill="#0E1B2E"/>
-      <circle cx="50" cy="50" r="33" fill="{{ miolo }}"/>
-    </svg>
-  </span>
+{%- macro solev_symbol(size=36, on_dark=False) -%}
+  {#- on_dark=True usa o símbolo areia sobre fundo escuro; default: navy sobre claro -#}
+  {%- set arq = 'solev-symbol-areia.png' if on_dark else 'solev-symbol.png' -%}
+  <img src="/static/logo/{{ arq }}"
+       alt="SoLev"
+       style="width:{{ size }}px;height:{{ size }}px;display:inline-block;vertical-align:middle">
 {%- endmacro -%}

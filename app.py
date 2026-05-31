@@ -875,121 +875,20 @@ def serve_logo(filename):
 
 
 # ──────────────────────────────────────────────────────────────
-#  OG image dinâmica por fatura — preview que aparece no WhatsApp
-#  quando o link /c/<token> é compartilhado, e também rota nova
-#  /cliente/<id>/cobranca.png pra pegar o card pela id do cliente.
+#  OG image — ESTÁTICA, vinda do handoff oficial em solev-logo/ (30/05/2026)
+#  Arquivos: static/og_background.png (1200×630, horizontal — Twitter/FB)
+#            static/og_square_logo.png (1000×1000, quadrado — WhatsApp thumb)
+#  Ambos com fundo navy + wordmark areia + brilho solar atrás do "o".
 #
-#  Toda a composição visual mora em solev_og_card.py (módulo isolado).
-#  Aqui só extraímos os 4 campos dinâmicos da fatura e delegamos.
+#  As infos dinâmicas (nome, valor, venc) aparecem no og:title/og:description
+#  ao lado da thumb — não precisamos mais compor o card via Pillow.
+#
+#  Histórico: até 29/05/2026 a gente compunha o card dinamicamente via
+#  solev_og_card.py + 4 rotas Flask (/c/<token>/og.png, .../og-square.png,
+#  /cliente/<id>/cobranca.png e -square.png). O designer entregou em 30/05
+#  OG cards estáticos puramente da marca. Decisão: adotar os estáticos;
+#  todo código dinâmico foi removido.
 # ──────────────────────────────────────────────────────────────
-
-_MESES_PT = ["", "Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-             "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-
-
-def _dados_card_da_fatura(fatura: dict) -> tuple:
-    """Extrai (nome, valor, vencimento, mes_ref) a partir de uma row de tb_faturas.
-
-    Faz lookup do nome do cliente (primeiro nome) via tb_clientes.
-    Devolve strings já formatadas pra passar pro solev_og_card.gerar_card_*().
-    """
-    from datetime import datetime as _dt
-    from db import _db
-
-    nome = "Cliente"
-    cli_rows = _db().select("tb_clientes", filtros={"id_cliente": fatura.get("id_cliente")})
-    if cli_rows:
-        nome_full = (cli_rows[0].get("desc_nome") or "").strip()
-        partes = nome_full.split()
-        if partes:
-            nome = partes[0].title()
-
-    valor_total = float(fatura.get("vlr_total_com") or 0)
-    # Formato BR sem prefixo: "373,56" / "12.345,67"
-    valor = f"{valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-    vencimento = ""
-    venc = fatura.get("dt_venc_solev") or ""
-    if venc:
-        try:
-            vencimento = _dt.fromisoformat(str(venc)[:10]).strftime("%d/%m/%Y")
-        except Exception:
-            pass
-
-    mes = int(fatura.get("mes_referencia") or 0)
-    ano = int(fatura.get("ano_referencia") or 0)
-    mes_ref = f"{_MESES_PT[mes]} / {ano}" if 1 <= mes <= 12 else ""
-
-    return nome, valor, vencimento, mes_ref
-
-
-def _servir_card(id_fatura, fatura: dict, quadrado: bool = False):
-    """Gera (ou puxa do cache em disco) o PNG do card e serve via send_file.
-
-    quadrado=True devolve a versão 1080×1080 otimizada pra thumb do WhatsApp.
-    quadrado=False devolve a versão horizontal 1200×630 (Twitter/FB/Telegram).
-    """
-    nome, valor, vencimento, mes_ref = _dados_card_da_fatura(fatura)
-    if quadrado:
-        from solev_og_card import gerar_card_quadrado_cached
-        path = gerar_card_quadrado_cached(id_fatura, nome, valor, vencimento)
-    else:
-        from solev_og_card import gerar_card_cached
-        path = gerar_card_cached(id_fatura, nome, valor, vencimento, mes_ref)
-    resp = send_file(path, mimetype="image/png")
-    resp.headers["Cache-Control"] = "public, max-age=3600"
-    return resp
-
-
-def _fatura_por_token(token):
-    from db import _db
-    fats = _db().select("tb_faturas", filtros={"token_acesso": token})
-    return fats[0] if fats else None
-
-
-def _fatura_aberta_do_cliente(id_cliente):
-    from db import tb_get_faturas_por_cliente
-    faturas = tb_get_faturas_por_cliente(id_cliente, limite=12)
-    abertas = [f for f in faturas if f.get("status") in ("pendente", "vencida")]
-    return abertas[0] if abertas else None
-
-
-@app.route("/c/<token>/og.png")
-def portal_cliente_og_image(token):
-    """OG image horizontal 1200×630 — pra previews tipo banner (Twitter/FB/Telegram)."""
-    f = _fatura_por_token(token)
-    if not f:
-        return send_file(os.path.join(_DIR, "static", "og_background.png"),
-                         mimetype="image/png")
-    return _servir_card(f.get("id_fatura"), f, quadrado=False)
-
-
-@app.route("/c/<token>/og-square.png")
-def portal_cliente_og_image_square(token):
-    """OG image quadrada 1080×1080 — otimizada pra thumb do WhatsApp."""
-    f = _fatura_por_token(token)
-    if not f:
-        return send_file(os.path.join(_DIR, "static", "og_background_square.png"),
-                         mimetype="image/png")
-    return _servir_card(f.get("id_fatura"), f, quadrado=True)
-
-
-@app.route("/cliente/<int:id_cliente>/cobranca.png")
-def cliente_cobranca_png(id_cliente):
-    """Card horizontal da fatura em aberto mais recente do cliente."""
-    f = _fatura_aberta_do_cliente(id_cliente)
-    if not f:
-        return ("sem fatura em aberto para este cliente", 404)
-    return _servir_card(f.get("id_fatura"), f, quadrado=False)
-
-
-@app.route("/cliente/<int:id_cliente>/cobranca-square.png")
-def cliente_cobranca_png_square(id_cliente):
-    """Card quadrado da fatura em aberto mais recente — pro WhatsApp."""
-    f = _fatura_aberta_do_cliente(id_cliente)
-    if not f:
-        return ("sem fatura em aberto para este cliente", 404)
-    return _servir_card(f.get("id_fatura"), f, quadrado=True)
 
 
 # DASHBOARD
