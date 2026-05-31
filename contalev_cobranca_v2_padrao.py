@@ -549,7 +549,7 @@ def _registrar_fonte_rodape():
 # ─── Overlay ReportLab para a pagina da Equatorial ───────────────────────────
 def _criar_overlay_pdf(page_w: float = None, page_h: float = None) -> bytes:
     INK    = HexColor("#0E1B2E")
-    ACCENT = HexColor("#E8732A")
+    ACCENT = HexColor("#E26A14")  # Laranja oficial (handoff 30/05/2026)
     PAPER  = HexColor("#F2E8D4")
     WHITE  = HexColor("#FFFFFF")
     MUTED  = HexColor("#888888")
