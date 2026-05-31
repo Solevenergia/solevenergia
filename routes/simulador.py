@@ -64,12 +64,18 @@ def simulador():
             tarifa_mes = obter_tarifa_mes(mes_ref)
             if tarifa_mes:
                 tarifa = tarifa_mes["tarifa_sem"]
-                band_am = (tarifa_mes.get("bandeira_amarela", 0) or 0) * consumo
-                band_vm = (tarifa_mes.get("bandeira_vermelha", 0) or 0) * consumo
+                _stored_am = tarifa_mes.get("bandeira_amarela", 0) or 0
+                _stored_vm = tarifa_mes.get("bandeira_vermelha", 0) or 0
             else:
                 tarifa = equatorial.get("tarifa_scee", 0) or 1.125214
-                band_am = (equatorial.get("bandeira_amarela", 0) or 0) * consumo
-                band_vm = (equatorial.get("bandeira_vermelha", 0) or 0) * consumo
+                _stored_am = _stored_vm = 0
+            # Bandeira — FONTE ÚNICA: tarifa REAL do PDF (adc/qtd) > tb_tarifas.
+            # Antes multiplicava o consumo pelo tb_tarifas velho (0,018053),
+            # ignorando o adc/qtd do PDF — mesmo bug que foi corrigido nas telas.
+            from utils import resolver_tarifa_bandeira
+            _ba, _bv, _ = resolver_tarifa_bandeira(equatorial, _stored_am, _stored_vm)
+            band_am = _ba * consumo
+            band_vm = _bv * consumo
 
             compensado = equatorial.get("compensado_kwh", consumo) or consumo
             ilum = equatorial.get("iluminacao_publica", 0) or 0
