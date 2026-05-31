@@ -17,8 +17,10 @@ from PIL import Image
 import numpy as np, unicodedata, os
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_COLOR = os.path.join(_DIR, "logo_transparent.png")
-LOGO_WHITE = os.path.join(_DIR, "logo_white_v_colored.png")
+# Logos do handoff oficial solev-logo/ (30/05/2026). Wordmark em paths
+# (não depende de fonte). Substitui logo_transparent.png e logo_white_v_colored.png.
+LOGO_COLOR = os.path.join(_DIR, "static", "logo", "solev-wordmark-navy.png")   # sobre fundo claro
+LOGO_WHITE = os.path.join(_DIR, "static", "logo", "solev-wordmark-areia.png")  # sobre fundo escuro
 LOGO_JPEG  = os.path.join(_DIR, "LOGO_CONTALEV.jpeg")
 LOGOS_DIR  = os.path.join(_DIR, "logos_clientes")
 

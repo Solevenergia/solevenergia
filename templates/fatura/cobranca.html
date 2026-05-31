@@ -38,18 +38,8 @@
     page-break-after: always;
   }
 
-  /* ── Wordmark (macro solev_wordmark) ─────────────────────── */
-  .solev-wm {
-    font-family: 'Sora', sans-serif; letter-spacing: -0.045em; line-height: 1;
-    display: inline-flex; align-items: baseline; white-space: nowrap;
-  }
-  .solev-wm .solev-wm-b { font-weight: 800; }
-  .solev-wm .solev-wm-l { font-weight: 300; }
-  .solev-wm .solev-wm-o {
-    display: inline-block; width: 0.66em; height: 0.66em; position: relative;
-    transform: translateY(0.05em); margin: 0 -0.07em 0 -0.02em;
-  }
-  .solev-wm .solev-wm-o svg { display: block; width: 100%; height: 100%; }
+  /* ── Wordmark agora vem do macro solev_wordmark (PNG/SVG do handoff oficial),
+        sem mais CSS recriando a logo. -- removido em 30/05/2026 ── */
 
   /* ── Header ──────────────────────────────────────────────── */
   .header {
@@ -58,7 +48,6 @@
     border-bottom: 0.4mm solid var(--accent);
   }
   .header .brand-block { display: flex; flex-direction: column; gap: 1.5mm; }
-  .header .solev-wm { font-size: 11mm; }
   .header .tag {
     font-family: 'Manrope', sans-serif; font-size: 6.5pt; font-weight: 600;
     letter-spacing: 0.32em; text-transform: uppercase; opacity: 0.55;
