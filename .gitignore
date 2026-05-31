@@ -87,3 +87,25 @@ tmp_amostras_texto/
 # Arquivos pesados de design (identidade visual fica em logo_*.svg/png)
 "Identidade visual Solev energia.zip"
 LOGO_SOLEV.jpeg
+
+# ── Runtime / dumps / assets (adicionado 2026-05-31) ──
+# Logs e saída do servidor (redirect do launcher)
+*.log
+*.log.err
+server_out.txt
+server_err*.txt
+
+# Assinaturas geradas em runtime
+_assinatura_*.png
+
+# Dumps e planilhas de dados (saída de scripts, não são código)
+ucs_equatorial.json
+ucs_faltando.txt
+ucs_lote_maio.txt
+relatorio_ucs.txt
+Relatorio_UCs_Equatorial.xlsx
+SOLEV_Preenchimento.xlsx
+
+# Handoff de design (pesado, externo ao deploy) — SEM aspas pra casar de verdade
+SOLEV - Handoff Claude Code/
+Identidade visual Solev energia.zip
