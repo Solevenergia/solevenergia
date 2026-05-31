@@ -1,4 +1,9 @@
-"""Extracao de texto de PDFs — tenta pypdfium2, pdfplumber, PyMuPDF nessa ordem."""
+"""Extracao de texto de PDFs — tenta pypdfium2, pdfplumber, PyMuPDF, OCR nessa ordem."""
+
+import os
+
+# Caminho do Tesseract no Windows (instalado via winget)
+_TESSERACT_WIN = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 
 def extrair_texto(caminho_pdf: str) -> tuple[str, str, int]:
@@ -50,6 +55,30 @@ def extrair_texto(caminho_pdf: str) -> tuple[str, str, int]:
         if completo.strip():
             return partes[0], completo, n
     except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # ── OCR via pytesseract + pdf2image (PDFs escaneados) ──
+    try:
+        import pytesseract
+        from pdf2image import convert_from_path
+
+        if os.path.isfile(_TESSERACT_WIN):
+            pytesseract.pytesseract.tesseract_cmd = _TESSERACT_WIN
+
+        images = convert_from_path(caminho_pdf, dpi=300)
+        n = len(images)
+        partes = [
+            pytesseract.image_to_string(img, lang="por+eng")
+            for img in images
+        ]
+        completo = "\n".join(partes)
+        if completo.strip():
+            return partes[0], completo, n
+    except ImportError:
+        pass
+    except Exception:
         pass
 
     raise PdfInvalido(

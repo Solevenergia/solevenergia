@@ -35,12 +35,12 @@
     <div class="col-md-3"><div class="card stat-card">
         <div class="stat-icon" style="background:{% if tem_geracao_real %}rgba(34,197,94,0.1);color:var(--green){% else %}rgba(234,179,8,0.1);color:#eab308{% endif %}">
             <i class="bi bi-{% if tem_geracao_real %}check-circle-fill{% else %}hourglass-split{% endif %}"></i></div>
-        <div class="stat-value">{{ "{:,.0f}".format(base_kwh).replace(",", ".") }}</div>
+        <div class="stat-value">{{ base_kwh|fmt_kwh_br }}</div>
         <div class="stat-label">{% if tem_geracao_real %}kWh gerados (fatura real){% else %}kWh previsão (estimativa){% endif %}</div>
     </div></div>
     <div class="col-md-3"><div class="card stat-card">
         <div class="stat-icon" style="background:rgba(59,130,246,0.1);color:#3b82f6"><i class="bi bi-bank2"></i></div>
-        <div class="stat-value" style="color:#3b82f6">{{ "{:,.2f}".format(saldo_usina).replace(",", "X").replace(".", ",").replace("X", ".") }}</div>
+        <div class="stat-value" style="color:#3b82f6">{{ saldo_usina|fmt_kwh_br }}</div>
         <div class="stat-label">Saldo usina (kWh)</div>
     </div></div>
     <div class="col-md-3"><div class="card stat-card">
@@ -94,13 +94,13 @@
                 <div class="input-group input-group-sm" style="width:190px">
                     <span class="input-group-text" style="font-size:11px"><i class="bi bi-lightning-charge-fill text-warning me-1"></i>kWh geração</span>
                     <input type="number" id="simKwhInput" class="form-control text-end"
-                           value="{{ "{:.0f}".format(base_kwh if base_kwh > 0 else geracao_mensal) }}"
-                           min="0" step="1" style="font-size:12px"
+                           value="{{ "%.2f"|format(base_kwh if base_kwh > 0 else geracao_mensal) }}"
+                           min="0" step="0.01" style="font-size:12px"
                            title="Edite para simular com outro valor de geração">
                 </div>
                 {% if tem_geracao_real %}
                 <span class="badge" style="background:rgba(34,197,94,0.1);color:var(--green);font-size:11px">
-                    <i class="bi bi-check-circle me-1"></i>Real: {{ "{:,.0f}".format(kwh_gerado_real).replace(",", ".") }} kWh
+                    <i class="bi bi-check-circle me-1"></i>Real: {{ kwh_gerado_real|fmt_kwh_br }} kWh
                 </span>
                 {% else %}
                 <span class="badge" style="background:rgba(234,179,8,0.1);color:#eab308;font-size:11px">
@@ -134,6 +134,7 @@
                 <th class="text-end" style="font-size:11px">kWh Compensado</th>
                 <th class="text-end" style="font-size:11px">Δ</th>
                 <th class="text-center" style="font-size:11px">Status</th>
+                <th class="text-center" style="font-size:11px;width:50px"></th>
             </tr>
             </thead>
             <tbody>
@@ -149,22 +150,22 @@
                     <div class="input-group input-group-sm" style="max-width:100px;margin-left:auto">
                         <input type="text"
                                class="form-control form-control-sm text-end input-edit-base input-saldo"
-                               value="{{ "%.1f"|format(a.saldo_kwh) if a.saldo_kwh else '0' }}"
+                               value="{{ "%.2f"|format(a.saldo_kwh)|replace(".", ",") if a.saldo_kwh else '0,00' }}"
                                data-campo="saldo_kwh"
-                               data-original="{{ "%.1f"|format(a.saldo_kwh) }}"
+                               data-original="{{ "%.2f"|format(a.saldo_kwh)|replace(".", ",") }}"
                                style="font-size:11px;{% if a.saldo_kwh > 0 %}color:#3b82f6;font-weight:600{% elif a.saldo_kwh < 0 %}color:#ef4444;font-weight:600{% endif %}"
                                title="Editar saldo. Sera sobrescrito pela proxima fatura.">
                     </div>
                     {% if a.dt_saldo_conferido %}<small class="text-success" style="font-size:9px"><i class="bi bi-patch-check-fill"></i> {{ a.dt_saldo_conferido[:10] }}</small>{% endif %}
-                    {% if a.tem_divergencia %}<br><small style="color:#eab308;font-size:10px"><i class="bi bi-exclamation-triangle-fill"></i> Eq:{{ "{:,.1f}".format(a.saldo_equatorial) }}</small>{% endif %}
+                    {% if a.tem_divergencia %}<br><small style="color:#eab308;font-size:10px"><i class="bi bi-exclamation-triangle-fill"></i> Eq: {{ a.saldo_equatorial|fmt_kwh_br }}</small>{% endif %}
                 </td>
                 <td class="text-end">
                     <div class="input-group input-group-sm" style="max-width:100px;margin-left:auto">
                         <input type="text"
                                class="form-control form-control-sm text-end input-edit-base input-consumo"
-                               value="{{ "%.0f"|format(a.previsao) if a.previsao else '' }}"
+                               value="{{ "%.2f"|format(a.previsao)|replace(".", ",") if a.previsao else '' }}"
                                data-campo="consumo_medio_kwh"
-                               data-original="{{ "%.0f"|format(a.previsao) }}"
+                               data-original="{{ "%.2f"|format(a.previsao)|replace(".", ",") }}"
                                placeholder="—"
                                style="font-size:11px;font-weight:600"
                                title="Editar previsao de consumo. Pre-preenchida com calculo automatico (fatura > cadastro).">
@@ -173,7 +174,7 @@
                 </td>
                 <td class="text-end">
                     {% if a.necessidade > 0 %}
-                    <strong style="color:#198754">{{ "{:,.0f}".format(a.necessidade) }}</strong>
+                    <strong style="color:#198754">{{ a.necessidade|fmt_kwh_br }}</strong>
                     {% else %}<span class="text-muted" title="Saldo cobre a previsão">—</span>{% endif %}
                 </td>
                 <td class="text-end">
@@ -195,20 +196,20 @@
                     </div>
                 </td>
                 <td class="text-end val-kwh-alocado" style="background:rgba(245,166,35,.04);font-weight:600;color:var(--or)">
-                    {{ "{:,.1f}".format(a.kwh_esperado) }}
+                    {{ a.kwh_esperado|fmt_kwh_br }}
                 </td>
                 <td class="text-end">
                     {% if a.tem_fatura %}
                         {% if a.kwh_compensado > 0 %}
-                        <strong>{{ "{:,.1f}".format(a.kwh_compensado) }}</strong>
-                        {% else %}<span class="text-muted">0</span>{% endif %}
+                        <strong>{{ a.kwh_compensado|fmt_kwh_br }}</strong>
+                        {% else %}<span class="text-muted">0,00</span>{% endif %}
                     {% else %}<span class="text-muted" style="font-size:11px">—</span>{% endif %}
                 </td>
                 <td class="text-end">
                     {% if a.tem_fatura and a.kwh_compensado > 0 %}
-                        {% if a.diferenca > 0 %}<span style="color:var(--green);font-weight:600">+{{ "{:,.1f}".format(a.diferenca) }}</span>
-                        {% elif a.diferenca < 0 %}<span style="color:#ef4444;font-weight:600">{{ "{:,.1f}".format(a.diferenca) }}</span>
-                        {% else %}<span class="text-muted">0</span>{% endif %}
+                        {% if a.diferenca > 0 %}<span style="color:var(--green);font-weight:600">+{{ a.diferenca|fmt_kwh_br }}</span>
+                        {% elif a.diferenca < 0 %}<span style="color:#ef4444;font-weight:600">{{ a.diferenca|fmt_kwh_br }}</span>
+                        {% else %}<span class="text-muted">0,00</span>{% endif %}
                     {% else %}<span class="text-muted">—</span>{% endif %}
                 </td>
                 <td class="text-center">
@@ -219,10 +220,21 @@
                     {% elif a.status == 'deficit' %}<span class="badge" style="background:#fee2e2;color:#991b1b;font-size:10px">Déficit</span>
                     {% endif %}
                 </td>
+                <td class="text-center">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-danger btn-desvincular"
+                            data-uc="{{ a.uc }}"
+                            data-nome="{{ a.nome }}"
+                            data-uid="{{ uid }}"
+                            title="Desvincular cliente desta usina"
+                            style="padding:2px 6px;font-size:11px;line-height:1">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="10" class="text-center text-muted py-4">
+                <td colspan="11" class="text-center text-muted py-4">
                     <i class="bi bi-people" style="font-size:32px;opacity:.3"></i>
                     <p class="mt-2 mb-0">Nenhum cliente vinculado.</p>
                 </td>
@@ -234,17 +246,18 @@
                 <tr style="background:var(--db);color:white;font-size:12px">
                     <td><strong>TOTAL</strong></td>
                     <td></td>
-                    <td class="text-end"><strong>{{ "{:,.0f}".format(alocacoes|sum(attribute='previsao')) }}</strong></td>
-                    <td class="text-end"><strong>{{ "{:,.0f}".format(alocacoes|sum(attribute='necessidade')) }}</strong></td>
+                    <td class="text-end"><strong>{{ (alocacoes|sum(attribute='previsao'))|fmt_kwh_br }}</strong></td>
+                    <td class="text-end"><strong>{{ (alocacoes|sum(attribute='necessidade'))|fmt_kwh_br }}</strong></td>
                     <td></td>
                     <td class="text-center">
                         <strong id="totalPctRateio" style="color:{% if total_rateio == 100 %}#22c55e{% else %}#ef4444{% endif %}">
                             {{ "%.2f"|format(total_rateio) }}%
                         </strong>
                     </td>
-                    <td class="text-end"><strong id="totalKwhAlocado">{{ "{:,.1f}".format(base_kwh) }}</strong></td>
-                    <td class="text-end"><strong>{{ "{:,.1f}".format(alocacoes|sum(attribute='kwh_compensado')) }}</strong></td>
-                    <td class="text-end"><strong>{{ "{:,.1f}".format(alocacoes|sum(attribute='diferenca')) }}</strong></td>
+                    <td class="text-end"><strong id="totalKwhAlocado">{{ base_kwh|fmt_kwh_br }}</strong></td>
+                    <td class="text-end"><strong>{{ (alocacoes|sum(attribute='kwh_compensado'))|fmt_kwh_br }}</strong></td>
+                    <td class="text-end"><strong>{{ (alocacoes|sum(attribute='diferenca'))|fmt_kwh_br }}</strong></td>
+                    <td></td>
                     <td></td>
                 </tr>
             </tfoot>
@@ -310,17 +323,17 @@
                 <div class="row text-center g-2">
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
                         <div style="color:rgba(255,255,255,0.4);font-size:10px">Previsão mensal</div>
-                        <div class="fw-bold" style="font-size:14px">{{ "{:,.0f}".format(geracao_mensal) }} kWh</div>
+                        <div class="fw-bold" style="font-size:14px">{{ geracao_mensal|fmt_kwh_br }} kWh</div>
                     </div></div>
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
                         <div style="color:rgba(255,255,255,0.4);font-size:10px">Geração real</div>
                         <div class="fw-bold" style="font-size:14px;color:{% if tem_geracao_real %}var(--green){% else %}rgba(255,255,255,0.3){% endif %}">
-                            {% if tem_geracao_real %}{{ "{:,.0f}".format(kwh_gerado_real) }} kWh{% else %}—{% endif %}
+                            {% if tem_geracao_real %}{{ kwh_gerado_real|fmt_kwh_br }} kWh{% else %}—{% endif %}
                         </div>
                     </div></div>
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
                         <div style="color:rgba(255,255,255,0.4);font-size:10px">Saldo usina</div>
-                        <div class="fw-bold" style="font-size:14px;color:#60a5fa">{{ "{:,.2f}".format(saldo_usina).replace(",", "X").replace(".", ",").replace("X", ".") }}</div>
+                        <div class="fw-bold" style="font-size:14px;color:#60a5fa">{{ saldo_usina|fmt_kwh_br }}</div>
                     </div></div>
                     <div class="col-6"><div class="p-2" style="background:rgba(255,255,255,0.05);border-radius:8px">
                         <div style="color:rgba(255,255,255,0.4);font-size:10px">Rateio total</div>
@@ -473,6 +486,26 @@ Certo do pronto atendimento, desde já agradeço.</div>
 
 {% block scripts %}
 <script>
+// ── Desvincular cliente da usina (atalho na tela de rateio) ──
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.btn-desvincular').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var uc   = btn.dataset.uc;
+            var nome = btn.dataset.nome || 'cliente';
+            var uid  = btn.dataset.uid;
+            if (!confirm('Desvincular ' + nome + ' desta usina?\n\nO cliente sairá do rateio. Para revincular, use a tela Distribuir Clientes.')) {
+                return;
+            }
+            // Cria form POST dinâmico
+            var f = document.createElement('form');
+            f.method = 'POST';
+            f.action = '/usinas/rateio/' + encodeURIComponent(uid) + '/desvincular/' + encodeURIComponent(uc);
+            document.body.appendChild(f);
+            f.submit();
+        });
+    });
+});
+
 const BASE_KWH_SERVIDOR = {{ base_kwh }};
 const simInput = document.getElementById('simKwhInput');
 const vincR    = document.getElementById('vincRateio');

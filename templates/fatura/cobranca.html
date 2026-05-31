@@ -337,14 +337,22 @@
     <div class="side sem">
       <div class="side-head">
         <span class="label">Sem Solev</span>
-        <span class="eyebrow" style="opacity:0.4">tarifa Equatorial</span>
+        <span class="eyebrow" style="opacity:0.4">{% if fatura.is_fixo %}referência usina{% else %}tarifa Equatorial{% endif %}</span>
       </div>
       <div class="rows">
-        <div class="row"><span class="k">Consumo total</span>         <span class="v">{{ fatura.sem_solev.consumo }}</span></div>
-        <div class="row"><span class="k">Tarifa (R$ / kWh)</span>     <span class="v">{{ fatura.sem_solev.tarifa }}</span></div>
+        {% if fatura.is_consolidada %}
+          {% for u in fatura.consumo_por_uc %}
+          <div class="row"><span class="k">{{ fatura.labels.consumo_total if fatura.labels else 'Geração comprada' }} <small style="display:block;font-size:9px;opacity:0.55;font-family:'Courier New',monospace;font-weight:400;margin-top:1px">UC {{ u.label }}</small></span><span class="v">{{ u.ger_fmt }}</span></div>
+          {% endfor %}
+        {% else %}
+          <div class="row"><span class="k">{{ fatura.labels.consumo_total if fatura.labels else 'Consumo total' }}</span>         <span class="v">{{ fatura.sem_solev.consumo }}</span></div>
+        {% endif %}
+        <div class="row"><span class="k">{{ fatura.labels.tarifa_sem if fatura.labels else 'Tarifa (R$ / kWh)' }}</span>     <span class="v">{{ fatura.sem_solev.tarifa }}</span></div>
         <hr>
         <div class="row"><span class="k">Subtotal energia</span>      <span class="v">{{ fatura.sem_solev.energia }}</span></div>
+        {% if not fatura.is_fixo %}
         <div class="row"><span class="k">Iluminação pública</span>    <span class="v">{{ fatura.sem_solev.ilum }}</span></div>
+        {% endif %}
         {% if fatura.sem_solev.multa != 'R$ 0,00' %}
         <div class="row"><span class="k">Multa</span>                  <span class="v">{{ fatura.sem_solev.multa }}</span></div>
         {% endif %}
@@ -368,12 +376,25 @@
         <span class="badge">−{{ fatura.com_solev.desconto_pct }}%</span>
       </div>
       <div class="rows">
-        <div class="row"><span class="k">Consumo compensado</span>    <span class="v">{{ fatura.com_solev.consumo_comp }}</span></div>
-        <div class="row"><span class="k">Consumo não compensado</span><span class="v">{{ fatura.com_solev.consumo_nao_comp }}</span></div>
-        <div class="row"><span class="k">Tarifa com desconto</span>   <span class="v">{{ fatura.com_solev.tarifa_desc }}</span></div>
+        {% if fatura.is_consolidada %}
+          {% for u in fatura.consumo_por_uc %}
+          <div class="row"><span class="k">{{ fatura.labels.consumo_comp if fatura.labels else 'Geração comprada' }} <small style="display:block;font-size:9px;opacity:0.55;font-family:'Courier New',monospace;font-weight:400;margin-top:1px">UC {{ u.label }}</small></span><span class="v">{{ u.ger_fmt }}</span></div>
+          {% endfor %}
+        {% else %}
+          <div class="row"><span class="k">{{ fatura.labels.consumo_comp if fatura.labels else 'Consumo compensado' }}</span>    <span class="v">{{ fatura.com_solev.consumo_comp }}</span></div>
+          {% if not fatura.is_fixo %}
+          <div class="row"><span class="k">Consumo não compensado</span><span class="v">{{ fatura.com_solev.consumo_nao_comp }}</span></div>
+          {% endif %}
+        {% endif %}
+        <div class="row"><span class="k">{{ fatura.labels.tarifa_com if fatura.labels else 'Tarifa com desconto' }}</span>   <span class="v">{{ fatura.com_solev.tarifa_desc }}</span></div>
         <hr>
         <div class="row"><span class="k">Subtotal energia</span>      <span class="v">{{ fatura.com_solev.energia }}</span></div>
+        {% if fatura.is_fixo and fatura.fio_b_deducao_fmt %}
+        <div class="row"><span class="k" style="color:#16a34a">{{ fatura.labels.fio_b_absorvido }}</span><span class="v" style="color:#16a34a">−{{ fatura.fio_b_deducao_fmt }}</span></div>
+        {% endif %}
+        {% if not fatura.is_fixo %}
         <div class="row"><span class="k">Iluminação pública</span>    <span class="v">{{ fatura.com_solev.ilum }}</span></div>
+        {% endif %}
         {% if fatura.com_solev.multa != 'R$ 0,00' %}
         <div class="row"><span class="k">Multa</span>                  <span class="v">{{ fatura.com_solev.multa }}</span></div>
         {% endif %}

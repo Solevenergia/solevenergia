@@ -181,6 +181,15 @@
                             <i class="bi bi-qr-code"></i> PIX
                         </a>
                     {% endif %}
+                    {% if item._pode_consolidar %}
+                        <form method="post" action="/fatura/consolidar-fixo/{{ item.id_fatura }}" style="display:inline">
+                            <button type="submit" class="btn btn-sm" style="background:#7c3aed;color:white"
+                                    title="Gerar cobrança consolidada FIXO ({{ item._consolidar_count }} UCs)"
+                                    onclick="return confirm('Gerar cobrança consolidada com {{ item._consolidar_count }} UCs do mesmo titular?');">
+                                <i class="bi bi-files"></i> Consolidar
+                            </button>
+                        </form>
+                    {% endif %}
                     <a href="/fatura/excluir/{{ item.id_fatura }}" class="btn btn-sm btn-outline-danger" title="Excluir"
                        onclick="return confirm('Excluir cobrança de {{ item._nome[:20]|e }}?')">
                         <i class="bi bi-trash"></i>

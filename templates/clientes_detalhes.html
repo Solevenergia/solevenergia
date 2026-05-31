@@ -391,7 +391,7 @@
                                     <strong>{{ fatura._mes_ref_br or '—' }}</strong>
                                 </td>
                                 <td>
-                                    {{ (fatura.qtd_consumo_kwh or 0)|int }} kWh
+                                    {{ fatura.qtd_consumo_kwh|fmt_kwh_br }} kWh
                                 </td>
                                 <td>
                                     R$ {{ "%.2f"|format(fatura.vlr_fatura_equatorial or 0) }}

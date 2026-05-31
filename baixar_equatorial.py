@@ -142,6 +142,27 @@ def buscar_credenciais_usina(uc: str) -> dict:
     if not usina:
         return {}
 
+    # ── PRIORIDADE 1: titularidade própria do CLIENTE ───────────────────────
+    # Quando cliente.flg_titularidade_propria = TRUE e tem CPF + DN preenchidos,
+    # essas credenciais SUBSTITUEM as do titular da usina vinculada.
+    # Útil para clientes que recebem rateio mas mantêm sua própria UC.
+    if cliente_tb.get("flg_titularidade_propria"):
+        cpf_prop = (cliente_tb.get("desc_cpf_titular_fatura") or "").strip()
+        dn_prop  = (cliente_tb.get("dt_nascimento_titular_fatura") or "").strip()
+        nome_prop = (cliente_tb.get("desc_nome_titular_fatura") or
+                     cliente_tb.get("desc_titular_fatura") or
+                     cliente_tb.get("desc_nome") or "").strip()
+        if cpf_prop and dn_prop:
+            return {
+                "id_usina":        id_usina,
+                "cpf":             cpf_prop,
+                "data_nascimento": dn_prop,
+                "nome_titular":    nome_prop,
+                "nome_usina":      usina.get("desc_nome", ""),
+                "_fonte_cred":     "cliente (titularidade própria)",
+            }
+
+    # ── PRIORIDADE 2: titular da USINA (caso padrão) ─────────────────────────
     # CPF/DN/nome do titular vivem em tb_titulares (referenciada por id_titular).
     # Os campos antigos desc_cpf_titular/dt_nascimento_titular/desc_titular_uc
     # na tb_usinas ficaram NULL apos a migracao — usar tb_titulares como fonte
@@ -167,6 +188,7 @@ def buscar_credenciais_usina(uc: str) -> dict:
         "data_nascimento": dn,
         "nome_titular":    nome,
         "nome_usina":      usina.get("desc_nome", ""),
+        "_fonte_cred":     "titular da usina",
     }
 
 
@@ -912,7 +934,7 @@ def processar_usina(
                     print(f"  ❌ Re-login falhou — abortando UCs restantes da usina")
                     restantes = [x["uc"] for x in pendentes[pendentes.index(r):]]
                     resumo["falha"].extend(restantes)
-                    return resumo
+                    break  # sai do loop mas permite que cobranças já acumuladas sejam geradas
 
             # Tenta baixar; se der PWTimeout (botao Download nao apareceu,
             # sessao expirou, etc.), reloga e tenta de novo (max 1 retry).
@@ -1206,6 +1228,32 @@ def gerar_cobranca_cliente(
             print(f"  📋 Historico registrado: {cliente['nome']} — {equatorial.get('mes_referencia', '')}")
         except Exception as e:
             print(f"  ⚠️  Falha ao registrar historico: {e}")
+
+        # ── Auto-consolidação FIXO ────────────────────────────────────
+        # Se este cliente tem vínculos FIXO e todos os irmãos do mesmo CPF
+        # já têm faturas no mesmo (ano, mes), gera automaticamente a
+        # cobrança consolidada (1 PDF + 1 QR PIX).
+        try:
+            from db import tb_get_cliente_por_uc as _tb_cli_uc
+            from consolidar_fixo import detectar_consolidaveis as _det_cons, gerar_pdf as _gerar_consol
+            import re as _re_acm
+            _cli_tb_acm = _tb_cli_uc(uc_original)
+            _id_cli_acm = _cli_tb_acm.get("id_cliente") if _cli_tb_acm else None
+            _mm_acm = _re_acm.match(r"^(\d{1,2})/(\d{4})$",
+                                     str(equatorial.get("mes_referencia") or "").strip())
+            if _id_cli_acm and _mm_acm:
+                _mes_acm = int(_mm_acm.group(1))
+                _ano_acm = int(_mm_acm.group(2))
+                _irmaos_acm = _det_cons(_id_cli_acm, _ano_acm, _mes_acm)
+                if _irmaos_acm and len(_irmaos_acm) >= 2:
+                    try:
+                        _res = _gerar_consol(_irmaos_acm, _ano_acm, _mes_acm)
+                        _t_fmt = f"R$ {_res['total_com']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        print(f"  📑 Cobranca consolidada FIXO gerada: {len(_irmaos_acm)} UCs · total {_t_fmt}")
+                    except RuntimeError as _ce:
+                        print(f"  ⚠️  Auto-consolidacao adiada: {_ce}")
+        except Exception as _e_acm:
+            print(f"  ⚠️  Auto-consolidacao FIXO falhou: {_e_acm}")
 
         return destino
 

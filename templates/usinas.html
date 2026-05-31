@@ -2,74 +2,219 @@
 {% block title %}Usinas{% endblock %}
 {% block topbar_breadcrumb %}<span>Trabalho</span><span class="sep">›</span><span class="here">Usinas</span>{% endblock %}
 {% block topbar_actions %}
+{% if tab == 'proprietarios' %}
+<a href="/recebedores/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Novo Proprietário</a>
+{% else %}
 <a href="/usinas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Nova Usina</a>
+{% endif %}
 {% endblock %}
 {% block content %}
 <div class="page-header">
     <h1><i class="bi bi-sun-fill me-2" style="color:var(--accent)"></i>Usinas Solares</h1>
 </div>
-<div class="row g-3">
-{% for u in usinas %}
-<div class="col-md-6 col-lg-4">
-    <div class="card h-100" style="cursor:pointer" onclick="location.href='/usinas/ver/{{ u.id_usina }}'">
-        <div class="card-body p-4">
-            <div class="d-flex justify-content-between align-items-start mb-3">
-                <div>
-                    <h5 class="fw-bold mb-1" style="color:var(--db)">{{ u.desc_nome }}</h5>
-                    <code style="font-size:11px;color:var(--sl)">ID: {{ u.id_usina }}</code>
-                </div>
-                <div class="stat-icon" style="background:rgba(245,166,35,0.1);color:var(--or);width:40px;height:40px;font-size:18px">
-                    <i class="bi bi-sun-fill"></i>
-                </div>
-            </div>
-            <div class="row g-2 mb-3" style="font-size:13px">
-                <div class="col-6">
-                    <span class="text-muted">Potencia:</span><br>
-                    <strong>{{ u.qtd_potencia_kwp or 0 }} kWp</strong>
-                </div>
-                <div class="col-6">
-                    <span class="text-muted">Geracao media:</span><br>
-                    <strong>{{ "{:,.0f}".format(u.qtd_geracao_media_mensal or 0).replace(",", ".") }} kWh/mes</strong>
-                </div>
-                <div class="col-6">
-                    <span class="text-muted">UC Geradora:</span><br>
-                    <strong>{{ (u.cod_uc_geradora | fmt_uc15) or '—' }}</strong>
-                </div>
-                <div class="col-6">
-                    <span class="text-muted">Clientes:</span><br>
-                    <strong>{{ u._clientes_count }}</strong>
-                    <span class="text-muted">vinculados</span>
-                </div>
-            </div>
-            {% if u._cidade_uf %}
-            <div style="font-size:12px">
-                <span class="text-muted"><i class="bi bi-geo-alt me-1"></i>{{ u._cidade_uf }}</span>
-            </div>
-            {% endif %}
+
+<!-- Abas -->
+<ul class="nav nav-tabs mb-3" style="border-bottom:2px solid #e8edf2">
+    <li class="nav-item">
+        <a class="nav-link {% if tab != 'proprietarios' %}active{% endif %}"
+           href="/usinas"
+           style="{% if tab != 'proprietarios' %}color:var(--db);border-bottom:2px solid var(--db);font-weight:600{% else %}color:#6c757d{% endif %}">
+            <i class="bi bi-gear-fill me-1"></i> Usinas
+            <span class="badge rounded-pill ms-1" style="background:rgba(26,42,74,0.1);color:var(--db);font-size:11px">{{ usinas|length }}</span>
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if tab == 'proprietarios' %}active{% endif %}"
+           href="/usinas?tab=proprietarios"
+           style="{% if tab == 'proprietarios' %}color:var(--db);border-bottom:2px solid var(--db);font-weight:600{% else %}color:#6c757d{% endif %}">
+            <i class="bi bi-person-vcard-fill me-1"></i> Proprietários
+            <span class="badge rounded-pill ms-1" style="background:rgba(26,42,74,0.1);color:var(--db);font-size:11px">{{ investidores|length }}</span>
+        </a>
+    </li>
+</ul>
+
+{% if tab == 'proprietarios' %}
+<!-- ── ABA PROPRIETÁRIOS ────────────────────────────────────── -->
+<div class="card">
+    <div class="card-body p-0">
+        {% if investidores %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:13px">
+            <thead>
+                <tr style="background:var(--db);color:white">
+                    <th class="ps-3 py-3">Proprietário</th>
+                    <th>CPF / CNPJ</th>
+                    <th>Contato</th>
+                    <th>Chave PIX</th>
+                    <th class="text-end">Deságio</th>
+                    <th class="text-center">Usinas</th>
+                    <th class="text-center pe-3">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for inv in investidores %}
+            <tr style="border-bottom:1px solid #f0f0f0">
+                <td class="ps-3 py-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div style="width:32px;height:32px;border-radius:8px;background:rgba(26,42,74,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="bi bi-person-fill" style="color:var(--db);font-size:15px"></i>
+                        </div>
+                        <div>
+                            <strong style="color:var(--db)">{{ inv.desc_nome or '—' }}</strong>
+                            <div style="font-size:11px;color:#aaa">ID: {{ inv.id_investidor }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="py-3">
+                    {% if inv.desc_cpf_cnpj %}
+                        <code style="font-size:11px">{{ inv.desc_cpf_cnpj }}</code>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="py-3" style="font-size:12px">
+                    {% if inv.desc_email %}
+                        <div><i class="bi bi-envelope me-1 text-muted"></i>{{ inv.desc_email }}</div>
+                    {% endif %}
+                    {% if inv.desc_telefone %}
+                        <div><i class="bi bi-phone me-1 text-muted"></i>{{ inv.desc_telefone }}</div>
+                    {% endif %}
+                    {% if not inv.desc_email and not inv.desc_telefone %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="py-3">
+                    {% if inv.desc_pix %}
+                        <code style="font-size:11px;color:var(--sl)">{{ inv.desc_pix }}</code>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-end py-3">
+                    {% if inv.pct_desagio %}
+                        <strong style="color:var(--or)">{{ "%.0f"|format(inv.pct_desagio) }}%</strong>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-center py-3">
+                    <span class="badge rounded-pill" style="background:rgba(245,166,35,0.12);color:var(--or);font-size:12px;font-weight:600">
+                        {{ inv._usinas_count }}
+                    </span>
+                </td>
+                <td class="text-center pe-3 py-3">
+                    <a href="/recebedores/editar/{{ inv.id_investidor }}" class="btn btn-sm btn-outline-primary" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    {% if inv._usinas_count == 0 %}
+                    <a href="/recebedores/excluir/{{ inv.id_investidor }}"
+                       class="btn btn-sm btn-outline-danger" title="Excluir"
+                       onclick="return confirm('Excluir {{ inv.desc_nome }}?')">
+                        <i class="bi bi-trash"></i>
+                    </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
         </div>
-        <div class="card-footer bg-transparent border-0 p-3 pt-0">
-            <div class="d-flex gap-2">
-                <a href="/usinas/ver/{{ u.id_usina }}" class="btn btn-sm btn-db flex-fill">
-                    <i class="bi bi-eye me-1"></i>Detalhes
-                </a>
-                <a href="/usinas/editar/{{ u.id_usina }}" class="btn btn-sm btn-outline-primary">
-                    <i class="bi bi-pencil"></i>
-                </a>
-                <a href="/usinas/remover/{{ u.id_usina }}" class="btn btn-sm btn-outline-danger"
-                   onclick="return confirm('Remover esta usina?')">
-                    <i class="bi bi-trash"></i>
-                </a>
-            </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-person-vcard" style="font-size:48px;color:var(--db);opacity:0.2"></i>
+            <p class="text-muted mt-3">Nenhum proprietário cadastrado.</p>
+            <a href="/recebedores/novo" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Cadastrar Proprietário</a>
         </div>
+        {% endif %}
     </div>
 </div>
-{% endfor %}
-{% if not usinas %}
-<div class="col-12"><div class="card"><div class="card-body text-center py-5">
-    <i class="bi bi-sun" style="font-size:48px;color:var(--or);opacity:0.3"></i>
-    <p class="text-muted mt-3">Nenhuma usina cadastrada.</p>
-    <a href="/usinas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Cadastrar Primeira Usina</a>
-</div></div></div>
-{% endif %}
+
+{% else %}
+<!-- ── ABA USINAS ───────────────────────────────────────────── -->
+<div class="card">
+    <div class="card-body p-0">
+        {% if usinas %}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:13px">
+            <thead>
+                <tr style="background:var(--db);color:white">
+                    <th class="ps-3 py-3">Usina</th>
+                    <th>UC Geradora</th>
+                    <th class="text-end">Potência</th>
+                    <th class="text-end">Geração média</th>
+                    <th class="text-center">Clientes</th>
+                    <th>Localização</th>
+                    <th class="text-center pe-3">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for u in usinas %}
+            <tr style="border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="location.href='/usinas/ver/{{ u.id_usina }}'">
+                <td class="ps-3 py-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <div style="width:32px;height:32px;border-radius:8px;background:rgba(245,166,35,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="bi bi-sun-fill" style="color:var(--or);font-size:15px"></i>
+                        </div>
+                        <div>
+                            <strong style="color:var(--db)">{{ u.desc_nome }}</strong>
+                            <div style="font-size:11px;color:#aaa">ID: {{ u.id_usina }}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="py-3">
+                    {% if u.cod_uc_geradora %}
+                        <code style="font-size:11px;color:var(--sl)">{{ u.cod_uc_geradora | fmt_uc15 }}</code>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-end py-3">
+                    <strong>{{ u.qtd_potencia_kwp or '—' }}</strong>
+                    {% if u.qtd_potencia_kwp %}<span class="text-muted" style="font-size:11px"> kWp</span>{% endif %}
+                </td>
+                <td class="text-end py-3">
+                    <strong style="color:var(--or)">{{ "{:,.0f}".format(u.qtd_geracao_media_mensal or 0).replace(",", ".") }}</strong>
+                    <span class="text-muted" style="font-size:11px"> kWh/mês</span>
+                </td>
+                <td class="text-center py-3">
+                    <span class="badge rounded-pill" style="background:rgba(59,130,246,0.1);color:#3b82f6;font-size:12px;font-weight:600">
+                        {{ u._clientes_count }}
+                    </span>
+                </td>
+                <td class="py-3">
+                    {% if u._cidade_uf %}
+                        <span style="font-size:12px"><i class="bi bi-geo-alt me-1 text-muted"></i>{{ u._cidade_uf }}</span>
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-center pe-3 py-3" onclick="event.stopPropagation()">
+                    <div class="d-flex gap-1 justify-content-center">
+                        <a href="/usinas/ver/{{ u.id_usina }}" class="btn btn-sm btn-db" title="Detalhes">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <a href="/usinas/editar/{{ u.id_usina }}" class="btn btn-sm btn-outline-primary" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                        </a>
+                        <a href="/usinas/remover/{{ u.id_usina }}" class="btn btn-sm btn-outline-danger" title="Remover"
+                           onclick="return confirm('Remover esta usina?')">
+                            <i class="bi bi-trash"></i>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-sun" style="font-size:48px;color:var(--or);opacity:0.3"></i>
+            <p class="text-muted mt-3">Nenhuma usina cadastrada.</p>
+            <a href="/usinas/nova" class="btn btn-cta"><i class="bi bi-plus-lg me-1"></i> Cadastrar Primeira Usina</a>
+        </div>
+        {% endif %}
+    </div>
 </div>
+{% endif %}
 {% endblock %}

@@ -67,7 +67,6 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 from routes.tarifas import bp as bp_tarifas
 from routes.recebedores import bp as bp_recebedores
-from routes.donos import bp as bp_donos
 from routes.titulares import bp as bp_titulares
 from routes.whatsapp import bp as bp_whatsapp
 from routes.contrato import bp as bp_contrato
@@ -75,9 +74,9 @@ from routes.investidor import bp as bp_investidor
 from routes.simulador import bp as bp_simulador
 from routes.importar import bp as bp_importar
 from routes.conciliacao import bp as bp_conciliacao
+from routes.inter import bp as bp_inter
 app.register_blueprint(bp_tarifas)
 app.register_blueprint(bp_recebedores)
-app.register_blueprint(bp_donos)
 app.register_blueprint(bp_titulares)
 app.register_blueprint(bp_whatsapp)
 app.register_blueprint(bp_contrato)
@@ -85,6 +84,7 @@ app.register_blueprint(bp_investidor)
 app.register_blueprint(bp_simulador)
 app.register_blueprint(bp_importar)
 app.register_blueprint(bp_conciliacao)
+app.register_blueprint(bp_inter)
 
 @app.after_request
 def _no_cache(response):
@@ -129,7 +129,6 @@ def handle_exception(e):
 def robots_txt():
     return ("User-agent: *\nAllow: /\n", 200, {"Content-Type": "text/plain"})
 
-
 @app.template_filter('basename')
 def _basename_filter(path):
     if not path: return ""
@@ -138,6 +137,17 @@ def _basename_filter(path):
 @app.template_filter('fmt_uc15')
 def _fmt_uc15_filter(v):
     return _fmt_uc15(v)
+
+
+@app.template_filter('fmt_kwh_br')
+def _fmt_kwh_br_filter(v):
+    """Formata kWh no padrão BR: 1.234,56 (ponto pra milhar, vírgula pra decimal,
+    sempre 2 casas decimais). Aceita None/'' (retorna '0,00')."""
+    try:
+        n = float(v or 0)
+    except (TypeError, ValueError):
+        n = 0.0
+    return f"{n:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 @app.template_filter('data_br')
 def _data_br_filter(v):
@@ -415,6 +425,10 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
             "bandeira_tarifa_verm":   tarifa_mes.get("bandeira_vermelha", 0) or 0,
             "adc_bandeira_amarela":   equatorial.get("adc_bandeira_amarela", 0) or 0,
             "adc_bandeira_vermelha":  equatorial.get("adc_bandeira_vermelha", 0) or 0,
+            # Qtd kWh sob bandeira — calcular() usa p/ achar a tarifa REAL do mes
+            # (adc_R$ / qtd), em vez do valor velho do tb_tarifas.
+            "_bandeira_amarela_qtd":  equatorial.get("bandeira_amarela", 0) or 0,
+            "_bandeira_vermelha_qtd": equatorial.get("bandeira_vermelha", 0) or 0,
             "modo_bandeira":          cliente.get("modo_bandeira", "com_bandeira"),
             "compensacao_dic": equatorial.get("compensacao_dic", 0) or 0,
         }
@@ -817,7 +831,7 @@ def portal_cliente(token):
         "valor_centavos":    valor_cents,
         "vencimento_data":   venc_data_extenso or dt_venc_br,
         "vencimento_dias":   dias_p_vencimento if dias_p_vencimento is not None else 0,
-        "pix_payload":       pix_chave,  # idealmente um BR Code completo; cai pra chave bruta
+        "pix_payload":       (_build_pix_payload(valor_num, chave_pix=pix_chave, nome_pix=pix_nome) if pix_chave else ""),
         "pix_nome":          pix_nome,
         "pix_chave_display": pix_chave_display,
         "pdf_url":           pdf_signed_url,
@@ -866,11 +880,6 @@ def portal_cliente(token):
     )
 
 
-# Rota /logo/<filename> removida em 30/05/2026 — servia logos antigas da raiz
-# do projeto (logo_blue_v_colored.svg etc) que foram deletadas. Tudo usa
-# /static/logo/ ou /static/icons/ agora via Flask static serve.
-
-
 # ──────────────────────────────────────────────────────────────
 #  OG image — ESTÁTICA, vinda do handoff oficial em solev-logo/ (30/05/2026)
 #  Arquivos: static/og_background.png (1200×630, horizontal — Twitter/FB)
@@ -886,6 +895,11 @@ def portal_cliente(token):
 #  OG cards estáticos puramente da marca. Decisão: adotar os estáticos;
 #  todo código dinâmico foi removido.
 # ──────────────────────────────────────────────────────────────
+
+
+# Rota /logo/<filename> removida em 30/05/2026 — servia logos antigas da raiz
+# do projeto (logo_blue_v_colored.svg etc) que foram deletadas. Tudo usa
+# /static/logo/ ou /static/icons/ agora via Flask static serve.
 
 
 # DASHBOARD
@@ -1294,6 +1308,12 @@ def cliente_novo():
                 "STATUS":                  request.form.get("status_ativo") == "1",
                 "qtd_consumo_medio_kwh":   _kwh_field("qtd_consumo_medio_kwh"),
                 "qtd_saldo_inicial_kwh":   _kwh_field("qtd_saldo_inicial_kwh"),
+                # Titularidade própria do cliente (override do titular da usina p/ login Equatorial)
+                "flg_titularidade_propria":     request.form.get("flg_titularidade_propria") == "1",
+                "desc_nome_titular_fatura":     request.form.get("desc_nome_titular_fatura", "").strip().upper() or None,
+                "desc_cpf_titular_fatura":      request.form.get("desc_cpf_titular_fatura", "").strip() or None,
+                "dt_nascimento_titular_fatura": request.form.get("dt_nascimento_titular_fatura", "").strip() or None,
+                "proxima_leitura":              request.form.get("proxima_leitura", "").strip() or None,
             })
             id_cliente = cliente.get("id_cliente")
 
@@ -1394,6 +1414,12 @@ def cliente_editar(uc):
                 "STATUS":                  request.form.get("status_ativo") == "1",
                 "qtd_consumo_medio_kwh":   _kwh_field_e("qtd_consumo_medio_kwh"),
                 "qtd_saldo_inicial_kwh":   _kwh_field_e("qtd_saldo_inicial_kwh"),
+                # Titularidade própria do cliente
+                "flg_titularidade_propria":     request.form.get("flg_titularidade_propria") == "1",
+                "desc_nome_titular_fatura":     request.form.get("desc_nome_titular_fatura", "").strip().upper() or None,
+                "desc_cpf_titular_fatura":      request.form.get("desc_cpf_titular_fatura", "").strip() or None,
+                "dt_nascimento_titular_fatura": request.form.get("dt_nascimento_titular_fatura", "").strip() or None,
+                "proxima_leitura":              request.form.get("proxima_leitura", "").strip() or None,
             })
 
             # Atualiza endereco
@@ -3510,11 +3536,70 @@ def faturas():
                       mapa_usina.get(str(r.get("_cod_uc") or ""), "")
         r["_pdf_legado"] = r.get("pdf_solev") or ""
 
+    # ── Detecta faturas consolidáveis (modelo FIXO) ──
+    try:
+        from consolidar_fixo import detectar_consolidaveis as _det_cons
+        for r in rows:
+            id_c = r.get("id_cliente")
+            mes_r = r.get("mes_referencia")
+            ano_r = r.get("ano_referencia")
+            if id_c and mes_r and ano_r:
+                irmaos = _det_cons(id_c, int(ano_r), int(mes_r))
+                if irmaos and len(irmaos) >= 2:
+                    r["_pode_consolidar"] = True
+                    r["_consolidar_count"] = len(irmaos)
+                else:
+                    r["_pode_consolidar"] = False
+            else:
+                r["_pode_consolidar"] = False
+    except Exception as _e:
+        app.logger.warning(f"[faturas] detecção FIXO falhou: {_e}")
+        for r in rows:
+            r["_pode_consolidar"] = False
+
     return render_template("faturas.html",
         faturas=rows, total=total,
         page=page, total_pages=total_pages,
         per_page=per_page, busca=busca, mes=mes_br, status=status,
         fmt=_fmt_brl)
+
+
+# ============================================================
+#  Cobrança consolidada FIXO
+# ============================================================
+@app.route("/fatura/consolidar-fixo/<int:id_fatura>", methods=["POST"])
+def fatura_consolidar_fixo(id_fatura):
+    """Gera o PDF consolidado FIXO para a fatura dada (e suas irmãs)."""
+    from db import _db as _get_db
+    from consolidar_fixo import detectar_consolidaveis, gerar_pdf
+
+    db = _get_db()
+    fats = db.select("tb_faturas", filtros={"id_fatura": id_fatura})
+    if not fats:
+        flash("Fatura não encontrada.", "danger")
+        return redirect(url_for("faturas"))
+    f = fats[0]
+    id_c = f.get("id_cliente")
+    ano  = int(f.get("ano_referencia") or 0)
+    mes  = int(f.get("mes_referencia") or 0)
+
+    irmaos = detectar_consolidaveis(id_c, ano, mes)
+    if not irmaos:
+        flash("Esta fatura não tem irmãos FIXO consolidáveis no mesmo mês.", "warning")
+        return redirect(url_for("faturas"))
+
+    try:
+        result = gerar_pdf(irmaos, ano, mes)
+        flash(
+            f"Cobrança consolidada gerada: {len(irmaos)} UCs · "
+            f"Total {_fmt_brl(result['total_com'])} · Economia {_fmt_brl(result['total_sem'] - result['total_com'])}",
+            "success"
+        )
+    except Exception as e:
+        app.logger.exception(f"[consolidar] {e}")
+        flash(f"Erro ao gerar consolidada: {e}", "danger")
+
+    return redirect(url_for("faturas"))
 
 
 # ============================================================
@@ -3632,6 +3717,251 @@ def fatura_excluir(id_fatura):
 
 
 # RELATORIO MENSAL  (le de tb_faturas)
+# ══════════════════════════════════════════════════════════════
+#  RELATÓRIOS — índice (extensível para novos relatórios)
+# ══════════════════════════════════════════════════════════════
+@app.route("/relatorios")
+def relatorios_index():
+    """Página índice listando todos os relatórios disponíveis."""
+    return render_template("relatorios_index.html")
+
+
+@app.route("/relatorios/comercializacao")
+def relatorio_comercializacao():
+    """Resumo de comercialização: geração total, vendido e disponível.
+
+    Quebras:
+      - Modo A (Consumo Médio): vendido = SUM(cliente.consumo_medio × pct_rateio)
+      - Modo B (Capacidade Reservada): reservado = SUM(usina.geracao × pct_rateio)
+      - Categoria FIXO vs Normal (FIXO = vínculo com desc_saldo_obs='FIXO')
+
+    Query params:
+      ?considerar_saldo=1  → desconta saldo do consumo médio no Modo A
+                            (cliente "coberto pelo saldo" ocupa 0 kWh)
+    """
+    from db import _db
+    db = _db()
+
+    considerar_saldo = request.args.get("considerar_saldo") in ("1", "true", "on")
+
+    # 1. Carrega usinas e clientes
+    usinas   = db.select("tb_usinas")
+    clientes = db.select("tb_clientes")
+    vincs    = db.select("tb_cliente_usina", raw_params={"dt_fim": "is.null"})
+
+    # Indexa
+    usinas_by_id   = {u["id_usina"]: u for u in usinas}
+    clientes_by_id = {c["id_cliente"]: c for c in clientes}
+
+    # Saldo efetivo por cliente: prioriza vínculo ativo; fallback saldo_inicial do cadastro
+    saldo_por_cliente = {}
+    for v in vincs:
+        id_c = v.get("id_cliente")
+        s = float(v.get("qtd_saldo_kwh") or 0)
+        if id_c and s > 0:
+            saldo_por_cliente[id_c] = saldo_por_cliente.get(id_c, 0) + s
+    for c in clientes:
+        id_c = c["id_cliente"]
+        if id_c not in saldo_por_cliente:
+            saldo_por_cliente[id_c] = float(c.get("qtd_saldo_inicial_kwh") or 0)
+
+    # 2. Geração total (estimada) e por usina
+    ger_total = 0.0
+    ger_por_usina = {}
+    for u in usinas:
+        g = float(u.get("qtd_geracao_media_mensal") or 0)
+        ger_por_usina[u["id_usina"]] = g
+        ger_total += g
+
+    # 3. Processa vínculos: separa FIXO de normal, acumula por usina
+    #    Para cada vínculo: contribui com (pct × geração) — capacidade reservada
+    #                       e (consumo_medio × pct/100) — consumo médio esperado
+    cap_fixo_por_usina   = {}  # capacidade reservada FIXO por usina
+    cap_normal_por_usina = {}  # capacidade reservada normal por usina
+    cons_fixo_por_usina   = {}  # consumo médio esperado FIXO por usina
+    cons_normal_por_usina = {}  # consumo médio esperado normal por usina
+    n_clientes_fixo = 0
+    n_clientes_normal = 0
+    ids_fixos_set = set()
+    ids_normal_set = set()
+
+    for v in vincs:
+        id_u = v.get("id_usina")
+        id_c = v.get("id_cliente")
+        if not id_u or not id_c:
+            continue
+        pct = float(v.get("pct_rateio") or 0) / 100.0
+        if pct <= 0:
+            continue
+        is_fixo = (v.get("desc_saldo_obs") or "").upper() == "FIXO"
+        ger_u = ger_por_usina.get(id_u, 0)
+        cli   = clientes_by_id.get(id_c, {})
+        consumo_med = float(cli.get("qtd_consumo_medio_kwh") or 0)
+
+        cap_alocada  = pct * ger_u
+        # Modo A — consumo médio (com ou sem saldo):
+        # Saldo é POR CLIENTE (não por vínculo); então ratiamos pelo pct também.
+        if considerar_saldo:
+            saldo_cli = saldo_por_cliente.get(id_c, 0)
+            consumo_liq = max(0, consumo_med - saldo_cli)
+            cons_alocado = pct * consumo_liq
+        else:
+            cons_alocado = pct * consumo_med
+
+        alvo_cap  = cap_fixo_por_usina  if is_fixo else cap_normal_por_usina
+        alvo_cons = cons_fixo_por_usina if is_fixo else cons_normal_por_usina
+        alvo_cap[id_u]  = alvo_cap.get(id_u, 0)  + cap_alocada
+        alvo_cons[id_u] = alvo_cons.get(id_u, 0) + cons_alocado
+
+        if is_fixo:
+            ids_fixos_set.add(id_c)
+        else:
+            ids_normal_set.add(id_c)
+
+    n_clientes_fixo   = len(ids_fixos_set)
+    n_clientes_normal = len(ids_normal_set)
+
+    # 4. Agrega totais
+    cap_fixo_total    = sum(cap_fixo_por_usina.values())
+    cap_normal_total  = sum(cap_normal_por_usina.values())
+    cap_vendida_total = cap_fixo_total + cap_normal_total
+    cap_disponivel    = max(0, ger_total - cap_vendida_total)
+
+    cons_fixo_total    = sum(cons_fixo_por_usina.values())
+    cons_normal_total  = sum(cons_normal_por_usina.values())
+    cons_esperado_total = cons_fixo_total + cons_normal_total
+    cons_disponivel    = max(0, ger_total - cons_esperado_total)
+
+    pct_cap_uso   = (cap_vendida_total  / ger_total * 100) if ger_total > 0 else 0
+    pct_cons_uso  = (cons_esperado_total / ger_total * 100) if ger_total > 0 else 0
+
+    # 5. Breakdown POR CLIENTE — TODOS os clientes ativos cadastrados:
+    #    - Clientes com vínculo: 1 linha por vínculo ativo
+    #    - Clientes sem vínculo: 1 linha marcada como "sem usina" (capacidade=0)
+    # Mapeia vínculos ativos por id_cliente
+    vincs_por_cliente = {}
+    for v in vincs:
+        id_vc = v.get("id_cliente")
+        if id_vc:
+            vincs_por_cliente.setdefault(id_vc, []).append(v)
+
+    n_sem_vinculo = 0
+    clientes_breakdown = []
+    for cli in clientes:
+        # Pula inativos
+        if str(cli.get("STATUS") or "").upper() == "INATIVO" or cli.get("STATUS") is False:
+            continue
+        id_c = cli["id_cliente"]
+        consumo_med = float(cli.get("qtd_consumo_medio_kwh") or 0)
+        saldo_cli   = saldo_por_cliente.get(id_c, 0)
+        cli_vincs   = vincs_por_cliente.get(id_c, [])
+
+        if not cli_vincs:
+            # Sem vínculo — consumo total fica como "demanda não alocada"
+            cons_bruto = consumo_med
+            cons_liq   = max(0, consumo_med - saldo_cli)
+            gap_capac  = 0 - (cons_liq if considerar_saldo else cons_bruto)
+            clientes_breakdown.append({
+                "id_cliente":  id_c,
+                "id_usina":    None,
+                "nome":        cli.get("desc_nome", "?"),
+                "cod_uc":      cli.get("cod_uc", ""),
+                "nome_usina":  "",
+                "pct":         0,
+                "consumo_med": consumo_med,
+                "saldo":       saldo_cli,
+                "cons_bruto":  cons_bruto,
+                "cons_liq":    cons_liq,
+                "cap_alocada": 0,
+                "gap":         gap_capac,
+                "is_fixo":     False,
+                "sem_vinculo": True,
+            })
+            n_sem_vinculo += 1
+        else:
+            # Tem vínculo(s) — 1 linha por vínculo ativo
+            for v in cli_vincs:
+                id_u = v.get("id_usina")
+                pct  = float(v.get("pct_rateio") or 0)
+                if pct <= 0 or not id_u:
+                    continue
+                is_fixo = (v.get("desc_saldo_obs") or "").upper() == "FIXO"
+                usina = usinas_by_id.get(id_u, {})
+                ger_u = float(usina.get("qtd_geracao_media_mensal") or 0)
+                cap_alocada = (pct / 100.0) * ger_u
+                cons_bruto  = (pct / 100.0) * consumo_med
+                cons_liq    = (pct / 100.0) * max(0, consumo_med - saldo_cli)
+                gap_capac   = cap_alocada - (cons_liq if considerar_saldo else cons_bruto)
+                clientes_breakdown.append({
+                    "id_cliente":  id_c,
+                    "id_usina":    id_u,
+                    "nome":        cli.get("desc_nome", "?"),
+                    "cod_uc":      cli.get("cod_uc", ""),
+                    "nome_usina":  usina.get("desc_nome", ""),
+                    "pct":         pct,
+                    "consumo_med": consumo_med,
+                    "saldo":       saldo_cli,
+                    "cons_bruto":  cons_bruto,
+                    "cons_liq":    cons_liq,
+                    "cap_alocada": cap_alocada,
+                    "gap":         gap_capac,
+                    "is_fixo":     is_fixo,
+                    "sem_vinculo": False,
+                })
+    # Ordena: sem-vínculo primeiro (mais urgente), depois FIXO, depois maiores consumos
+    clientes_breakdown.sort(key=lambda x: (
+        not x.get("sem_vinculo", False),
+        not x.get("is_fixo", False),
+        -x["cons_bruto"]
+    ))
+
+    # 6. Breakdown por usina (mantido)
+    usinas_breakdown = []
+    for u in usinas:
+        id_u = u["id_usina"]
+        g    = ger_por_usina.get(id_u, 0)
+        if g <= 0:
+            continue
+        cf = cap_fixo_por_usina.get(id_u, 0)
+        cn = cap_normal_por_usina.get(id_u, 0)
+        usinas_breakdown.append({
+            "id_usina":   id_u,
+            "nome":       u.get("desc_nome", ""),
+            "geracao":    g,
+            "fixo":       cf,
+            "normal":     cn,
+            "vendido":    cf + cn,
+            "disponivel": max(0, g - cf - cn),
+            "pct":        ((cf + cn) / g * 100) if g > 0 else 0,
+        })
+    usinas_breakdown.sort(key=lambda x: -x["geracao"])
+
+    return render_template("relatorio_comercializacao.html",
+        considerar_saldo=considerar_saldo,
+        ger_total=ger_total,
+        n_usinas=len(usinas),
+        # Modo A — Consumo Médio
+        cons_esperado_total=cons_esperado_total,
+        cons_disponivel=cons_disponivel,
+        pct_cons_uso=pct_cons_uso,
+        cons_fixo_total=cons_fixo_total,
+        cons_normal_total=cons_normal_total,
+        # Modo B — Capacidade Reservada
+        cap_vendida_total=cap_vendida_total,
+        cap_disponivel=cap_disponivel,
+        pct_cap_uso=pct_cap_uso,
+        cap_fixo_total=cap_fixo_total,
+        cap_normal_total=cap_normal_total,
+        # Contagens
+        n_clientes_fixo=n_clientes_fixo,
+        n_clientes_normal=n_clientes_normal,
+        # Breakdown
+        usinas_breakdown=usinas_breakdown,
+        clientes_breakdown=clientes_breakdown,
+        n_sem_vinculo=n_sem_vinculo,
+    )
+
+
 @app.route("/relatorio")
 def relatorio():
     from db import tb_get_faturas_paginado, tb_carregar_clientes
@@ -3691,16 +4021,23 @@ def relatorio():
 # USINAS - Listar
 @app.route("/usinas")
 def usinas_lista():
-    from db import tb_carregar_usinas, tb_carregar_todas_vinculacoes, tb_carregar_enderecos_usinas
+    from db import tb_carregar_usinas, tb_carregar_todas_vinculacoes, tb_carregar_enderecos_usinas, tb_carregar_investidores
     usinas    = tb_carregar_usinas()
     vinculos  = tb_carregar_todas_vinculacoes()
     enderecos = tb_carregar_enderecos_usinas()
+    investidores = tb_carregar_investidores()
     # Conta clientes vinculados a cada usina e enriquece com endereco
     contagem = {}
     for id_c, vlist in vinculos.items():
         for v in vlist:
             id_u = v["id_usina"]
             contagem[id_u] = contagem.get(id_u, 0) + 1
+    # Conta usinas por investidor
+    usinas_por_inv = {}
+    for u in usinas:
+        iid = u.get("id_investidor")
+        if iid:
+            usinas_por_inv[iid] = usinas_por_inv.get(iid, 0) + 1
     for u in usinas:
         u["_clientes_count"] = contagem.get(u["id_usina"], 0)
         end = enderecos.get(u["id_usina"], {})
@@ -3708,7 +4045,10 @@ def usinas_lista():
             end.get("desc_cidade", ""),
             end.get("desc_estado", ""),
         ]))
-    return render_template("usinas.html", usinas=usinas, fmt=_fmt_brl)
+    for inv in investidores:
+        inv["_usinas_count"] = usinas_por_inv.get(inv["id_investidor"], 0)
+    tab = request.args.get("tab", "usinas")
+    return render_template("usinas.html", usinas=usinas, investidores=investidores, tab=tab, fmt=_fmt_brl)
 
 # USINAS - Helper para extrair dados do form
 def _usina_from_form():
@@ -3750,10 +4090,10 @@ def _usina_from_form():
 @app.route("/usinas/nova", methods=["GET", "POST"])
 def usina_nova():
     if request.method == "POST":
-        from db import (tb_save_usina, tb_save_investidor, tb_save_dono,
+        from db import (tb_save_usina, tb_save_investidor,
                         tb_save_titular, tb_save_endereco_usina)
         try:
-            # Recebedor: selecionar existente OU cadastrar novo inline
+            # Proprietário/Investidor: selecionar existente OU cadastrar novo inline
             id_investidor = None
             _rec_existente = request.form.get("id_investidor_existente", "").strip()
             if _rec_existente:
@@ -3762,38 +4102,20 @@ def usina_nova():
                 inv_nome = request.form.get("inv_desc_nome", "").strip()
                 if inv_nome:
                     inv_dados = {
-                        "desc_nome": inv_nome,
-                        "desc_cpf_cnpj": request.form.get("inv_desc_cpf_cnpj", "").strip(),
-                        "desc_email": request.form.get("inv_desc_email", "").strip(),
-                        "desc_telefone": request.form.get("inv_desc_telefone", "").strip(),
-                        "desc_banco": request.form.get("inv_desc_banco", "").strip(),
-                        "desc_agencia": request.form.get("inv_desc_agencia", "").strip(),
-                        "desc_conta": request.form.get("inv_desc_conta", "").strip(),
-                        "desc_pix": request.form.get("inv_desc_pix", "").strip(),
-                        "pct_desagio": float(request.form.get("inv_pct_desagio", "0").replace(",", ".") or "0"),
+                        "desc_nome":         inv_nome,
+                        "desc_cpf_cnpj":     request.form.get("inv_desc_cpf_cnpj", "").strip(),
+                        "desc_email":        request.form.get("inv_desc_email", "").strip(),
+                        "desc_telefone":     request.form.get("inv_desc_telefone", "").strip(),
+                        "desc_banco":        request.form.get("inv_desc_banco", "").strip(),
+                        "desc_agencia":      request.form.get("inv_desc_agencia", "").strip(),
+                        "desc_conta":        request.form.get("inv_desc_conta", "").strip(),
+                        "desc_pix":          request.form.get("inv_desc_pix", "").strip(),
+                        "pct_desagio":       float(request.form.get("inv_pct_desagio", "0").replace(",", ".") or "0"),
                         "qtd_dia_pagamento": int(request.form.get("inv_qtd_dia_pagamento", "0") or "0") or None,
-                        "vlr_minimo": float(request.form.get("inv_vlr_minimo", "0").replace(",", ".") or "0"),
+                        "vlr_minimo":        float(request.form.get("inv_vlr_minimo", "0").replace(",", ".") or "0"),
                     }
-                    inv_salvo = tb_save_investidor(inv_dados)
+                    inv_salvo     = tb_save_investidor(inv_dados)
                     id_investidor = inv_salvo.get("id_investidor")
-
-            # Dono: selecionar existente OU cadastrar novo inline
-            id_dono = None
-            _dono_existente = request.form.get("id_dono_existente", "").strip()
-            if _dono_existente:
-                id_dono = int(_dono_existente)
-            else:
-                dono_nome = request.form.get("desc_dono_nome", "").strip()
-                if dono_nome:
-                    dono_dados = {
-                        "desc_nome":     dono_nome,
-                        "desc_cpf_cnpj": request.form.get("desc_dono_cpf_cnpj", "").strip() or None,
-                        "desc_telefone": request.form.get("desc_dono_telefone", "").strip() or None,
-                        "desc_email":    request.form.get("desc_dono_email", "").strip() or None,
-                        "dt_nascimento": _data_br_para_iso(request.form.get("dt_dono_nascimento", "")) or None,
-                    }
-                    dono_salvo = tb_save_dono(dono_dados)
-                    id_dono = dono_salvo.get("id_dono")
 
             # Titular UC: selecionar existente OU cadastrar novo inline
             id_titular = None
@@ -3833,6 +4155,7 @@ def usina_nova():
                 "qtd_geracao_media_mensal": float(request.form.get("qtd_geracao_media_mensal", "0").replace(",", ".") or "0"),
                 "qtd_geracao_prevista_diaria": float(request.form.get("qtd_geracao_prevista_diaria", "0").replace(",", ".") or "0"),
                 "desc_observacoes": request.form.get("desc_observacoes", "").strip(),
+                "desc_pix_recebimento": request.form.get("desc_pix_recebimento", "").strip() or None,
             }
             # Ciclo de leitura — habitual + próxima exata
             _dia_leit = request.form.get("qtd_dia_leitura", "").strip()
@@ -3848,8 +4171,6 @@ def usina_nova():
                 usina_dados["dt_proxima_leitura"] = _prox_leit
             if id_investidor:
                 usina_dados["id_investidor"] = id_investidor
-            if id_dono:
-                usina_dados["id_dono"] = id_dono
             if id_titular:
                 usina_dados["id_titular"] = id_titular
             usina_salva = tb_save_usina(usina_dados)
@@ -3871,25 +4192,24 @@ def usina_nova():
             return redirect(url_for("usinas_lista"))
         except Exception as e:
             flash(f"Erro ao salvar: {e}", "danger")
-    from db import tb_carregar_investidores, tb_carregar_donos, tb_carregar_titulares
+    from db import tb_carregar_investidores, tb_carregar_titulares
     return render_template("usina_form.html", usina=None, endereco=None,
-                           investidor=None, dono=None, titular=None,
+                           investidor=None, titular=None,
                            recebedores=tb_carregar_investidores(),
-                           donos=tb_carregar_donos(),
                            titulares=tb_carregar_titulares())
 
 # USINAS - Editar
 @app.route("/usinas/editar/<int:id_usina>", methods=["GET", "POST"])
 def usina_editar(id_usina):
-    from db import (tb_get_usina, tb_save_usina, tb_save_investidor, tb_save_dono,
+    from db import (tb_get_usina, tb_save_usina, tb_save_investidor,
                     tb_save_titular, tb_get_endereco_usina, tb_save_endereco_usina,
-                    tb_get_investidor, tb_get_dono, tb_get_titular)
+                    tb_get_investidor, tb_get_titular)
     usina = tb_get_usina(id_usina)
     if not usina:
         flash("Usina nao encontrada!", "danger"); return redirect(url_for("usinas_lista"))
     if request.method == "POST":
         try:
-            # Recebedor: selecionar existente OU manter/cadastrar inline
+            # Proprietário/Investidor: selecionar existente OU manter/atualizar inline
             _rec_existente = request.form.get("id_investidor_existente", "").strip()
             if _rec_existente:
                 id_investidor = int(_rec_existente)
@@ -3898,42 +4218,22 @@ def usina_editar(id_usina):
                 inv_nome = request.form.get("inv_desc_nome", "").strip()
                 if inv_nome:
                     inv_dados = {
-                        "desc_nome": inv_nome,
-                        "desc_cpf_cnpj": request.form.get("inv_desc_cpf_cnpj", "").strip(),
-                        "desc_email": request.form.get("inv_desc_email", "").strip(),
-                        "desc_telefone": request.form.get("inv_desc_telefone", "").strip(),
-                        "desc_banco": request.form.get("inv_desc_banco", "").strip(),
-                        "desc_agencia": request.form.get("inv_desc_agencia", "").strip(),
-                        "desc_conta": request.form.get("inv_desc_conta", "").strip(),
-                        "desc_pix": request.form.get("inv_desc_pix", "").strip(),
-                        "pct_desagio": float(request.form.get("inv_pct_desagio", "0").replace(",", ".") or "0"),
+                        "desc_nome":         inv_nome,
+                        "desc_cpf_cnpj":     request.form.get("inv_desc_cpf_cnpj", "").strip(),
+                        "desc_email":        request.form.get("inv_desc_email", "").strip(),
+                        "desc_telefone":     request.form.get("inv_desc_telefone", "").strip(),
+                        "desc_banco":        request.form.get("inv_desc_banco", "").strip(),
+                        "desc_agencia":      request.form.get("inv_desc_agencia", "").strip(),
+                        "desc_conta":        request.form.get("inv_desc_conta", "").strip(),
+                        "desc_pix":          request.form.get("inv_desc_pix", "").strip(),
+                        "pct_desagio":       float(request.form.get("inv_pct_desagio", "0").replace(",", ".") or "0"),
                         "qtd_dia_pagamento": int(request.form.get("inv_qtd_dia_pagamento", "0") or "0") or None,
-                        "vlr_minimo": float(request.form.get("inv_vlr_minimo", "0").replace(",", ".") or "0"),
+                        "vlr_minimo":        float(request.form.get("inv_vlr_minimo", "0").replace(",", ".") or "0"),
                     }
                     if id_investidor:
                         inv_dados["id_investidor"] = id_investidor
-                    inv_salvo = tb_save_investidor(inv_dados)
+                    inv_salvo     = tb_save_investidor(inv_dados)
                     id_investidor = inv_salvo.get("id_investidor")
-
-            # Dono: selecionar existente OU manter/cadastrar/atualizar inline
-            _dono_existente = request.form.get("id_dono_existente", "").strip()
-            if _dono_existente:
-                id_dono = int(_dono_existente)
-            else:
-                id_dono = usina.get("id_dono")
-                dono_nome = request.form.get("desc_dono_nome", "").strip()
-                if dono_nome:
-                    dono_dados = {
-                        "desc_nome":     dono_nome,
-                        "desc_cpf_cnpj": request.form.get("desc_dono_cpf_cnpj", "").strip() or None,
-                        "desc_telefone": request.form.get("desc_dono_telefone", "").strip() or None,
-                        "desc_email":    request.form.get("desc_dono_email", "").strip() or None,
-                        "dt_nascimento": _data_br_para_iso(request.form.get("dt_dono_nascimento", "")) or None,
-                    }
-                    if id_dono:
-                        dono_dados["id_dono"] = id_dono
-                    dono_salvo = tb_save_dono(dono_dados)
-                    id_dono = dono_salvo.get("id_dono")
 
             # Titular: selecionar existente OU manter/cadastrar/atualizar inline
             _titular_existente = request.form.get("id_titular_existente", "").strip()
@@ -3976,6 +4276,7 @@ def usina_editar(id_usina):
                 "qtd_geracao_media_mensal": float(request.form.get("qtd_geracao_media_mensal", "0").replace(",", ".") or "0"),
                 "qtd_geracao_prevista_diaria": float(request.form.get("qtd_geracao_prevista_diaria", "0").replace(",", ".") or "0"),
                 "desc_observacoes": request.form.get("desc_observacoes", "").strip(),
+                "desc_pix_recebimento": request.form.get("desc_pix_recebimento", "").strip() or None,
             }
             # Ciclo de leitura — habitual + próxima exata
             _dia_leit = request.form.get("qtd_dia_leitura", "").strip()
@@ -3991,8 +4292,6 @@ def usina_editar(id_usina):
                 usina_dados["dt_proxima_leitura"] = _prox_leit
             if id_investidor:
                 usina_dados["id_investidor"] = id_investidor
-            if id_dono:
-                usina_dados["id_dono"] = id_dono
             if id_titular:
                 usina_dados["id_titular"] = id_titular
             tb_save_usina(usina_dados)
@@ -4011,16 +4310,14 @@ def usina_editar(id_usina):
             return redirect(url_for("usinas_lista"))
         except Exception as e:
             flash(f"Erro ao salvar: {e}", "danger")
-    from db import tb_carregar_investidores, tb_carregar_donos, tb_carregar_titulares
+    from db import tb_carregar_investidores, tb_carregar_titulares
     endereco   = tb_get_endereco_usina(id_usina) or {}
     investidor = tb_get_investidor(usina.get("id_investidor")) if usina.get("id_investidor") else {}
-    dono       = tb_get_dono(usina.get("id_dono")) if usina.get("id_dono") else {}
     titular    = tb_get_titular(usina.get("id_titular")) if usina.get("id_titular") else {}
     return render_template("usina_form.html", usina=usina, endereco=endereco,
-                           investidor=investidor or {}, dono=dono or {},
+                           investidor=investidor or {},
                            titular=titular or {},
                            recebedores=tb_carregar_investidores(),
-                           donos=tb_carregar_donos(),
                            titulares=tb_carregar_titulares())
 
 # USINAS - Upload do documento pessoal do titular (anexado ao PDF de rateio)
@@ -4140,6 +4437,489 @@ def usina_remover(id_usina):
         tb_delete_usina(id_usina)
         flash(f"Usina '{nome}' removida!", "warning")
     return redirect(url_for("usinas_lista"))
+
+# ──────────────────────────────────────────────────────────────────
+# USINAS - Distribuição automática de clientes
+# ──────────────────────────────────────────────────────────────────
+def _dia_de(data_iso):
+    """Extrai o dia do mês de uma data ISO (YYYY-MM-DD). Retorna None se inválida."""
+    try:
+        return int(str(data_iso)[8:10]) if data_iso and len(str(data_iso)) >= 10 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _dias_apos(dia_usina: int, dia_cliente: int) -> int:
+    """Quantos dias o cliente é lido após a usina (módulo 30). Negativo = antes."""
+    return (dia_cliente - dia_usina) % 30
+
+
+def _algoritmo_distribuicao(usinas: list, clientes: list,
+                             kwh_fixo_por_usina: dict = None,
+                             ignorar_saldo: bool = False,
+                             janela_dias: int = 7,
+                             excesso_pct: int = 5,
+                             folga_pct: int = 0,
+                             ordem: str = "maior",
+                             permitir_split: bool = True) -> tuple:
+    """
+    Distribui clientes entre usinas respeitando filtros configuráveis.
+
+    Args:
+      kwh_fixo_por_usina: {id_usina: kwh_total_comprometido_via_fixo}
+      ignorar_saldo:    True trata saldo como 0
+      janela_dias:      compatibilidade leitura: 1 ≤ (dia_cli - dia_usina) mod 30 ≤ janela_dias
+                        (cliente deve ler DEPOIS da usina, nunca no mesmo dia)
+      excesso_pct:      até X% acima da geração que o algoritmo aceita ultrapassar (hard limit)
+      folga_pct:        Y% da geração que o algoritmo PREFERE deixar livre (soft target)
+                        Quando 0 e excesso=5 → comportamento legado (até 5% acima).
+                        Quando folga=10 e excesso=0 → estrito, sempre deixa 10% livres.
+                        Quando folga=5 e excesso=10 → tenta deixar 5%, aceita até +10% se necessário.
+      ordem:            "maior" = clientes com maior demanda primeiro; "menor" = menor primeiro
+      permitir_split:   True permite dividir cliente em 2 usinas
+    Retorna:
+      alocacao  = {id_usina: {'usina': {...}, 'itens': [...]}}
+      sem_usina = [{'cliente': {...}, 'motivo': str}]
+    """
+    kwh_fixo_por_usina = kwh_fixo_por_usina or {}
+    # Fatores: target = capacidade preferida (com folga); max = teto absoluto (com excesso)
+    fator_target = max(0.10, 1.0 - folga_pct / 100.0)
+    fator_max    = max(fator_target, 1.0 + excesso_pct / 100.0)
+
+    def _ger_disp(u):
+        ger_total = float(u.get("qtd_geracao_media_mensal") or 0)
+        return max(0.0, ger_total - kwh_fixo_por_usina.get(u["id_usina"], 0.0))
+
+    # Inclui apenas usinas com geração DISPONÍVEL > 0 (após descontar FIXO)
+    usinas_ok = [u for u in usinas
+                 if u.get("qtd_dia_leitura") and _ger_disp(u) > 0]
+
+    alocacao = {
+        u["id_usina"]: {
+            "usina":        u,
+            "itens":        [],
+            "kwh_alocado":  0.0,    # soma dos kwh_efetivos (líquido de saldo)
+            "kwh_geracao":  _ger_disp(u),                          # CAPACIDADE PARA ALOCAR (pós-FIXO)
+            "kwh_geracao_total": float(u.get("qtd_geracao_media_mensal") or 0),  # bruta (display)
+            "kwh_fixo":     kwh_fixo_por_usina.get(u["id_usina"], 0.0),
+        }
+        for u in usinas_ok
+    }
+    sem_usina = []
+
+    def _compat(u_day, c_day):
+        # Cliente deve ler ENTRE 1 e janela_dias APÓS a usina.
+        # Dia 0 (mesma data) NÃO conta — créditos ainda não foram alocados
+        # pela Equatorial (o ciclo de geração da usina não fechou).
+        return 1 <= _dias_apos(u_day, c_day) <= janela_dias
+
+    def _restante(id_u):
+        return alocacao[id_u]["kwh_geracao"] - alocacao[id_u]["kwh_alocado"]
+
+    def _registrar(id_u, cli, pct, kwh_bruto, saldo):
+        kwh_efetivo = max(0.0, kwh_bruto * pct / 100 - saldo * pct / 100)
+        coberto = (kwh_efetivo == 0)
+        alocacao[id_u]["itens"].append({
+            "cliente":      cli,
+            "pct":          pct,
+            "kwh_bruto":    kwh_bruto * pct / 100,
+            "kwh_efetivo":  kwh_efetivo,
+            "saldo":        saldo * pct / 100,
+            "coberto_saldo": coberto,
+        })
+        alocacao[id_u]["kwh_alocado"] += kwh_efetivo
+
+    # Ordena: por kwh_efetivo (maior ou menor primeiro conforme parâmetro)
+    def _sort_key(c):
+        bruto = float(c.get("qtd_consumo_medio_kwh") or 0)
+        saldo = 0.0 if ignorar_saldo else float(c.get("_saldo_atual") or 0)
+        ef = max(0.0, bruto - saldo)
+        return -ef if ordem == "maior" else ef
+
+    clientes_sorted = sorted(clientes, key=_sort_key)
+
+    for cli in clientes_sorted:
+        consumo_bruto = float(cli.get("qtd_consumo_medio_kwh") or 0)
+        saldo         = 0.0 if ignorar_saldo else float(cli.get("_saldo_atual") or 0)
+        kwh_efetivo   = max(0.0, consumo_bruto - saldo)
+
+        if consumo_bruto <= 0:
+            sem_usina.append({"cliente": cli, "motivo": "Consumo médio não preenchido"})
+            continue
+
+        dia_c = _dia_de(cli.get("proxima_leitura"))
+        if not dia_c:
+            sem_usina.append({"cliente": cli, "motivo": "Data de leitura não preenchida"})
+            continue
+
+        compat = [u for u in usinas_ok if _compat(u["qtd_dia_leitura"], dia_c)]
+        if not compat:
+            sem_usina.append({"cliente": cli,
+                               "motivo": f"Nenhuma usina compatível (dia de leitura: {dia_c})"})
+            continue
+
+        # Ordena por restante desc
+        compat_rest = sorted(compat, key=lambda u: -_restante(u["id_usina"]))
+
+        if kwh_efetivo == 0:
+            # Coberto pelo saldo: vincula à usina com mais restante (ocupa 0 kWh)
+            _registrar(compat_rest[0]["id_usina"], cli, 100, consumo_bruto, saldo)
+            continue
+
+        # Tenta encaixar em 1 usina em 2 fases:
+        # 1ª: respeitando folga (target = gen × (1 - folga%))
+        # 2ª: usando excesso permitido (max = gen × (1 + excesso%))
+        limite_target = kwh_efetivo / fator_target
+        limite_max    = kwh_efetivo / fator_max
+        candidato = next(
+            (u for u in compat_rest if _restante(u["id_usina"]) >= limite_target),
+            None
+        )
+        if not candidato:
+            candidato = next(
+                (u for u in compat_rest if _restante(u["id_usina"]) >= limite_max),
+                None
+            )
+        if candidato:
+            _registrar(candidato["id_usina"], cli, 100, consumo_bruto, saldo)
+        elif permitir_split and len(compat_rest) >= 2:
+            # Split entre as 2 com maior restante
+            u1, u2 = compat_rest[0], compat_rest[1]
+            r1 = max(_restante(u1["id_usina"]), 0)
+            r2 = max(_restante(u2["id_usina"]), 0)
+            total_r = r1 + r2
+            if total_r > 0:
+                pct1 = max(1, min(99, round(r1 / total_r * 100)))
+            else:
+                pct1 = 50
+            pct2 = 100 - pct1
+            _registrar(u1["id_usina"], cli, pct1, consumo_bruto, saldo)
+            _registrar(u2["id_usina"], cli, pct2, consumo_bruto, saldo)
+        else:
+            # Não cabe em 1 e split desabilitado → marca como sem usina
+            if not permitir_split:
+                sem_usina.append({"cliente": cli,
+                    "motivo": f"Sem capacidade em 1 usina (split desativado, demanda {int(kwh_efetivo)} kWh)"})
+            else:
+                # Só 1 usina compatível mesmo que cheia
+                _registrar(compat_rest[0]["id_usina"], cli, 100, consumo_bruto, saldo)
+
+    return alocacao, sem_usina
+
+
+@app.route("/usinas/distribuir", methods=["GET", "POST"])
+def usinas_distribuir():
+    import json as _json
+    from db import tb_carregar_usinas, tb_carregar_clientes, tb_carregar_enderecos_usinas, _db
+
+    usinas   = tb_carregar_usinas()
+    clientes = tb_carregar_clientes()
+    # Todos os ativos (incluindo já vinculados)
+    clientes = [c for c in clientes if str(c.get("STATUS") or "").upper() != "INATIVO"]
+
+    if request.method == "POST":
+        # ── CONFIRMAR ──────────────────────────────────────────
+        from datetime import date
+        hoje = date.today().isoformat()
+        payload = request.form.get("payload_json", "")
+        try:
+            proposta = _json.loads(payload)  # [{id_cliente, id_usina, pct, saldo_kwh}]
+        except Exception as e:
+            flash(f"Erro ao interpretar proposta: {e}", "danger")
+            return redirect(url_for("usinas_distribuir"))
+
+        por_cliente: dict = {}
+        for item in proposta:
+            por_cliente.setdefault(item["id_cliente"], []).append(item)
+
+        db = _db()
+        # Identifica clientes com vínculos FIXO — não serão sobrescritos
+        vincs_fixas_post = db.select("tb_cliente_usina",
+            raw_params={"dt_fim": "is.null", "desc_saldo_obs": "eq.FIXO"})
+        ids_fixos_post = {v["id_cliente"] for v in vincs_fixas_post}
+
+        # IDs de clientes que DEVEM permanecer vinculados (vieram no payload)
+        ids_no_payload = {int(k) for k in por_cliente.keys()}
+
+        # ── PASSO 1: Limpa "lixo" — fecha vínculos ATIVOS de clientes que NÃO
+        # estão no payload (clientes movidos pra "sem usina" perdem o vínculo).
+        # FIXO sempre preservado.
+        todos_ativos = db.select("tb_cliente_usina",
+                                  raw_params={"dt_fim": "is.null"})
+        removidos = 0
+        for v in todos_ativos:
+            if (v.get("desc_saldo_obs") or "").upper() == "FIXO":
+                continue
+            if v.get("id_cliente") not in ids_no_payload:
+                try:
+                    db.patch("tb_cliente_usina", {"id": v["id"]}, {"dt_fim": hoje})
+                    removidos += 1
+                except Exception as e:
+                    app.logger.error(f"[distribuir-global] erro fechar v={v.get('id')}: {e}")
+
+        # ── PASSO 2: Processa os clientes do payload
+        salvos = erros = 0
+        for id_c, items in por_cliente.items():
+            if int(id_c) in ids_fixos_post:
+                continue  # Vínculo FIXO — não sobrescrever
+            try:
+                # Fecha vínculos ativos antigos do cliente (mesmo cliente em outra usina)
+                ativos = db.select("tb_cliente_usina",
+                                   raw_params={"id_cliente": f"eq.{id_c}", "dt_fim": "is.null"})
+                for a in ativos:
+                    if (a.get("desc_saldo_obs") or "").upper() == "FIXO":
+                        continue
+                    db.patch("tb_cliente_usina", {"id": a["id"]}, {"dt_fim": hoje})
+                # Cria novos vínculos — preserva saldo no novo vínculo
+                for item in items:
+                    row = {
+                        "id_cliente": id_c,
+                        "id_usina":   item["id_usina"],
+                        "pct_rateio": item["pct"],
+                        "dt_inicio":  hoje,
+                    }
+                    if item.get("saldo_kwh", 0) > 0:
+                        row["qtd_saldo_kwh"] = item["saldo_kwh"]
+                    db.upsert("tb_cliente_usina", row)
+                salvos += 1
+            except Exception as e:
+                app.logger.error(f"[distribuir] cliente {id_c}: {e}")
+                erros += 1
+
+        msgs = [f"{salvos} cliente(s) vinculado(s)"]
+        if removidos:
+            msgs.append(f"{removidos} vínculo(s) antigo(s) fechado(s)")
+        if erros:
+            msgs.append(f"{erros} erro(s)")
+        flash("Distribuição concluída! " + " · ".join(msgs),
+              "warning" if erros else "success")
+        return redirect(url_for("usinas_lista"))
+
+    # ── GET: busca saldo atual e calcula preview ────────────────
+    # Saldo atual = saldo da vinculação ativa OU saldo_inicial do cadastro
+    vinculos_ativos = _db().select("tb_cliente_usina",
+                                   raw_params={"dt_fim": "is.null"},
+                                   columns="id_cliente,id_usina,qtd_saldo_kwh,desc_saldo_obs")
+    saldo_por_cliente = {}
+    for v in vinculos_ativos:
+        id_c = v.get("id_cliente")
+        saldo = float(v.get("qtd_saldo_kwh") or 0)
+        if saldo > 0:
+            saldo_por_cliente[id_c] = saldo_por_cliente.get(id_c, 0) + saldo
+
+    # ── Clientes FIXO: vínculos pré-configurados, não entram na distribuição ──
+    # Reload com pct_rateio para calcular kwh comprometido por usina
+    vinculos_ativos_full = _db().select("tb_cliente_usina",
+                                   raw_params={"dt_fim": "is.null"},
+                                   columns="id_cliente,id_usina,pct_rateio,qtd_saldo_kwh,desc_saldo_obs")
+    ids_fixos = {v["id_cliente"] for v in vinculos_ativos_full
+                 if (v.get("desc_saldo_obs") or "").upper() == "FIXO"}
+    usinas_map = {u["id_usina"]: u.get("desc_nome", "") for u in usinas}
+    vincs_fixas_map: dict = {}
+    for v in vinculos_ativos_full:
+        if (v.get("desc_saldo_obs") or "").upper() == "FIXO":
+            vincs_fixas_map.setdefault(v["id_cliente"], []).append(v)
+
+    # kwh comprometido por usina via FIXO (= soma de pct × geração_usina)
+    ger_por_usina = {u["id_usina"]: float(u.get("qtd_geracao_media_mensal") or 0) for u in usinas}
+    kwh_fixo_por_usina: dict = {}
+    for v in vinculos_ativos_full:
+        if (v.get("desc_saldo_obs") or "").upper() != "FIXO":
+            continue
+        id_u = v.get("id_usina"); pct = float(v.get("pct_rateio") or 0) / 100.0
+        if id_u and pct > 0:
+            kwh_fixo_por_usina[id_u] = kwh_fixo_por_usina.get(id_u, 0.0) + pct * ger_por_usina.get(id_u, 0)
+
+    clientes_fixos = []
+    for c in clientes:
+        if c["id_cliente"] in ids_fixos:
+            vfs = vincs_fixas_map.get(c["id_cliente"], [])
+            c["_vinculos_fixos"] = [
+                {"nome_usina": usinas_map.get(v.get("id_usina"), str(v.get("id_usina"))),
+                 "pct": v.get("pct_rateio") or 100}
+                for v in vfs
+            ]
+            clientes_fixos.append(c)
+
+    # Remove fixos da lista que entra na distribuição automática
+    clientes = [c for c in clientes if c["id_cliente"] not in ids_fixos]
+
+    for c in clientes:
+        id_c = c["id_cliente"]
+        # Prioridade: saldo da vinculação ativa; fallback: saldo_inicial do cadastro
+        c["_saldo_atual"] = saldo_por_cliente.get(
+            id_c, float(c.get("qtd_saldo_inicial_kwh") or 0)
+        )
+
+    enderecos = tb_carregar_enderecos_usinas()
+    for u in usinas:
+        end = enderecos.get(u["id_usina"], {})
+        u["_cidade_uf"] = ", ".join(filter(None, [end.get("desc_cidade"), end.get("desc_estado")]))
+
+    ignorar_saldo = request.args.get("ignorar_saldo") in ("1", "true", "on")
+    try: janela_dias = max(1, min(30, int(request.args.get("janela_dias", "7"))))
+    except Exception: janela_dias = 7
+    try: excesso_pct = max(0, min(50, int(request.args.get("excesso_pct", "5"))))
+    except Exception: excesso_pct = 5
+    try: folga_pct   = max(0, min(50, int(request.args.get("folga_pct",   "0"))))
+    except Exception: folga_pct = 0
+    permitir_split = request.args.get("permitir_split", "1") in ("1", "true", "on")
+
+    alocacao, sem_usina = _algoritmo_distribuicao(
+        usinas, clientes, kwh_fixo_por_usina,
+        ignorar_saldo=ignorar_saldo,
+        janela_dias=janela_dias,
+        excesso_pct=excesso_pct,
+        folga_pct=folga_pct,
+        permitir_split=permitir_split,
+    )
+
+    # Payload para confirmação (inclui saldo proporcional por vínculo)
+    proposta = []
+    for uid, bloco in alocacao.items():
+        for item in bloco["itens"]:
+            proposta.append({
+                "id_cliente": item["cliente"]["id_cliente"],
+                "id_usina":   uid,
+                "pct":        item["pct"],
+                "saldo_kwh":  round(item["saldo"], 2),
+            })
+    payload_json = _json.dumps(proposta)
+
+    # Estatísticas
+    ids_alocados = {item["cliente"]["id_cliente"]
+                    for bloco in alocacao.values() for item in bloco["itens"]}
+    total_alocados  = len(ids_alocados)
+    total_sem_usina = len(sem_usina)
+    splits          = len({item["cliente"]["id_cliente"]
+                           for bloco in alocacao.values()
+                           for item in bloco["itens"] if item["pct"] < 100})
+    cobertos_saldo  = sum(1 for bloco in alocacao.values()
+                          for item in bloco["itens"]
+                          if item["coberto_saldo"] and item["pct"] == 100)
+
+    return render_template("distribuir_preview.html",
+                           alocacao=alocacao,
+                           sem_usina=sem_usina,
+                           payload_json=payload_json,
+                           total_clientes=len(clientes) + len(clientes_fixos),
+                           total_alocados=total_alocados,
+                           total_sem_usina=total_sem_usina,
+                           splits=splits,
+                           cobertos_saldo=cobertos_saldo,
+                           clientes_fixos=clientes_fixos,
+                           total_fixos=len(clientes_fixos),
+                           ignorar_saldo=ignorar_saldo,
+                           janela_dias=janela_dias,
+                           excesso_pct=excesso_pct,
+                           folga_pct=folga_pct,
+                           permitir_split=permitir_split)
+
+
+# ============================================================
+#  Confirmar distribuição de UMA usina específica
+#  Permite finalizar usinas incrementalmente (próximas de leitura primeiro)
+# ============================================================
+@app.route("/usinas/distribuir/confirmar-usina/<int:id_usina>", methods=["POST"])
+def usinas_distribuir_confirmar_usina(id_usina):
+    import json as _json
+    from datetime import date
+    from db import _db
+
+    payload = request.form.get("payload_json", "")
+    try:
+        proposta = _json.loads(payload)
+    except Exception as e:
+        flash(f"Erro ao interpretar proposta: {e}", "danger")
+        return redirect(url_for("usinas_distribuir"))
+
+    # Filtra só os itens da usina sendo confirmada
+    itens_usina = [p for p in proposta if int(p.get("id_usina") or 0) == id_usina]
+    if not itens_usina:
+        flash("Nenhum cliente para confirmar nesta usina.", "warning")
+        return redirect(url_for("usinas_distribuir"))
+
+    db = _db()
+    hoje = date.today().isoformat()
+
+    # Identifica clientes FIXO (proteção extra — não sobrescrever)
+    vincs_fixas = db.select("tb_cliente_usina",
+        raw_params={"dt_fim": "is.null", "desc_saldo_obs": "eq.FIXO"})
+    ids_fixos = {v["id_cliente"] for v in vincs_fixas}
+
+    # IDs de clientes que DEVEM ficar vinculados a esta usina (vieram no payload)
+    ids_novos = {int(p.get("id_cliente") or 0) for p in itens_usina}
+    ids_novos.discard(0)
+
+    # ── PASSO 1: Limpa "lixo" — fecha vínculos ATIVOS desta usina que NÃO estão
+    # mais no payload (clientes removidos/movidos pra outra usina na tela).
+    # Sem isto, clientes anteriores ficavam pendurados aqui, causando duplicação.
+    vincs_existentes_usina = db.select("tb_cliente_usina",
+        raw_params={"id_usina": f"eq.{id_usina}", "dt_fim": "is.null"})
+    removidos = 0
+    for v in vincs_existentes_usina:
+        if (v.get("desc_saldo_obs") or "").upper() == "FIXO":
+            continue  # nunca toca FIXO
+        if v.get("id_cliente") not in ids_novos:
+            try:
+                db.patch("tb_cliente_usina", {"id": v["id"]}, {"dt_fim": hoje})
+                removidos += 1
+            except Exception as e:
+                app.logger.error(f"[confirmar-usina {id_usina}] erro fechar v={v.get('id')}: {e}")
+
+    # ── PASSO 2: Processa os clientes do payload
+    salvos = erros = 0
+    for item in itens_usina:
+        id_c = int(item.get("id_cliente") or 0)
+        if not id_c:
+            continue
+        if id_c in ids_fixos:
+            continue  # FIXO: nunca sobrescrever
+        try:
+            # Fecha TODOS os vínculos ativos antigos do cliente (em qualquer usina)
+            # Garante consistência mesmo quando confirmando 1 usina por vez:
+            # se cliente foi movido da usina A pra B, ao confirmar B fecha o de A.
+            ativos = db.select("tb_cliente_usina",
+                               raw_params={"id_cliente": f"eq.{id_c}", "dt_fim": "is.null"})
+            for a in ativos:
+                # Não fecha vínculos FIXO (proteção extra)
+                if (a.get("desc_saldo_obs") or "").upper() == "FIXO":
+                    continue
+                db.patch("tb_cliente_usina", {"id": a["id"]}, {"dt_fim": hoje})
+
+            # Cria vínculo novo nesta usina
+            row = {
+                "id_cliente": id_c,
+                "id_usina":   id_usina,
+                "pct_rateio": item.get("pct", 100),
+                "dt_inicio":  hoje,
+            }
+            if (item.get("saldo_kwh") or 0) > 0:
+                row["qtd_saldo_kwh"] = item["saldo_kwh"]
+            db.upsert("tb_cliente_usina", row)
+            salvos += 1
+        except Exception as e:
+            app.logger.error(f"[confirmar-usina {id_usina}] cliente {id_c}: {e}")
+            erros += 1
+
+    msgs = []
+    if salvos:
+        msgs.append(f"{salvos} vinculado(s)")
+    if removidos:
+        msgs.append(f"{removidos} removido(s) (estavam aqui e não estão mais no payload)")
+    if erros:
+        msgs.append(f"{erros} erro(s)")
+
+    if salvos or removidos:
+        flash("Usina confirmada! " + " · ".join(msgs),
+              "success" if not erros else "warning")
+    else:
+        flash("Nenhuma alteração aplicada." + (f" {erros} erro(s)." if erros else ""),
+              "danger" if erros else "warning")
+
+    # Redireciona pra tela de rateio dessa usina
+    return redirect(url_for("rateio_dashboard", uid=id_usina))
+
 
 # USINAS - Ver detalhes + geracao
 @app.route("/usinas/ver/<uid>")
@@ -4811,9 +5591,13 @@ def _calcular_resumo_rateio_consolidado(mes_sel: str = ""):
     historico = carregar_faturas()
     rateios_all = carregar_rateios_mensais()
 
-    # Lista de meses disponiveis = uniao de todos os meses com geracao + mes atual
-    mes_atual = f"{datetime.now().month}/{datetime.now().year}"
-    meses_set = {mes_atual}
+    # Lista de meses disponiveis = uniao de todos os meses com geracao + mes atual + proximo mes
+    _now = datetime.now()
+    mes_atual = f"{_now.month}/{_now.year}"
+    _prox_n   = _now.month + 1 if _now.month < 12 else 1
+    _prox_ano = _now.year if _now.month < 12 else _now.year + 1
+    prox_mes  = f"{_prox_n}/{_prox_ano}"
+    meses_set = {mes_atual, prox_mes}
     for _uid, _meses in geracao_mensal_all.items():
         meses_set.update(_meses.keys())
 
@@ -5958,7 +6742,8 @@ def admin_sync_leituras():
 @app.route("/usinas/rateio/pdf/<uid>")
 def rateio_gerar_pdf(uid):
     from db import (tb_get_usina, tb_get_usina_por_nome, tb_get_endereco_usina,
-                    tb_get_investidor, tb_get_clientes_da_usina, tb_carregar_clientes)
+                    tb_get_investidor, tb_get_clientes_da_usina, tb_carregar_clientes,
+                    tb_get_titular)
     try:
         usina = None
         vinculados = []
@@ -5989,14 +6774,31 @@ def rateio_gerar_pdf(uid):
                 end_tb.get("desc_complemento", ""), end_tb.get("desc_setor", ""),
             ]
             _end_str = ", ".join(p for p in _end_parts if p).strip() or _leg.get("endereco", "")
+
+            # ── Dados do TITULAR ──────────────────────────────────────
+            # Os campos legados desc_titular_uc / desc_cpf_titular / etc. em
+            # tb_usinas ficaram NULL após a migração — agora vivem em tb_titulares
+            # referenciado por id_titular. Buscar lá primeiro, com fallback nos legados.
+            _titular_nome  = (usina_tb.get("desc_titular_uc") or "").strip()
+            _titular_cpf   = (usina_tb.get("desc_cpf_titular") or "").strip()
+            _titular_tel   = (usina_tb.get("desc_telefone_titular") or "").strip()
+            _titular_email = (usina_tb.get("desc_email_titular") or "").strip()
+            _id_titular = usina_tb.get("id_titular")
+            if _id_titular and not all([_titular_nome, _titular_cpf, _titular_tel, _titular_email]):
+                _tit = tb_get_titular(_id_titular) or {}
+                if not _titular_nome:  _titular_nome  = (_tit.get("desc_nome")     or "").strip()
+                if not _titular_cpf:   _titular_cpf   = (_tit.get("desc_cpf_cnpj") or "").strip()
+                if not _titular_tel:   _titular_tel   = (_tit.get("desc_telefone") or "").strip()
+                if not _titular_email: _titular_email = (_tit.get("desc_email")    or "").strip()
+
             usina = {
                 "nome":              usina_tb.get("desc_nome", uid),
                 "uc_geradora":       _fmt_uc15(usina_tb.get("cod_uc_geradora", "") or _leg.get("uc_geradora", "")),
                 "classe":            usina_tb.get("desc_classe", "") or _leg.get("classe", ""),
-                "titular_uc":        usina_tb.get("desc_titular_uc", "") or _leg.get("titular_uc", ""),
-                "cpf_titular":       _fmt_cpf_cnpj(usina_tb.get("desc_cpf_titular", "") or _leg.get("cpf_titular", "")),
-                "telefone":          usina_tb.get("desc_telefone_titular", "") or _leg.get("telefone", ""),
-                "email_titular":     usina_tb.get("desc_email_titular", "") or _leg.get("email", ""),
+                "titular_uc":        _titular_nome or _leg.get("titular_uc", ""),
+                "cpf_titular":       _fmt_cpf_cnpj(_titular_cpf or _leg.get("cpf_titular", "")),
+                "telefone":          _titular_tel or _leg.get("telefone", ""),
+                "email_titular":     _titular_email or _leg.get("email", ""),
                 "endereco":          _end_str,
                 "cep":               _fmt_cep(end_tb.get("cod_cep", "") or _leg.get("cep", "")),
                 "cidade_uf":         _cidade or _leg.get("cidade_uf", ""),
@@ -6166,6 +6968,45 @@ def rateio_enviar_email(uid):
     return redirect(url_for("rateio_dashboard", uid=uid))
 
 # USINAS - Desvincular cliente
+@app.route("/usinas/rateio/<uid>/desvincular/<uc>", methods=["POST"])
+def rateio_desvincular_cliente(uid, uc):
+    """Desvincula um cliente da usina diretamente pela tela de Rateio
+    (atalho que evita ter que voltar pra tela de Distribuir).
+    Após desvincular, volta pra mesma tela de rateio."""
+    from db import (tb_get_cliente_por_uc, tb_get_usina, tb_get_usina_por_nome,
+                    tb_delete_cliente_usina)
+    nome_exibir = uc
+    try:
+        try:
+            id_usina = int(uid)
+            tb_usina = tb_get_usina(id_usina)
+        except (ValueError, TypeError):
+            usinas_leg = carregar_usinas()
+            nome_usina = usinas_leg.get(uid, {}).get("nome", "")
+            tb_usina = tb_get_usina_por_nome(nome_usina) if nome_usina else None
+
+        tb_cliente = tb_get_cliente_por_uc(uc)
+        if not tb_usina or not tb_cliente:
+            flash("Cliente ou usina não encontrados.", "danger")
+            return redirect(url_for("rateio_dashboard", uid=uid))
+
+        # Bloqueia exclusão de vínculo FIXO (consistência com toda a regra FIXO)
+        from db import tb_get_usinas_do_cliente
+        vincs = tb_get_usinas_do_cliente(tb_cliente["id_cliente"])
+        for v in vincs:
+            if v.get("id_usina") == tb_usina["id_usina"] and (v.get("desc_saldo_obs") or "").upper() == "FIXO":
+                flash(f"Cliente {tb_cliente.get('desc_nome','?')} está como vínculo FIXO — não pode ser desvinculado aqui.", "warning")
+                return redirect(url_for("rateio_dashboard", uid=uid))
+
+        tb_delete_cliente_usina(tb_cliente["id_cliente"], tb_usina["id_usina"])
+        nome_exibir = tb_cliente.get("desc_nome", nome_exibir)
+        flash(f"Cliente {nome_exibir} desvinculado da usina.", "warning")
+    except Exception as e:
+        app.logger.warning(f"[rateio-desvincular] Falha: {e}")
+        flash(f"Erro ao desvincular: {e}", "danger")
+    return redirect(url_for("rateio_dashboard", uid=uid))
+
+
 @app.route("/usinas/desvincular/<uid>/<uc>")
 def desvincular_cliente(uid, uc):
     from db import (tb_get_cliente_por_uc, tb_get_usina, tb_get_usina_por_nome,

@@ -285,6 +285,50 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
     # Resolve bandeiras
     ba, bv = resolver_bandeiras(mr)
 
+    # ── OVERRIDE: tarifa real da Equatorial extraída do PDF ──────────────────
+    # A Equatorial cobra bandeira em valores diferentes por região. O cadastro
+    # em tb_tarifas (Aneel padrão) só serve para faturas TOTALMENTE compensadas
+    # (onde a bandeira fica zerada). Para faturas com consumo não compensado,
+    # usar a tarifa real extraída do PDF (adc / kWh sob bandeira) evita
+    # divergência com a fatura Equatorial original.
+    _adc_am = float(equatorial.get("adc_bandeira_amarela", 0) or 0)
+    _kwh_am = float(equatorial.get("bandeira_amarela", 0) or 0)
+    ba_real = None
+    if _adc_am > 0 and _kwh_am > 0:
+        ba_real = _adc_am / _kwh_am
+        if abs(ba_real - ba) > 0.00001:
+            print(f"   Bandeira AM: tarifa do PDF = R$ {ba_real:.6f}/kWh "
+                  f"(R$ {_adc_am:.2f} ÷ {_kwh_am:.2f} kWh) — substitui tb_tarifas R$ {ba:.6f}")
+        ba = ba_real
+
+    _adc_vm = float(equatorial.get("adc_bandeira_vermelha", 0) or 0)
+    _kwh_vm = float(equatorial.get("bandeira_vermelha", 0) or 0)
+    bv_real = None
+    if _adc_vm > 0 and _kwh_vm > 0:
+        bv_real = _adc_vm / _kwh_vm
+        if abs(bv_real - bv) > 0.00001:
+            print(f"   Bandeira VM: tarifa do PDF = R$ {bv_real:.6f}/kWh "
+                  f"(R$ {_adc_vm:.2f} ÷ {_kwh_vm:.2f} kWh) — substitui tb_tarifas R$ {bv:.6f}")
+        bv = bv_real
+
+    # Auto-aprendizado: atualiza tb_tarifas se a tarifa real do PDF for MAIOR
+    # que a cadastrada (mantém sempre o maior valor observado como fallback).
+    if ba_real or bv_real:
+        try:
+            from db import tarifa_atualizar_se_maior
+            res = tarifa_atualizar_se_maior(mr, ba_real, bv_real)
+            if res.get("atualizado"):
+                msgs = []
+                if "bandeira_amarela" in res:
+                    msgs.append(f"AM R$ {res['ba_antes']:.6f} → R$ {res['bandeira_amarela']:.6f}")
+                if "bandeira_vermelha" in res:
+                    msgs.append(f"VM R$ {res['bv_antes']:.6f} → R$ {res['bandeira_vermelha']:.6f}")
+                print(f"   📌 tb_tarifas[{res['mes']}] atualizado: {' | '.join(msgs)}")
+            elif res.get("criado"):
+                print(f"   📌 tb_tarifas[{res['mes']}] criado com valores do PDF")
+        except Exception as _e:
+            print(f"   ⚠️ Falha ao auto-atualizar tb_tarifas: {_e}")
+
     # Endereco
     endereco = _resolver_endereco(cliente)
     if not endereco:
@@ -387,6 +431,9 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
         # 3+4: valor R$ que a Equatorial cobrou (ADC BANDEIRA do PDF)
         "adc_bandeira_amarela":     equatorial.get("adc_bandeira_amarela", 0) or 0,
         "adc_bandeira_vermelha":    equatorial.get("adc_bandeira_vermelha", 0) or 0,
+        # 5+6: qtd kWh sob bandeira — calcular() resolve a tarifa real (adc/qtd)
+        "_bandeira_amarela_qtd":    equatorial.get("bandeira_amarela", 0) or 0,
+        "_bandeira_vermelha_qtd":   equatorial.get("bandeira_vermelha", 0) or 0,
         # Legados (mantidos por compat — antigos chamadores)
         "bandeira_amarela":    ba * consumo if ba > 0 else 0,
         "bandeira_vermelha":   bv * consumo if bv > 0 else 0,

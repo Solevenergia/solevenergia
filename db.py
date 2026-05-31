@@ -577,9 +577,14 @@ def tb_save_cliente(dados: dict) -> dict:
         "desc_cpf", "desc_telefone", "desc_email", "desc_titular_fatura",
         "tp_fornecimento", "tp_bandeira",
         "pct_desconto", "dt_adesao", "STATUS",
+        "qtd_consumo_medio_kwh", "qtd_saldo_inicial_kwh",
+        "proxima_leitura",
         # campos de estado pos-cobranca
         "qtd_economia_acumulada", "vlr_cobranca_anterior",
         "dt_venc_anterior", "dt_ultimo_pagamento",
+        # Titularidade própria (cliente independente do titular da usina)
+        "desc_nome_titular_fatura", "desc_cpf_titular_fatura",
+        "dt_nascimento_titular_fatura", "flg_titularidade_propria",
     ]
     for col in cols:
         if col in dados:
@@ -587,6 +592,32 @@ def tb_save_cliente(dados: dict) -> dict:
     if "desc_cpf" in row and row["desc_cpf"]:
         import re
         row["desc_cpf"] = re.sub(r'[.\-/]', '', row["desc_cpf"])
+    # Limpa CPF do titular da fatura também
+    if "desc_cpf_titular_fatura" in row and row["desc_cpf_titular_fatura"]:
+        import re
+        row["desc_cpf_titular_fatura"] = re.sub(r'[.\-/]', '', row["desc_cpf_titular_fatura"])
+    # Converte DN BR (DD/MM/AAAA) para ISO (AAAA-MM-DD)
+    if "dt_nascimento_titular_fatura" in row and row["dt_nascimento_titular_fatura"]:
+        s = str(row["dt_nascimento_titular_fatura"]).strip()
+        if len(s) == 10 and s[2] == "/" and s[5] == "/":
+            try:
+                d, m, y = s.split("/")
+                row["dt_nascimento_titular_fatura"] = f"{y}-{m}-{d}"
+            except ValueError:
+                pass
+    # Converte proxima_leitura BR (DD/MM/AAAA) para ISO (AAAA-MM-DD)
+    if "proxima_leitura" in row and row["proxima_leitura"]:
+        s = str(row["proxima_leitura"]).strip()
+        if len(s) == 10 and s[2] == "/" and s[5] == "/":
+            try:
+                d, m, y = s.split("/")
+                row["proxima_leitura"] = f"{y}-{m}-{d}"
+            except ValueError:
+                pass
+    # Normaliza flag booleana
+    if "flg_titularidade_propria" in row:
+        v = row["flg_titularidade_propria"]
+        row["flg_titularidade_propria"] = str(v).lower() in ("1", "true", "yes", "on", "t")
     # PATCH quando temos id_cliente (permite atualizar cod_uc)
     if "id_cliente" in row:
         id_cliente = row.pop("id_cliente")
@@ -918,52 +949,28 @@ def tb_delete_investidor(id_investidor: int) -> None:
 
 
 def tb_get_pix_da_usina(id_usina: int) -> Optional[dict]:
-    """Retorna dados PIX do recebedor vinculado a usina, ou None se nao configurado."""
+    """Retorna dados PIX para recebimento dos clientes vinculados à usina.
+    Prioridade: desc_pix_recebimento da própria usina → PIX do investidor (fallback legado).
+    Retorna dict compatível com desc_pix / desc_nome_pix / desc_cidade_pix."""
     usina = tb_get_usina(id_usina)
-    if not usina or not usina.get("id_investidor"):
+    if not usina:
+        return None
+    # 1) PIX próprio da usina (SOLEV recebe dos clientes)
+    pix_usina = (usina.get("desc_pix_recebimento") or "").strip()
+    if pix_usina:
+        return {
+            "desc_pix":       pix_usina,
+            "desc_nome_pix":  "SOLEV ENERGIA",
+            "desc_cidade_pix": "GOIANIA",
+            "desc_nome":       "SOLEV ENERGIA LTDA",
+        }
+    # 2) Fallback: PIX do investidor (comportamento anterior)
+    if not usina.get("id_investidor"):
         return None
     rec = tb_get_investidor(usina["id_investidor"])
     if not rec or not rec.get("desc_pix"):
         return None
     return rec
-
-
-# ==================================================================
-#  TB_DONOS (donos das usinas — separados de tb_usinas)
-# ==================================================================
-
-def tb_carregar_donos() -> list:
-    """Retorna lista de donos cadastrados, ordenados por nome."""
-    rows = _db().select("tb_donos", order="desc_nome.asc")
-    return [_limpar_nulos(r) for r in rows]
-
-
-def tb_get_dono(id_dono: int) -> Optional[dict]:
-    """Busca um dono pelo ID."""
-    rows = _db().select("tb_donos", filtros={"id_dono": id_dono})
-    return _limpar_nulos(rows[0]) if rows else None
-
-
-def tb_save_dono(dados: dict) -> dict:
-    """Insere ou atualiza um dono. Retorna o registro salvo."""
-    row = {}
-    cols = [
-        "id_dono", "desc_nome", "desc_cpf_cnpj",
-        "desc_telefone", "desc_email", "dt_nascimento",
-    ]
-    for col in cols:
-        if col in dados:
-            row[col] = dados[col]
-    if "desc_cpf_cnpj" in row and row["desc_cpf_cnpj"]:
-        import re
-        row["desc_cpf_cnpj"] = re.sub(r'[.\-/]', '', row["desc_cpf_cnpj"])
-    on_conflict = "id_dono" if "id_dono" in row else None
-    return _db().upsert_returning("tb_donos", row, on_conflict=on_conflict)
-
-
-def tb_delete_dono(id_dono: int) -> None:
-    """Remove um dono pelo ID. As usinas com FK ficam com id_dono = NULL."""
-    _db().delete("tb_donos", {"id_dono": id_dono})
 
 
 # ==================================================================
@@ -1070,7 +1077,7 @@ def tb_save_usina(dados: dict) -> dict:
     """Insere ou atualiza uma usina. Retorna o registro salvo (com id_usina)."""
     row = {}
     cols = [
-        "id_usina", "id_investidor", "id_dono", "id_titular",
+        "id_usina", "id_investidor", "id_titular",
         "desc_nome", "cod_uc_geradora", "desc_classe",
         "qtd_potencia_kwp",
         "desc_modulos_tipo", "qtd_modulos", "desc_inversor",
@@ -1078,7 +1085,8 @@ def tb_save_usina(dados: dict) -> dict:
         "desc_garantia_inversor", "qtd_geracao_media_mensal",
         "qtd_geracao_prevista_diaria", "desc_observacoes",
         "desc_documento_titular_pdf",
-        "dt_proxima_leitura", "qtd_saldo_kwh",
+        "qtd_dia_leitura", "dt_proxima_leitura", "qtd_saldo_kwh",
+        "desc_pix_recebimento",
         "path_doc_cnh_rg", "path_doc_procuracao", "path_doc_cnh_rg_proc",
     ]
     # Colunas opcionais que so entram no payload se tiverem valor
@@ -1098,7 +1106,7 @@ def tb_save_usina(dados: dict) -> dict:
         rows = _db().select("tb_usinas", filtros={"id_usina": id_usina})
         return _limpar_nulos(rows[0]) if rows else {"id_usina": id_usina}
     # INSERT novo registro
-    return _db().insert_returning("tb_usinas", row)
+    return _db().upsert_returning("tb_usinas", row)
 
 
 def tb_delete_usina(id_usina: int) -> None:
@@ -1869,6 +1877,68 @@ def salvar_tarifas(tarifas: dict) -> None:
                 row[col] = t[col]
         rows.append(row)
     _db().upsert("tarifas", rows, on_conflict="mes_referencia")
+
+
+def tarifa_atualizar_se_maior(mes_ref: str, ba_nova: float = None, bv_nova: float = None) -> dict:
+    """
+    Atualiza tb_tarifas[mes_ref] APENAS SE a tarifa nova for MAIOR que a cadastrada.
+    Caso a linha do mês não exista, cria com os valores fornecidos.
+    Útil pra auto-aprender o maior valor de bandeira observado nas faturas Equatorial
+    (varia por região; usar o máximo conhecido como fallback é mais conservador).
+
+    Retorna dict com:
+      {'criado': True, ...}            se criou nova linha
+      {'atualizado': True, ...}         se alterou algum campo
+      {'sem_mudanca': True}             se nada mudou (valor cadastrado já era >= novo)
+    """
+    db = _db()
+    # Normaliza para MM/YYYY (formato padrão no banco)
+    partes = str(mes_ref or "").split("/")
+    if len(partes) == 2:
+        try:
+            mes_ref = f"{int(partes[0]):02d}/{partes[1]}"
+        except ValueError:
+            pass
+    rows = db.select("tarifas", filtros={"mes_referencia": mes_ref})
+    if not rows:
+        # Tenta variante sem zero à esquerda (compat com cadastros antigos)
+        try:
+            m_int = int(partes[0]); _ano = partes[1]
+            alt = f"{m_int}/{_ano}"
+            rows = db.select("tarifas", filtros={"mes_referencia": alt})
+            if rows:
+                mes_ref = alt
+        except Exception:
+            pass
+
+    novo = {}
+    if ba_nova and ba_nova > 0:
+        novo["bandeira_amarela"]  = round(float(ba_nova), 6)
+    if bv_nova and bv_nova > 0:
+        novo["bandeira_vermelha"] = round(float(bv_nova), 6)
+    if not novo:
+        return {"sem_mudanca": True}
+
+    if not rows:
+        # Não existe linha — cria
+        row = {"mes_referencia": mes_ref, **novo}
+        db.upsert("tarifas", row, on_conflict="mes_referencia")
+        return {"criado": True, "mes": mes_ref, **novo}
+
+    atual = rows[0]
+    update = {}
+    ba_atual = float(atual.get("bandeira_amarela") or 0)
+    bv_atual = float(atual.get("bandeira_vermelha") or 0)
+    if "bandeira_amarela"  in novo and novo["bandeira_amarela"]  > ba_atual:
+        update["bandeira_amarela"]  = novo["bandeira_amarela"]
+    if "bandeira_vermelha" in novo and novo["bandeira_vermelha"] > bv_atual:
+        update["bandeira_vermelha"] = novo["bandeira_vermelha"]
+    if not update:
+        return {"sem_mudanca": True, "ba_atual": ba_atual, "bv_atual": bv_atual}
+
+    db.patch("tarifas", {"mes_referencia": mes_ref}, update)
+    return {"atualizado": True, "mes": mes_ref, **update,
+            "ba_antes": ba_atual, "bv_antes": bv_atual}
 
 
 def salvar_tarifa_mes(mes_ref: str, dados: dict, mes_ref_antigo: str = None) -> None:

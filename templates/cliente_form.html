@@ -239,10 +239,9 @@
                                    title="Usado no rateio quando não há histórico de faturas. Preencha para clientes novos ou vindos de outro sistema."
                                    style="cursor:help"></i>
                             </label>
-                            <input type="number" name="qtd_consumo_medio_kwh" class="form-control"
-                                   step="1" min="0"
-                                   value="{{ cliente.qtd_consumo_medio_kwh|int if cliente and cliente.qtd_consumo_medio_kwh else '' }}"
-                                   placeholder="Ex: 350">
+                            <input type="text" name="qtd_consumo_medio_kwh" class="form-control decimal-br"
+                                   value="{{ "%.2f"|format(cliente.qtd_consumo_medio_kwh)|replace(".", ",") if cliente and cliente.qtd_consumo_medio_kwh else '' }}"
+                                   placeholder="Ex: 350,00">
                         </div>
                         <div class="col-6 mb-3">
                             <label class="form-label">
@@ -251,11 +250,28 @@
                                    title="Saldo de créditos kWh trazido de outro sistema. Usado no rateio até que uma fatura real seja processada."
                                    style="cursor:help"></i>
                             </label>
-                            <input type="number" name="qtd_saldo_inicial_kwh" class="form-control"
-                                   step="0.1" min="0"
-                                   value="{{ cliente.qtd_saldo_inicial_kwh if cliente and cliente.qtd_saldo_inicial_kwh else '' }}"
-                                   placeholder="Ex: 125.5">
+                            <input type="text" name="qtd_saldo_inicial_kwh" class="form-control decimal-br"
+                                   value="{{ "%.2f"|format(cliente.qtd_saldo_inicial_kwh)|replace(".", ",") if cliente and cliente.qtd_saldo_inicial_kwh else '' }}"
+                                   placeholder="Ex: 125,50">
                         </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">
+                            Próxima leitura
+                            <i class="bi bi-question-circle text-muted ms-1"
+                               title="Data da próxima leitura da UC pela Equatorial. Usada pelo algoritmo de distribuição (precisa estar no intervalo do dia de leitura da usina). Atualizado automaticamente após cada baixa de fatura."
+                               style="cursor:help"></i>
+                        </label>
+                        {% set _pl = (cliente.proxima_leitura if cliente and cliente.proxima_leitura else '')|string %}
+                        {% if _pl and _pl|length >= 10 and _pl[4] == '-' %}
+                            {% set _pl_br = _pl[8:10] ~ '/' ~ _pl[5:7] ~ '/' ~ _pl[0:4] %}
+                        {% else %}
+                            {% set _pl_br = _pl %}
+                        {% endif %}
+                        <input type="text" name="proxima_leitura" id="campo_prox_leitura"
+                               class="form-control" maxlength="10"
+                               value="{{ _pl_br }}" placeholder="dd/mm/aaaa">
                     </div>
 
                     <div class="mb-3">
@@ -301,13 +317,16 @@
                                 data-titular-tel="{{ u._titular_telefone or '' }}"
                                 data-titular-email="{{ u._titular_email or '' }}"
                                 {{ 'checked' if u.id_usina in usinas_cliente else '' }}>
-                            <label class="form-check-label" for="usina_{{ u.id_usina }}">
+                            <label class="form-check-label" for="usina_{{ u.id_usina }}" style="word-break:break-word">
                                 <i class="bi bi-sun me-1" style="color:var(--orange)"></i>
-                                {{ u.desc_nome }}
-                                {% if u.desc_titular_uc %}
-                                <small class="text-muted ms-1">· {{ u.desc_titular_uc }}</small>
+                                <strong>{{ u.desc_nome }}</strong>
+                                {% if u.cod_uc_geradora %}
+                                <small class="text-muted ms-1" style="font-size:10px"><code>{{ u.cod_uc_geradora | fmt_uc15 }}</code></small>
                                 {% endif %}
-                                <code class="text-muted ms-1" style="font-size:11px">ID: {{ u.id_usina }}</code>
+                                {% if u.desc_titular_uc %}
+                                <small class="text-muted ms-1" style="font-size:11px">· {{ u.desc_titular_uc }}</small>
+                                {% endif %}
+                                <code class="text-muted ms-1" style="font-size:10px">ID: {{ u.id_usina }}</code>
                             </label>
                         </div>
                         {% endfor %}
@@ -317,27 +336,50 @@
                 </div>
             </div>
 
-            <!-- Titularidade da UC (preenchido automaticamente pela usina) -->
+            <!-- Titularidade da UC (preenchido automaticamente pela usina, ou própria) -->
             <div class="card mb-4" id="cardTitularidade" style="display:none">
                 <div class="card-body p-4">
-                    <h5 class="fw-bold mb-3">
-                        <i class="bi bi-person-badge me-2" style="color:var(--orange)"></i>Titularidade da UC
-                        <small class="text-muted fw-normal ms-2" style="font-size:12px">
-                            (preenchido a partir da usina vinculada — usado no login do portal Equatorial)
-                        </small>
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="fw-bold mb-0">
+                            <i class="bi bi-person-badge me-2" style="color:var(--orange)"></i>Titularidade da UC
+                            <small class="text-muted fw-normal ms-2" style="font-size:12px">
+                                (usado no login do portal Equatorial)
+                            </small>
+                        </h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                                   name="flg_titularidade_propria" id="flgTitularidadePropria"
+                                   value="1"
+                                   {% if dados and dados.flg_titularidade_propria %}checked{% endif %}>
+                            <label class="form-check-label small" for="flgTitularidadePropria">
+                                <strong>Titularidade própria</strong>
+                                <i class="bi bi-info-circle ms-1" style="cursor:help"
+                                   title="Marque quando o cliente é titular da própria UC (não é a mesma pessoa do titular da usina). O sistema usa estes dados para login Equatorial em vez do titular da usina."></i>
+                            </label>
+                        </div>
+                    </div>
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label small text-muted mb-1">Nome</label>
-                            <input type="text" class="form-control form-control-sm" id="tit_nome" readonly>
+                            <input type="text" class="form-control form-control-sm" id="tit_nome"
+                                   name="desc_nome_titular_fatura"
+                                   value="{{ dados.desc_nome_titular_fatura if dados and dados.desc_nome_titular_fatura else '' }}"
+                                   data-from-usina="" data-readonly-default="1">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small text-muted mb-1">CPF</label>
-                            <input type="text" class="form-control form-control-sm" id="tit_cpf" readonly>
+                            <label class="form-label small text-muted mb-1">CPF/CNPJ <span class="text-danger" id="tit_cpf_req" style="display:none">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="tit_cpf"
+                                   name="desc_cpf_titular_fatura"
+                                   value="{{ dados.desc_cpf_titular_fatura if dados and dados.desc_cpf_titular_fatura else '' }}"
+                                   data-readonly-default="1">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label small text-muted mb-1">Data Nascimento</label>
-                            <input type="text" class="form-control form-control-sm" id="tit_dn" readonly>
+                            <label class="form-label small text-muted mb-1">Data Nascimento <span class="text-danger" id="tit_dn_req" style="display:none">*</span></label>
+                            <input type="text" class="form-control form-control-sm" id="tit_dn"
+                                   name="dt_nascimento_titular_fatura"
+                                   value="{{ dados.dt_nascimento_titular_fatura if dados and dados.dt_nascimento_titular_fatura else '' }}"
+                                   placeholder="DD/MM/AAAA"
+                                   data-readonly-default="1">
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small text-muted mb-1">Telefone</label>
@@ -348,6 +390,9 @@
                             <input type="text" class="form-control form-control-sm" id="tit_email" readonly>
                         </div>
                     </div>
+                    <small class="text-muted mt-2 d-block" id="legendaTitularidade">
+                        Modo atual: <strong id="modoTitularidade">titular da usina vinculada</strong>
+                    </small>
                 </div>
             </div>
         </div>
@@ -420,6 +465,40 @@
         return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
     }
 
+    function maskDecimalBR(v) {
+        // Aceita vírgula ou ponto como separador decimal
+        // Exibe com vírgula, envia com ponto para o backend
+        if (!v) return '';
+
+        // Remove tudo que não é número, vírgula ou ponto
+        let clean = v.replace(/[^\d,\.]/g, '');
+
+        // Se tem tanto vírgula quanto ponto, remove o primeiro separador encontrado
+        const hasComma = clean.includes(',');
+        const hasDot = clean.includes('.');
+        if (hasComma && hasDot) {
+            const lastCommaIdx = clean.lastIndexOf(',');
+            const lastDotIdx = clean.lastIndexOf('.');
+            if (lastCommaIdx > lastDotIdx) {
+                clean = clean.replace(',', '');
+            } else {
+                clean = clean.replace('.', '');
+            }
+        }
+
+        // Substitui ponto por vírgula para exibição BR
+        clean = clean.replace('.', ',');
+
+        // Limita a 2 casas decimais
+        const parts = clean.split(',');
+        if (parts.length === 2) {
+            parts[1] = parts[1].slice(0, 2);
+            return parts.join(',');
+        }
+
+        return clean;
+    }
+
     function attachMask(selector, fn) {
         document.querySelectorAll(selector).forEach(el => {
             el.value = fn(el.value);
@@ -436,8 +515,11 @@
         attachMask('input[name="cod_uc"]', maskUC15);
         attachMask('input[name="desc_cpf"]',           maskCpfCnpj);
         attachMask('input[name="dt_adesao"]',          maskData);
+        attachMask('input[name="proxima_leitura"]',    maskData);
+        attachMask('input[name="dt_nascimento_titular_fatura"]', maskData);
         attachMask('input[name="cod_cep"]',            maskCep);
         attachMask('input[name="desc_telefone"]',      maskTelefone);
+        attachMask('.decimal-br',                      maskDecimalBR);
 
         // Ao marcar usina: preenche Titular da Fatura se estiver vazio
         document.querySelectorAll('.usina-check').forEach(function(cb) {
@@ -464,8 +546,28 @@
             return d.slice(0,3) + '.' + d.slice(3,6) + '.' + d.slice(6,9) + '-' + d.slice(9);
         }
 
+        const flgPropria = document.getElementById('flgTitularidadePropria');
+        const modoTit    = document.getElementById('modoTitularidade');
+        const cpfReq     = document.getElementById('tit_cpf_req');
+        const dnReq      = document.getElementById('tit_dn_req');
+
+        function aplicarReadonly(modo_propria) {
+            // Quando titularidade propria: nome/cpf/dn ficam EDITÁVEIS e marcados como obrigatórios
+            // Quando titular da usina:    nome/cpf/dn ficam READONLY e preenchidos pela usina
+            if (fNome) { fNome.readOnly = !modo_propria; fNome.classList.toggle('bg-light', !modo_propria); }
+            if (fCpf)  { fCpf.readOnly  = !modo_propria; fCpf.classList.toggle('bg-light', !modo_propria); }
+            if (fDn)   { fDn.readOnly   = !modo_propria; fDn.classList.toggle('bg-light', !modo_propria); }
+            if (cpfReq) cpfReq.style.display = modo_propria ? '' : 'none';
+            if (dnReq)  dnReq.style.display  = modo_propria ? '' : 'none';
+            if (modoTit) modoTit.textContent = modo_propria
+                ? 'cliente é titular da própria UC (campos editáveis)'
+                : 'titular da usina vinculada (preenchido automaticamente)';
+        }
+
         function atualizarTitularidade() {
             if (!cardTit) return;
+            var propria = !!(flgPropria && flgPropria.checked);
+
             // Pega a PRIMEIRA usina marcada que tenha titular cadastrado
             var marcadas = document.querySelectorAll('.usina-check:checked');
             var fonte = null;
@@ -475,16 +577,25 @@
                     break;
                 }
             }
-            if (!fonte) {
+            // Esconde card se nem propria nem usina vinculada
+            if (!fonte && !propria) {
                 cardTit.style.display = 'none';
-                if (fNome) fNome.value = '';
-                if (fCpf)  fCpf.value  = '';
-                if (fDn)   fDn.value   = '';
-                if (fTel)  fTel.value  = '';
-                if (fEmail)fEmail.value= '';
                 return;
             }
             cardTit.style.display = '';
+            aplicarReadonly(propria);
+
+            if (propria) {
+                // NÃO sobrescreve os valores digitados pelo user — só preenche tel/email da usina pra info
+                if (fTel)   fTel.value   = fonte ? (fonte.dataset.titularTel || '')   : '';
+                if (fEmail) fEmail.value = fonte ? (fonte.dataset.titularEmail || '') : '';
+                // Se nome/cpf/dn estiverem vazios, sugere os da usina como ponto de partida
+                if (fNome && !fNome.value.trim() && fonte) fNome.value = fonte.dataset.titular || '';
+                return;
+            }
+
+            // Modo "titular da usina" — preenche tudo a partir da usina marcada
+            if (!fonte) return;
             if (fNome) fNome.value = fonte.dataset.titular || '';
             if (fCpf)  fCpf.value  = fmtCpf(fonte.dataset.titularCpf || '');
             if (fDn)   fDn.value   = fonte.dataset.titularDn || '';
@@ -496,7 +607,9 @@
         document.querySelectorAll('.usina-check').forEach(function(cb) {
             cb.addEventListener('change', atualizarTitularidade);
         });
-        // Preenche já na carga (caso modo edição com usina marcada)
+        // Recalcula ao alternar o toggle de titularidade
+        if (flgPropria) flgPropria.addEventListener('change', atualizarTitularidade);
+        // Preenche já na carga
         atualizarTitularidade();
 
         // Toggle STATUS: atualiza label ao mudar
@@ -505,6 +618,15 @@
         if (switchStatus) {
             switchStatus.addEventListener('change', function() {
                 labelStatus.textContent = this.checked ? 'Ativo' : 'Inativo';
+            });
+        }
+
+        // Converter vírgula para ponto nos campos decimal antes de enviar
+        function convertDecimalBRToUS() {
+            document.querySelectorAll('input[name="qtd_consumo_medio_kwh"], input[name="qtd_saldo_inicial_kwh"]').forEach(el => {
+                if (el.value) {
+                    el.value = el.value.replace(',', '.');
+                }
             });
         }
 
@@ -519,6 +641,8 @@
                 document.getElementById('campo_uc').focus();
             } else {
                 erro.style.display = 'none';
+                // Converte decimais BR para US antes de enviar
+                convertDecimalBRToUS();
             }
         });
     });

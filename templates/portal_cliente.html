@@ -17,7 +17,7 @@
 <meta property="og:site_name" content="SOLEV ENERGIA">
 <meta property="og:title" content="Sua fatura SOLEV está pronta">
 <meta property="og:description" content="{{ cliente.primeiro_nome }} · {{ valor_total }}{% if venc_br and venc_br != '—' %} · venc {{ venc_br }}{% endif %}">
-<!-- og:image: estático, do handoff oficial solev-logo/ (30/05/2026).
+<!-- og:image: estático, vindo do handoff oficial solev-logo/ (30/05/2026).
      1000×1000 navy + wordmark areia + brilho solar — WhatsApp/iMessage/LinkedIn.
      A info dinâmica (nome, valor, venc) vai no og:description acima. -->
 <meta property="og:image" content="{{ url_for('static', filename='og_square_logo.png', _external=True) }}">
@@ -343,13 +343,9 @@
   <div class="dot-b" aria-hidden="true"></div>
 
   <header class="topbar">
-    <span class="wm" aria-label="Solev">
-      <span class="wm-b">s</span>
-      <span class="wm-o"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="#F2E8D4"/><circle cx="50" cy="50" r="33" fill="#E8732A"/></svg></span>
-      <span class="wm-b">l</span>
-      <span class="wm-l">e</span>
-      <span class="wm-l">v</span>
-    </span>
+    {# Logo: arquivo PNG fixo (NUNCA recriar com código — ver static/logo/README.md) #}
+    <img src="/static/logo/solev-wordmark-areia.png" alt="SoLev Energia"
+         style="height:28px;width:auto;display:block">
     <div class="topbar-actions">
       <button type="button" class="icon-btn bell" aria-label="Notificações">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">

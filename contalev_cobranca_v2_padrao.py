@@ -134,9 +134,23 @@ def calcular(d):
     adc_band_amar_eq = float(d.get("adc_bandeira_amarela",  0) or 0)
     adc_band_verm_eq = float(d.get("adc_bandeira_vermelha", 0) or 0)
 
-    # Tarifa R$/kWh da bandeira (vem do tb_tarifas via resolver_bandeiras)
-    tarifa_band_amar = float(d.get("bandeira_tarifa_amar", 0) or 0)
-    tarifa_band_verm = float(d.get("bandeira_tarifa_verm", 0) or 0)
+    # ── Tarifa R$/kWh da bandeira — RESOLUCAO (fonte unica) ──────────────
+    # Prioridade: (1) tarifa real da fatura do mes = adc_R$ / qtd_kWh da linha
+    #             ADC BANDEIRA do PDF; (2) valor armazenado em tb_tarifas (so
+    #             serve p/ cliente 100% compensado, cujo PDF nao tem linha de
+    #             bandeira pra extrair).
+    # NUNCA usar tb_tarifas quando ha consumo nao compensado — a fatura traz a
+    # tarifa real do mes. Detalhes em memory business_rules_cobranca.md.
+    def _resolver_tarifa_band(adc_eq, qtd_key, stored_key):
+        qtd = float(d.get(qtd_key, 0) or 0)
+        if adc_eq > 0 and qtd > 0:
+            return adc_eq / qtd
+        return float(d.get(stored_key, 0) or 0)
+
+    tarifa_band_amar = _resolver_tarifa_band(
+        adc_band_amar_eq, "_bandeira_amarela_qtd",  "bandeira_tarifa_amar")
+    tarifa_band_verm = _resolver_tarifa_band(
+        adc_band_verm_eq, "_bandeira_vermelha_qtd", "bandeira_tarifa_verm")
 
     # ── MODO BANDEIRA ──────────────────────────────────────────
     # Define como a bandeira tarifaria aparece na conta:
@@ -252,8 +266,36 @@ def calcular(d):
                  + total_nao_comp_band_amar_com + total_nao_comp_band_verm_com
                  + total_financeiro_com + ajuste_valor + compensacao_dic)
 
+    # ── DEDUCAO DE FIO B (modelo FIXO - usina absorve) ────────────────────
+    # Usado para clientes com vinculo FIXO (ex.: Luiz Camilo), onde o
+    # proprietario da usina assume o fio B no calculo do SOLEV.
+    # Afeta apenas total_com (nao mexe em total_sem).
+    # IMPORTANTE: o fio B NAO conta como economia para o cliente — ele soh
+    # existe porque ha geracao injetada. Eh um custo que o usina absorve,
+    # nao um beneficio real do cliente. Por isso a economia eh calculada
+    # ANTES da deducao (economia = total_sem - total_com SEM fio_b_deducao).
+    fio_b_deducao = float(d.get("fio_b_deducao", 0) or 0)
+    total_com_antes_fio_b = total_com  # guarda para calcular economia depois
+    if fio_b_deducao > 0:
+        total_com = total_com - fio_b_deducao
+        print(f"⚙️  Deducao fio B (FIXO): -{_fmt_brl(fio_b_deducao)}  -> TOTAL COM = {_fmt_brl(total_com)}")
+    out["_fio_b_deducao"]      = fio_b_deducao
+    out["fio_b_deducao_fmt"]   = _fmt_brl(fio_b_deducao) if fio_b_deducao > 0 else ""
+
+    # Modo FIXO: a tarifa efetiva exibida no PDF inclui a deducao do fio B
+    # (tarifa × (1-desconto) - tarifa_fio_b). Permite o cliente ver o valor real.
+    if fio_b_deducao > 0 and comp > 0:
+        # tarifa_fio_b implicita (deducao / kwh)
+        tarifa_fio_b = fio_b_deducao / comp
+        tarifa_com_efetiva = tarifa_com - tarifa_fio_b
+        out["_tarifa_com_efetiva"]    = tarifa_com_efetiva
+        out["tarifa_com_efetiva_fmt"] = _fmt_tarifa(tarifa_com_efetiva)
+
     # ── ECONOMIA ───────────────────────────────────────────
-    economia_mes  = total_sem - total_com
+    # Economia = total_sem - total_com (mas IGNORA a deducao do fio B no FIXO,
+    # pois fio B nao eh beneficio real ao cliente, eh apenas custo absorvido
+    # pela usina). Para clientes normais, total_com_antes_fio_b == total_com.
+    economia_mes  = total_sem - total_com_antes_fio_b
     economia_acum = max(0.0, eco_anterior + economia_mes)
 
     print("┌─────────────────────────────────────────────────┐")
@@ -361,6 +403,10 @@ def calcular(d):
     # Tarifas formatadas (alem das ja existentes tarifa_sem_fmt e tarifa_com_fmt)
     out["tarifa_band_amar_fmt"] = _fmt_tarifa(tarifa_band_amar) if tarifa_band_amar > 0 else "—"
     out["tarifa_band_verm_fmt"] = _fmt_tarifa(tarifa_band_verm) if tarifa_band_verm > 0 else "—"
+    # Tarifa de bandeira RESOLVIDA — sobrescreve o valor cru de entrada para que
+    # o badge (em _dict_para_contexto) leia exatamente a mesma tarifa usada aqui.
+    out["bandeira_tarifa_amar"] = tarifa_band_amar
+    out["bandeira_tarifa_verm"] = tarifa_band_verm
     return out
 
 
@@ -700,8 +746,11 @@ def _dict_para_contexto(d: dict, qr_b64: str, bar_b64: str) -> dict:
         _b_am    = float(d.get("bandeira_tarifa_amar", 0) or 0)
         _b_vm    = float(d.get("bandeira_tarifa_verm", 0) or 0)
         _t_com_t = float(d.get("_tarifa_com", 0) or 0)
-        if _t_eq > 0:
-            pct_float = (_t_eq + _b_am + _b_vm - _t_com_t) / _t_eq * 100
+        _t_full = _t_eq + _b_am + _b_vm
+        if _t_full > 0:
+            # Denominador = tarifa cheia (eq + amarela + vermelha), NAO so a eq.
+            # Conferido contra Pasta1.xlsx: (eq+am+vm - com)/(eq+am+vm).
+            pct_float = (_t_full - _t_com_t) / _t_full * 100
         else:
             pct_float = desconto_cadastro
     else:
@@ -709,11 +758,32 @@ def _dict_para_contexto(d: dict, qr_b64: str, bar_b64: str) -> dict:
     pct_int = f"{pct_float:.2f}".replace(".", ",")
     eco_mes = d.get("economia_mes_fmt", "R$ 0,00").replace("R$ ", "")
 
+    # Modo FIXO: cliente compra a geração da usina (não usa o consumo do PDF)
+    # Marcador = fio_b_deducao > 0 (setado quando o script FIXO injeta a dedução)
+    is_fixo = float(d.get("fio_b_deducao", 0) or 0) > 0
+    labels = {
+        "consumo_total":      "Geração comprada" if is_fixo else "Consumo total",
+        "consumo_comp":       "Geração comprada" if is_fixo else "Consumo compensado",
+        "consumo_nao_comp":   "Consumo não compensado",  # ocultado quando FIXO
+        "tarifa_sem":         "Tarifa da usina (R$ / kWh)" if is_fixo else "Tarifa (R$ / kWh)",
+        "tarifa_com":         "Tarifa com desconto",
+        "fio_b_absorvido":    "(−) Fio B absorvido pela usina",
+    }
+
+    # Consolidada: lista de UCs (cada uma vira uma linha "Geração comprada (UC X)")
+    consumo_por_uc = d.get("consumo_por_uc") or []
+    is_consolidada = bool(consumo_por_uc)
+
     return {
         "mes_ref":    d.get("mes_ano_fatura", ""),
         "mes_nome":   mes_nome,
         "vencimento": d.get("venc_solev", ""),
         "id_fatura":  d.get("id_fatura", ""),
+        "is_fixo":    is_fixo,
+        "is_consolidada":  is_consolidada,
+        "consumo_por_uc":  consumo_por_uc,
+        "labels":     labels,
+        "fio_b_deducao_fmt": d.get("fio_b_deducao_fmt", ""),
         "cliente": {
             "nome":     d.get("nome", ""),
             "cpf":      d.get("cpf_fmt", "") or d.get("cpf", ""),

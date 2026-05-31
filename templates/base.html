@@ -312,13 +312,10 @@
     {% set ep = request.endpoint or '' %}
     {% set in_cadastros = (
         ('cliente' in ep and 'importar' not in ep) or
-        'importar' in ep or
-        ('usina' in ep and ep != 'rateio_consolidado') or
-        'dono' in ep or
-        'titular' in ep or
-        'recebedor' in ep or
-        'investidor' in ep
+        'importar' in ep
     ) %}
+    {% set in_usinas = 'usina' in ep or 'recebedor' in ep or 'titular' in ep or 'distribuir' in ep %}
+    {% set in_rateio = 'rateio' in ep %}
     {% set in_gerar = ep in ['gerar', 'gerar_auto', 'gerar_manual', 'gerar_lote', 'gerar_em_lote'] %}
 
     <nav class="sidebar-nav">
@@ -331,17 +328,24 @@
                 <i class="bi bi-chevron-down chevron"></i>
             </button>
             <div class="nav-group-items">
-                <a href="/clientes"    class="{% if 'cliente' in ep and 'importar' not in ep %}active{% endif %}"><i class="bi bi-people-fill"></i> Clientes</a>
-                <a href="/importar"    class="{% if 'importar' in ep %}active{% endif %}"><i class="bi bi-cloud-arrow-up-fill"></i> Importar</a>
-                <a href="/usinas"      class="{% if 'usina' in ep and ep != 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-sun-fill"></i> Usinas</a>
-                <a href="/donos"       class="{% if 'dono' in ep %}active{% endif %}"><i class="bi bi-person-fill-check"></i> Donos</a>
-                <a href="/titulares"   class="{% if 'titular' in ep %}active{% endif %}"><i class="bi bi-person-badge-fill"></i> Titulares UC</a>
-                <a href="/recebedores" class="{% if 'recebedor' in ep %}active{% endif %}"><i class="bi bi-qr-code"></i> Recebedores PIX</a>
-                <a href="/investidor"  class="{% if 'investidor' in ep %}active{% endif %}"><i class="bi bi-briefcase-fill"></i> Investidores</a>
+                <a href="/clientes" class="{% if 'cliente' in ep and 'importar' not in ep %}active{% endif %}"><i class="bi bi-people-fill"></i> Clientes</a>
+                <a href="/importar" class="{% if 'importar' in ep %}active{% endif %}"><i class="bi bi-cloud-arrow-up-fill"></i> Importar</a>
             </div>
         </div>
 
-        <a href="/rateio"       class="{% if ep == 'rateio_consolidado' %}active{% endif %}"><i class="bi bi-pie-chart-fill"></i> Rateio</a>
+        <div class="nav-group {% if in_usinas or in_rateio %}open has-active{% endif %}">
+            <button type="button" class="nav-group-toggle" onclick="this.parentElement.classList.toggle('open')">
+                <i class="bi bi-sun-fill"></i> Usinas
+                <i class="bi bi-chevron-down chevron"></i>
+            </button>
+            <div class="nav-group-items">
+                <a href="/usinas"           class="{% if 'usina' in ep and 'distribuir' not in ep %}active{% endif %}"><i class="bi bi-gear-fill"></i> Cadastro</a>
+                <a href="/recebedores"      class="{% if 'recebedor' in ep %}active{% endif %}"><i class="bi bi-person-vcard-fill"></i> Proprietários</a>
+                <a href="/titulares"        class="{% if 'titular' in ep %}active{% endif %}"><i class="bi bi-person-badge-fill"></i> Titulares UC</a>
+                <a href="/usinas/distribuir" class="{% if 'distribuir' in ep %}active{% endif %}"><i class="bi bi-diagram-3-fill"></i> Distribuir Clientes</a>
+                <a href="/rateio"           class="{% if in_rateio %}active{% endif %}"><i class="bi bi-pie-chart-fill"></i> Rateio</a>
+            </div>
+        </div>
         <a href="/conciliacao"  class="{% if 'conciliacao' in ep %}active{% endif %}"><i class="bi bi-clipboard-check-fill"></i> Conciliacao</a>
         <a href="/tarifas"      class="{% if 'tarifa' in ep %}active{% endif %}"><i class="bi bi-tag-fill"></i> Tarifas</a>
 
@@ -351,7 +355,7 @@
         <div class="side-section">Analise</div>
         <a href="/pagamento"   class="{% if ep == 'pagamento' %}active{% endif %}"><i class="bi bi-cash-coin"></i> Pagamentos</a>
         <a href="/faturas"     class="{% if ep == 'faturas' %}active{% endif %}"><i class="bi bi-receipt"></i> Faturas</a>
-        <a href="/relatorio"   class="{% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-bar-chart-line-fill"></i> Relatorios</a>
+        <a href="/relatorios"  class="{% if ep in ('relatorios_index', 'relatorio', 'relatorio_comercializacao') %}active{% endif %}"><i class="bi bi-bar-chart-line-fill"></i> Relatorios</a>
         <a href="/simulador"   class="{% if ep == 'simulador' %}active{% endif %}"><i class="bi bi-calculator-fill"></i> Simulador</a>
 
         <div class="side-section">Config</div>

@@ -27,6 +27,14 @@ def _safe_pdf_str(s):
     return "".join(c if ord(c) < 256 and c != "\ufffd" else "" for c in str(s))
 
 
+def _uc_so_digitos(s):
+    """Remove pontua\u00e7\u00e3o (pontos, h\u00edfens, espa\u00e7os) das UCs para o Formul\u00e1rio
+    de Solicita\u00e7\u00e3o de Rateio \u2014 Equatorial pede formato cru, s\u00f3 d\u00edgitos."""
+    if not s:
+        return ""
+    return "".join(c for c in str(s) if c.isdigit())
+
+
 def _gerar_assinatura_image_dinamica(uid):
     """Carrega a imagem base de assinatura e sobrescreve apenas a linha 'Dados:'
     com a data/hora atual no fuso de Brasilia. Mantem o mesmo corpo de fonte das
@@ -150,7 +158,7 @@ def gerar_pdf_rateio(usina, uid, vinculados):
     ]))
     story.append(sec1)
 
-    uc_ger = _safe_pdf_str(usina.get("uc_geradora", ""))
+    uc_ger = _uc_so_digitos(usina.get("uc_geradora", ""))
     titular = _safe_pdf_str(usina.get("titular_uc", ""))
     cpf_tit = _safe_pdf_str(usina.get("cpf_titular", ""))
     endereco = _safe_pdf_str(usina.get("endereco", ""))
@@ -233,7 +241,7 @@ def gerar_pdf_rateio(usina, uid, vinculados):
         total_pct += pct
         data.append([
             str(i),
-            _safe_pdf_str(cli.get("uc_display", uc)),
+            _uc_so_digitos(cli.get("uc_display", uc)),
             _safe_pdf_str(cpf_tit),
             f"{pct:.2f}%",
         ])

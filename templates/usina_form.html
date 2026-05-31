@@ -236,76 +236,39 @@
             </small>
         </div></div>
 
-        {# Dono da Usina (tabela tb_donos com FK em tb_usinas) #}
-        <div class="card mb-3"><div class="card-body p-4">
-            <h6 class="fw-bold mb-3"><i class="bi bi-person-fill-check me-2" style="color:var(--or)"></i>Dono da Usina</h6>
+    </div>
 
-            {# Dropdown: selecionar dono ja cadastrado #}
-            <div class="mb-3">
-                <label class="form-label">Selecionar dono existente</label>
-                <select name="id_dono_existente" id="select_dono" class="form-select"
-                        onchange="onSelectDono(this)">
-                    <option value="">— Cadastrar novo dono abaixo —</option>
-                    {% for d in donos or [] %}
-                    <option value="{{ d.id_dono }}"
-                        data-nome="{{ d.desc_nome or '' }}"
-                        data-cpf="{{ d.desc_cpf_cnpj or '' }}"
-                        data-tel="{{ d.desc_telefone or '' }}"
-                        data-email="{{ d.desc_email or '' }}"
-                        data-nasc="{{ d.dt_nascimento or '' }}"
-                        {% if dono and dono.id_dono == d.id_dono %}selected{% endif %}>
-                        {{ d.desc_nome }}{% if d.desc_cpf_cnpj %} — {{ d.desc_cpf_cnpj }}{% endif %}
-                    </option>
-                    {% endfor %}
-                </select>
-                <small class="text-muted">
-                    Escolha um dono ja cadastrado, ou deixe em branco e preencha abaixo para criar um novo.
-                </small>
-            </div>
-
-            <div id="dono_campos" class="border-top pt-3">
-                <div class="mb-3">
-                    <label class="form-label">Nome Completo</label>
-                    <input type="text" name="desc_dono_nome" id="dono_nome" class="form-control"
-                        value="{{ (dono.desc_nome if dono else (usina.desc_dono_nome if usina else '')) or '' }}"
-                        placeholder="Nome completo do proprietário">
+    {# ── PIX de Recebimento (SOLEV recebe dos clientes) ──────── #}
+    <div class="col-12">
+        <div class="card mb-3" style="border-left:4px solid #22c55e"><div class="card-body p-4">
+            <h6 class="fw-bold mb-3"><i class="bi bi-qr-code me-2" style="color:#22c55e"></i>PIX de Recebimento
+                <small class="text-muted fw-normal ms-2" style="font-size:11px">— chave que aparece nas faturas dos clientes</small>
+            </h6>
+            <div class="row align-items-end">
+                <div class="col-md-6 mb-0">
+                    <label class="form-label">Chave PIX da SOLEV para esta usina</label>
+                    <input type="text" name="desc_pix_recebimento" class="form-control"
+                        value="{{ usina.desc_pix_recebimento if usina and usina.desc_pix_recebimento else '' }}"
+                        placeholder="CNPJ, e-mail, telefone ou chave aleatória">
+                    <small class="text-muted">Se vazio, usa o PIX do proprietário (comportamento anterior)</small>
                 </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">CPF / CNPJ</label>
-                        <input type="text" name="desc_dono_cpf_cnpj" id="campo_cpf_dono" class="form-control"
-                            value="{{ (dono.desc_cpf_cnpj if dono else (usina.desc_dono_cpf_cnpj if usina else '')) or '' }}"
-                            placeholder="000.000.000-00">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Data de Nascimento</label>
-                        <input type="text" name="dt_dono_nascimento" id="campo_nasc" class="form-control"
-                            value="{{ (dono.dt_nascimento if dono else (usina.dt_dono_nascimento if usina else '')) or '' }}"
-                            placeholder="dd/mm/aaaa" maxlength="10">
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">Telefone</label>
-                        <input type="text" name="desc_dono_telefone" id="campo_tel_dono" class="form-control"
-                            value="{{ (dono.desc_telefone if dono else (usina.desc_dono_telefone if usina else '')) or '' }}"
-                            placeholder="(62) 99999-9999">
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label class="form-label">E-mail</label>
-                        <input type="email" name="desc_dono_email" id="dono_email" class="form-control"
-                            value="{{ (dono.desc_email if dono else (usina.desc_dono_email if usina else '')) or '' }}"
-                            placeholder="email@exemplo.com">
+                <div class="col-md-6">
+                    <div class="alert alert-success mb-0 py-2 px-3" style="font-size:12px">
+                        <i class="bi bi-arrow-down-circle-fill me-1"></i>
+                        <strong>Clientes → SOLEV</strong> via este PIX.<br>
+                        <i class="bi bi-arrow-up-circle-fill me-1 mt-1"></i>
+                        <strong>SOLEV → Proprietário</strong> via PIX do proprietário.
                     </div>
                 </div>
             </div>
         </div></div>
     </div>
 
-    {# ── Recebedor PIX ───────────────────────────────────────── #}
+    {# ── Proprietário / Investidor ───────────────────────────── #}
     <div class="col-12">
         <div class="card mb-3"><div class="card-body p-4">
-            <h6 class="fw-bold mb-3"><i class="bi bi-qr-code me-2" style="color:var(--or)"></i>Recebedor PIX da Usina</h6>
+            <h6 class="fw-bold mb-3"><i class="bi bi-person-fill-check me-2" style="color:var(--or)"></i>Proprietário / Investidor</h6>
+            <p class="text-muted mb-3" style="font-size:12px"><i class="bi bi-info-circle me-1"></i>Quem é dono da usina e recebe os repasses da SOLEV via PIX.</p>
 
             {% if recebedores %}
             <div class="mb-4">
@@ -316,12 +279,12 @@
                     {% for r in recebedores %}
                     <option value="{{ r.id_investidor }}"
                         {% if usina and usina.id_investidor == r.id_investidor %}selected{% endif %}>
-                        {{ r.desc_nome }}{% if r.desc_pix %} — {{ r.desc_pix }}{% endif %}
+                        {{ r.desc_nome }}{% if r.desc_cpf_cnpj %} — {{ r.desc_cpf_cnpj }}{% endif %}
                     </option>
                     {% endfor %}
                 </select>
-                <small class="text-muted">Para gerenciar recebedores, acesse
-                    <a href="/recebedores" target="_blank">Recebedores PIX</a>.
+                <small class="text-muted">Para gerenciar proprietários, acesse
+                    <a href="/usinas?tab=proprietarios" target="_blank">Usinas › Proprietários</a>.
                 </small>
             </div>
             <div id="div_novo_recebedor" style="{{ 'display:none' if usina and usina.id_investidor else '' }}">
@@ -354,6 +317,12 @@
                     <label class="form-label">Telefone</label>
                     <input type="text" name="inv_desc_telefone" class="form-control"
                         value="{{ investidor.desc_telefone if investidor else '' }}" placeholder="(62) 99999-9999">
+                </div>
+                <div class="col-md-4 mb-3">
+                    <label class="form-label">Data de Nascimento</label>
+                    <input type="text" name="inv_dt_nascimento" class="form-control"
+                        value="{{ investidor.dt_nascimento | fmt_data_br if investidor and investidor.dt_nascimento else '' }}"
+                        placeholder="dd/mm/aaaa" maxlength="10">
                 </div>
                 <div class="col-md-4 mb-3">
                     <label class="form-label">E-mail</label>
