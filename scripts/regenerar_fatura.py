@@ -39,6 +39,24 @@ def montar_dados(fatura, cliente, tarifa_mes):
         try: return datetime.strptime(str(s)[:10], "%Y-%m-%d").strftime("%d/%m/%Y")
         except Exception: return str(s)
 
+    # Tarifa de bandeira REAL do mes: extrai adc + qtd da fatura Equatorial
+    # original (calcular() prefere adc/qtd e ignora o tb_tarifas velho).
+    # Mesmo fix do app.py. Ver memory/business_rules_cobranca.md.
+    _adc_am = _adc_vm = _qtd_am = _qtd_vm = 0.0
+    _eqpdf = fatura.get("pdf_equatorial")
+    if _eqpdf:
+        _pp = os.path.join("uploads", str(_eqpdf))
+        if os.path.isfile(_pp):
+            try:
+                from extrair_equatorial import extrair_equatorial as _ext
+                _eq = _ext(_pp)
+                _adc_am = float(_eq.get("adc_bandeira_amarela") or 0)
+                _adc_vm = float(_eq.get("adc_bandeira_vermelha") or 0)
+                _qtd_am = float(_eq.get("bandeira_amarela") or 0)
+                _qtd_vm = float(_eq.get("bandeira_vermelha") or 0)
+            except Exception as _e:
+                print(f"  AVISO: re-extracao de bandeira do PDF falhou: {_e}")
+
     return {
         "id_cliente":   cliente.get("id_cliente"),
         "id_fatura":    fatura.get("id_fatura"),
@@ -57,6 +75,11 @@ def montar_dados(fatura, cliente, tarifa_mes):
         "tarifa_sem":           float(tarifa_mes.get("tarifa_sem") or 0),
         "bandeira_tarifa_amar": float(tarifa_mes.get("bandeira_amarela") or 0),
         "bandeira_tarifa_verm": float(tarifa_mes.get("bandeira_vermelha") or 0),
+        # Tarifa REAL por-fatura (adc/qtd do PDF) — calcular() prefere isto:
+        "adc_bandeira_amarela":  _adc_am,
+        "adc_bandeira_vermelha": _adc_vm,
+        "_bandeira_amarela_qtd":  _qtd_am,
+        "_bandeira_vermelha_qtd": _qtd_vm,
         "consumo_kwh":          float(fatura.get("qtd_consumo_kwh") or 0),
         "consumo_compensado":   float(fatura.get("qtd_compensado_kwh") or 0),
         "consumo_nao_comp":     float(fatura.get("qtd_consumo_kwh") or 0) - float(fatura.get("qtd_compensado_kwh") or 0),
