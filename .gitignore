@@ -4,6 +4,11 @@ email_config.json
 whatsapp_config.json
 token.txt
 token
+# Certificados/chaves de API (Banco Inter mTLS etc) — NUNCA commitar
+certs/
+*.key
+*.pfx
+*.p12
 
 # Dados legados (ja migrados para o Supabase)
 clientes.json

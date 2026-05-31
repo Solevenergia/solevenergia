@@ -24,7 +24,8 @@ import requests
 log = logging.getLogger(__name__)
 
 _BASES = {
-    "sandbox":  "https://cdpj.partners.uatinter.com.br",
+    # Sandbox/homologação do Inter (seg–sex 8h–20h). Host é .co, não .com.br.
+    "sandbox":  "https://cdpj-sandbox.partners.uatinter.co",
     "producao": "https://cdpj.partners.bancointer.com.br",
 }
 
@@ -63,7 +64,7 @@ def _get_token() -> str:
         data={
             "client_id":     cfg["client_id"],
             "client_secret": cfg["client_secret"],
-            "scope":         "cobranca.write cobranca.read webhook.write webhook.read",
+            "scope":         "boleto-cobranca.read boleto-cobranca.write",
             "grant_type":    "client_credentials",
         },
         timeout=15,
