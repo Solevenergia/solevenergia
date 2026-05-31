@@ -1,0 +1,438 @@
+{% extends "base.html" %}
+{% block title %}Comercialização Mensal{% endblock %}
+{% block topbar_breadcrumb %}
+<a href="{{ url_for('relatorios_index') }}" style="text-decoration:none;color:inherit">Relatórios</a>
+<span class="sep">›</span><span class="here">Comercialização Mensal</span>
+{% endblock %}
+{% block topbar_actions %}
+<a href="{{ url_for('relatorios_index') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Voltar</a>
+{% endblock %}
+{% block content %}
+
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-start mb-4 flex-wrap gap-3">
+        <div>
+            <h1 class="mb-1"><i class="bi bi-lightning-charge-fill me-2" style="color:var(--or)"></i>Comercialização Mensal</h1>
+            <p class="text-muted mb-0">
+                Visão geral da geração comercializada vs disponível.
+                Valores em <strong>estimativa</strong> baseados na geração média mensal de cada usina e no consumo médio cadastrado dos clientes.
+            </p>
+        </div>
+        <div class="card" style="border:1px solid #e0e6ed;min-width:280px">
+            <div class="card-body py-2 px-3">
+                <form method="get" action="" class="d-flex align-items-center gap-2">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox"
+                               id="togSaldo" name="considerar_saldo" value="1"
+                               {% if considerar_saldo %}checked{% endif %}
+                               onchange="this.form.submit()">
+                        <label class="form-check-label" for="togSaldo" style="font-size:12px;cursor:pointer">
+                            <strong>Considerar saldo</strong>
+                            <small class="text-muted d-block" style="font-size:10px">
+                                {% if considerar_saldo %}
+                                Modo A desconta o saldo acumulado dos clientes
+                                {% else %}
+                                Modo A usa consumo bruto (não desconta saldo)
+                                {% endif %}
+                            </small>
+                        </label>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    {# ── KPI principal ── #}
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card h-100" style="border-left:4px solid var(--or)">
+                <div class="card-body p-4 text-center">
+                    <small class="text-muted text-uppercase" style="font-size:11px;letter-spacing:0.5px">Geração total estimada</small>
+                    <div class="mt-2" style="font-size:32px;font-weight:700;color:var(--db)">
+                        {{ ger_total|fmt_kwh_br }}
+                    </div>
+                    <small class="text-muted">kWh / mês &nbsp;·&nbsp; {{ n_usinas }} usinas</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100" style="border-left:4px solid #22c55e">
+                <div class="card-body p-4 text-center">
+                    <small class="text-muted text-uppercase" style="font-size:11px;letter-spacing:0.5px">Disponível para vender (capacidade)</small>
+                    <div class="mt-2" style="font-size:32px;font-weight:700;color:#22c55e">
+                        {{ cap_disponivel|fmt_kwh_br }}
+                    </div>
+                    <small class="text-muted">kWh / mês</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100" style="border-left:4px solid #3b82f6">
+                <div class="card-body p-4 text-center">
+                    <small class="text-muted text-uppercase" style="font-size:11px;letter-spacing:0.5px">Clientes vinculados</small>
+                    <div class="mt-2" style="font-size:32px;font-weight:700;color:#3b82f6">
+                        {{ n_clientes_fixo + n_clientes_normal }}
+                    </div>
+                    <small class="text-muted">
+                        <span style="color:#7c3aed">{{ n_clientes_fixo }} FIXO</span>
+                        &nbsp;+&nbsp;
+                        <span>{{ n_clientes_normal }} normais</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── 2 modos lado a lado ── #}
+    <div class="row g-3 mb-4">
+        {# Modo A — Consumo Médio #}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header py-2 px-3" style="background:rgba(59,130,246,0.08)">
+                    <strong style="color:#3b82f6;font-size:13px">
+                        <i class="bi bi-people-fill me-1"></i>Modo A: Consumo Médio dos Clientes
+                    </strong>
+                    <i class="bi bi-question-circle text-muted ms-1" style="cursor:help;font-size:11px"
+                       title="Quanto os clientes vinculados consomem em média. Útil pra avaliar se há gap entre capacidade reservada e consumo real esperado."></i>
+                </div>
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between mb-2" style="font-size:12px">
+                        <span class="text-muted">Vendido (esperado):</span>
+                        <strong>{{ cons_esperado_total|fmt_kwh_br }} kWh</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2" style="font-size:12px">
+                        <span class="text-muted">Disponível:</span>
+                        <strong style="color:#22c55e">{{ cons_disponivel|fmt_kwh_br }} kWh</strong>
+                    </div>
+                    <div style="height:10px;background:#f0f0f0;border-radius:5px;overflow:hidden;margin-top:8px">
+                        <div style="width:{{ [pct_cons_uso, 100]|min }}%;height:100%;
+                                    background:{% if pct_cons_uso <= 90 %}#22c55e{% elif pct_cons_uso <= 105 %}#f59e0b{% else %}#dc3545{% endif %};
+                                    border-radius:5px"></div>
+                    </div>
+                    <div class="text-end mt-1" style="font-size:11px;color:#888">
+                        <strong>{{ "%.1f"|format(pct_cons_uso) }}%</strong> utilizado
+                    </div>
+                    <hr class="my-2">
+                    <div class="d-flex justify-content-between" style="font-size:11px">
+                        <span class="text-muted"><i class="bi bi-lock-fill me-1" style="color:#7c3aed"></i>FIXO:</span>
+                        <span>{{ cons_fixo_total|fmt_kwh_br }} kWh</span>
+                    </div>
+                    <div class="d-flex justify-content-between" style="font-size:11px">
+                        <span class="text-muted"><i class="bi bi-people me-1"></i>Normal:</span>
+                        <span>{{ cons_normal_total|fmt_kwh_br }} kWh</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {# Modo B — Capacidade Reservada #}
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header py-2 px-3" style="background:rgba(245,166,35,0.08)">
+                    <strong style="color:var(--or);font-size:13px">
+                        <i class="bi bi-sun-fill me-1"></i>Modo B: Capacidade Reservada (% × geração)
+                    </strong>
+                    <i class="bi bi-question-circle text-muted ms-1" style="cursor:help;font-size:11px"
+                       title="Quanto da capacidade de geração já está comprometida com vínculos ativos. Usado pra planejar venda de capacidade restante."></i>
+                </div>
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between mb-2" style="font-size:12px">
+                        <span class="text-muted">Reservado:</span>
+                        <strong>{{ cap_vendida_total|fmt_kwh_br }} kWh</strong>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2" style="font-size:12px">
+                        <span class="text-muted">Disponível:</span>
+                        <strong style="color:#22c55e">{{ cap_disponivel|fmt_kwh_br }} kWh</strong>
+                    </div>
+                    <div style="height:10px;background:#f0f0f0;border-radius:5px;overflow:hidden;margin-top:8px">
+                        <div style="width:{{ [pct_cap_uso, 100]|min }}%;height:100%;
+                                    background:{% if pct_cap_uso <= 90 %}#22c55e{% elif pct_cap_uso <= 105 %}#f59e0b{% else %}#dc3545{% endif %};
+                                    border-radius:5px"></div>
+                    </div>
+                    <div class="text-end mt-1" style="font-size:11px;color:#888">
+                        <strong>{{ "%.1f"|format(pct_cap_uso) }}%</strong> utilizado
+                    </div>
+                    <hr class="my-2">
+                    <div class="d-flex justify-content-between" style="font-size:11px">
+                        <span class="text-muted"><i class="bi bi-lock-fill me-1" style="color:#7c3aed"></i>FIXO:</span>
+                        <span>{{ cap_fixo_total|fmt_kwh_br }} kWh</span>
+                    </div>
+                    <div class="d-flex justify-content-between" style="font-size:11px">
+                        <span class="text-muted"><i class="bi bi-people me-1"></i>Normal:</span>
+                        <span>{{ cap_normal_total|fmt_kwh_br }} kWh</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Breakdown por usina ── #}
+    <div class="card">
+        <div class="card-header py-2 px-3" style="background:#f8f9fa">
+            <strong style="font-size:13px;color:var(--db)">
+                <i class="bi bi-list-ul me-1"></i>Detalhamento por usina
+            </strong>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" style="font-size:12px">
+                <thead>
+                    <tr style="background:#f8f9fa">
+                        <th class="ps-3 py-2">Usina</th>
+                        <th class="text-end">Geração</th>
+                        <th class="text-end" style="color:#7c3aed">FIXO</th>
+                        <th class="text-end">Normal</th>
+                        <th class="text-end" style="background:rgba(245,166,35,.04)">Vendido</th>
+                        <th class="text-end" style="color:#22c55e">Disponível</th>
+                        <th class="text-center">% Uso</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for u in usinas_breakdown %}
+                <tr>
+                    <td class="ps-3 py-2">
+                        <a href="{{ url_for('rateio_dashboard', uid=u.id_usina) }}" style="text-decoration:none;color:inherit">
+                            <strong>{{ u.nome }}</strong>
+                        </a>
+                    </td>
+                    <td class="text-end py-2">{{ u.geracao|fmt_kwh_br }}</td>
+                    <td class="text-end py-2" style="color:#7c3aed">
+                        {% if u.fixo > 0 %}{{ u.fixo|fmt_kwh_br }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="text-end py-2">
+                        {% if u.normal > 0 %}{{ u.normal|fmt_kwh_br }}{% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="text-end py-2" style="background:rgba(245,166,35,.04)"><strong>{{ u.vendido|fmt_kwh_br }}</strong></td>
+                    <td class="text-end py-2" style="color:#22c55e;font-weight:600">{{ u.disponivel|fmt_kwh_br }}</td>
+                    <td class="text-center py-2">
+                        <div class="d-inline-flex align-items-center gap-2">
+                            <div style="width:60px;height:6px;background:#f0f0f0;border-radius:3px;overflow:hidden">
+                                <div style="width:{{ [u.pct, 100]|min }}%;height:100%;
+                                            background:{% if u.pct <= 90 %}#22c55e{% elif u.pct <= 105 %}#f59e0b{% else %}#dc3545{% endif %}"></div>
+                            </div>
+                            <small style="font-size:11px;color:{% if u.pct <= 90 %}#22c55e{% elif u.pct <= 105 %}#f59e0b{% else %}#dc3545{% endif %};font-weight:600">
+                                {{ "%.0f"|format(u.pct) }}%
+                            </small>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="7" class="text-center text-muted py-4">Nenhuma usina com geração cadastrada.</td></tr>
+                {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr style="background:var(--db);color:white">
+                        <td class="ps-3 py-2"><strong>TOTAL</strong></td>
+                        <td class="text-end py-2"><strong>{{ ger_total|fmt_kwh_br }}</strong></td>
+                        <td class="text-end py-2"><strong>{{ cap_fixo_total|fmt_kwh_br }}</strong></td>
+                        <td class="text-end py-2"><strong>{{ cap_normal_total|fmt_kwh_br }}</strong></td>
+                        <td class="text-end py-2"><strong>{{ cap_vendida_total|fmt_kwh_br }}</strong></td>
+                        <td class="text-end py-2"><strong style="color:#86efac">{{ cap_disponivel|fmt_kwh_br }}</strong></td>
+                        <td class="text-center py-2"><strong>{{ "%.1f"|format(pct_cap_uso) }}%</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    {# ── Detalhamento por cliente ─────────────────────────────── #}
+    <div class="card mt-3">
+        <div class="card-header py-2 px-3" style="background:#f8f9fa">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <strong style="font-size:13px;color:var(--db)">
+                    <i class="bi bi-person-lines-fill me-1"></i>Detalhamento por cliente
+                    <small class="text-muted ms-2">({{ clientes_breakdown|length }} linha(s))</small>
+                    {% if n_sem_vinculo > 0 %}
+                    <span class="badge ms-2" style="background:rgba(239,68,68,0.12);color:#dc3545;font-size:10px">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>{{ n_sem_vinculo }} sem usina
+                    </span>
+                    {% endif %}
+                </strong>
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" id="togSemVinc" checked
+                               style="cursor:pointer">
+                        <label class="form-check-label small" for="togSemVinc" style="cursor:pointer;font-size:11px">
+                            Mostrar sem usina
+                        </label>
+                    </div>
+                    <input type="search" id="filtroCliente" class="form-control form-control-sm"
+                           placeholder="Filtrar por cliente, UC ou usina..." style="max-width:240px;font-size:12px">
+                </div>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0" style="font-size:12px">
+                <thead>
+                    <tr style="background:#f8f9fa">
+                        <th class="ps-3 py-2 th-sort-cli" data-sort-key="nome" data-sort-type="str"
+                            style="cursor:pointer;user-select:none">Cliente <span style="opacity:0.4">⇅</span></th>
+                        <th class="py-2 th-sort-cli" data-sort-key="usina" data-sort-type="str"
+                            style="cursor:pointer;user-select:none">Usina <span style="opacity:0.4">⇅</span></th>
+                        <th class="text-end py-2 th-sort-cli" data-sort-key="pct" data-sort-type="num"
+                            style="cursor:pointer;user-select:none">% Rateio <span style="opacity:0.4">⇅</span></th>
+                        <th class="text-end py-2 th-sort-cli" data-sort-key="consumo" data-sort-type="num"
+                            style="cursor:pointer;user-select:none">Consumo médio <span style="opacity:0.4">⇅</span></th>
+                        <th class="text-end py-2 th-sort-cli" data-sort-key="saldo" data-sort-type="num"
+                            style="cursor:pointer;user-select:none">Saldo atual <span style="opacity:0.4">⇅</span></th>
+                        <th class="text-end py-2 th-sort-cli" data-sort-key="esperado" data-sort-type="num"
+                            style="cursor:pointer;user-select:none;background:rgba(59,130,246,0.05)">
+                            {% if considerar_saldo %}Demanda líquida{% else %}Demanda esperada{% endif %} <span style="opacity:0.4">⇅</span>
+                        </th>
+                        <th class="text-end py-2 th-sort-cli" data-sort-key="cap" data-sort-type="num"
+                            style="cursor:pointer;user-select:none;background:rgba(245,166,35,0.05)">
+                            Capacidade alocada <span style="opacity:0.4">⇅</span>
+                        </th>
+                        <th class="text-end py-2 th-sort-cli" data-sort-key="gap" data-sort-type="num"
+                            style="cursor:pointer;user-select:none">
+                            Gap
+                            <i class="bi bi-question-circle text-muted" style="cursor:help;font-size:11px"
+                               title="Capacidade alocada − demanda esperada. Positivo = sobra capacidade (cliente usa menos que a fração reservada). Negativo = falta capacidade (cliente consome mais do que a fração)."></i>
+                            <span style="opacity:0.4">⇅</span>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyClientes">
+                {% for c in clientes_breakdown %}
+                <tr class="row-cliente {% if c.sem_vinculo %}row-sem-vinculo{% endif %}"
+                    data-nome="{{ c.nome|lower }}"
+                    data-uc="{{ c.cod_uc|lower }}"
+                    data-usina="{{ c.nome_usina|lower }}"
+                    data-pct="{{ c.pct }}"
+                    data-consumo="{{ c.consumo_med }}"
+                    data-saldo="{{ c.saldo }}"
+                    data-esperado="{{ c.cons_liq if considerar_saldo else c.cons_bruto }}"
+                    data-cap="{{ c.cap_alocada }}"
+                    data-gap="{{ c.gap }}"
+                    data-sem-vinculo="{{ '1' if c.sem_vinculo else '0' }}"
+                    {% if c.sem_vinculo %}style="background:rgba(239,68,68,0.03)"{% endif %}>
+                    <td class="ps-3 py-2">
+                        <strong>{{ c.nome[:35] }}</strong>
+                        {% if c.is_fixo %}
+                        <span class="badge ms-1" style="background:rgba(124,58,237,0.12);color:#7c3aed;font-size:9px">
+                            <i class="bi bi-lock-fill me-1"></i>FIXO
+                        </span>
+                        {% endif %}
+                        {% if c.cod_uc %}
+                        <br><code style="font-size:10px;color:#999">{{ c.cod_uc|fmt_uc15 }}</code>
+                        {% endif %}
+                    </td>
+                    <td class="py-2">
+                        {% if c.sem_vinculo %}
+                        <a href="{{ url_for('usinas_distribuir') }}"
+                           class="badge text-decoration-none"
+                           style="background:rgba(239,68,68,0.12);color:#dc3545;font-size:10px;font-weight:600"
+                           title="Cliente sem vínculo ativo — clique para alocar">
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Sem usina
+                        </a>
+                        {% else %}
+                        <a href="{{ url_for('rateio_dashboard', uid=c.id_usina) }}"
+                           style="text-decoration:none;color:var(--db);font-size:11px">
+                            <i class="bi bi-sun me-1" style="color:var(--or)"></i>{{ c.nome_usina }}
+                        </a>
+                        {% endif %}
+                    </td>
+                    <td class="text-end py-2">
+                        {% if c.sem_vinculo %}
+                        <span class="text-muted">—</span>
+                        {% elif c.pct == 100 %}
+                        <span class="text-muted">100%</span>
+                        {% else %}
+                        <strong style="color:var(--or)">{{ "%.1f"|format(c.pct) }}%</strong>
+                        {% endif %}
+                    </td>
+                    <td class="text-end py-2">{{ c.consumo_med|fmt_kwh_br }}</td>
+                    <td class="text-end py-2">
+                        {% if c.saldo > 0 %}
+                        <span style="color:#3b82f6;font-weight:600">{{ c.saldo|fmt_kwh_br }}</span>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
+                    <td class="text-end py-2" style="background:rgba(59,130,246,0.04)">
+                        <strong>
+                            {% if considerar_saldo %}{{ c.cons_liq|fmt_kwh_br }}{% else %}{{ c.cons_bruto|fmt_kwh_br }}{% endif %}
+                        </strong>
+                    </td>
+                    <td class="text-end py-2" style="background:rgba(245,166,35,0.04)">
+                        {% if c.sem_vinculo %}<span class="text-muted">0,00</span>
+                        {% else %}{{ c.cap_alocada|fmt_kwh_br }}{% endif %}
+                    </td>
+                    <td class="text-end py-2">
+                        {% if c.gap > 0 %}
+                        <span style="color:#22c55e;font-weight:600">+{{ c.gap|fmt_kwh_br }}</span>
+                        {% elif c.gap < 0 %}
+                        <span style="color:#ef4444;font-weight:600">{{ c.gap|fmt_kwh_br }}</span>
+                        {% else %}<span class="text-muted">0,00</span>{% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8" class="text-center text-muted py-4">Nenhum cliente vinculado.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="alert alert-info mt-3" style="font-size:12px">
+        <i class="bi bi-info-circle me-1"></i>
+        <strong>Observação:</strong> os valores acima são <strong>estimativas</strong> baseadas em médias.
+        Os valores reais só são consolidados após o processamento das faturas Equatorial de cada cliente.
+        Próximas versões deste relatório vão mostrar também a comparação estimado × realizado.
+    </div>
+</div>
+
+<script>
+(function() {
+    // ── Filtros combinados (busca + toggle sem-usina) ──
+    var filtro      = document.getElementById('filtroCliente');
+    var togSemVinc  = document.getElementById('togSemVinc');
+    var tbody       = document.getElementById('tbodyClientes');
+
+    function aplicarFiltros() {
+        if (!tbody) return;
+        var q = (filtro && filtro.value || '').toLowerCase().trim();
+        var mostrarSemVinc = togSemVinc ? togSemVinc.checked : true;
+        tbody.querySelectorAll('tr.row-cliente').forEach(function(tr) {
+            var matchBusca = !q
+                || (tr.dataset.nome  || '').includes(q)
+                || (tr.dataset.uc    || '').includes(q)
+                || (tr.dataset.usina || '').includes(q);
+            var ehSemVinc = tr.dataset.semVinculo === '1';
+            var matchVinc = mostrarSemVinc || !ehSemVinc;
+            tr.style.display = (matchBusca && matchVinc) ? '' : 'none';
+        });
+    }
+    if (filtro)     filtro.addEventListener('input',  aplicarFiltros);
+    if (togSemVinc) togSemVinc.addEventListener('change', aplicarFiltros);
+
+    // ── Ordenação clicável nas colunas ──
+    document.querySelectorAll('.th-sort-cli').forEach(function(th) {
+        th.addEventListener('click', function() {
+            var key  = th.dataset.sortKey;
+            var type = th.dataset.sortType;
+            var dirAtual = th.dataset.sortDir || '';
+            var novaDir  = (dirAtual === 'asc') ? 'desc' : 'asc';
+            // Limpa indicadores dos outros
+            th.parentElement.querySelectorAll('.th-sort-cli').forEach(function(t) {
+                t.dataset.sortDir = '';
+            });
+            th.dataset.sortDir = novaDir;
+            // Ordena
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.row-cliente'));
+            rows.sort(function(a, b) {
+                var va = a.dataset[key] || '';
+                var vb = b.dataset[key] || '';
+                if (type === 'num') {
+                    va = parseFloat(va) || 0; vb = parseFloat(vb) || 0;
+                    return novaDir === 'asc' ? (va - vb) : (vb - va);
+                }
+                va = String(va); vb = String(vb);
+                if (va < vb) return novaDir === 'asc' ? -1 : 1;
+                if (va > vb) return novaDir === 'asc' ?  1 : -1;
+                return 0;
+            });
+            rows.forEach(function(r) { tbody.appendChild(r); });
+        });
+    });
+})();
+</script>
+
+{% endblock %}

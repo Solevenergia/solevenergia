@@ -1,0 +1,1178 @@
+{% extends "base.html" %}
+{% block title %}Distribuição de Clientes{% endblock %}
+{% block topbar_breadcrumb %}<span>Usinas</span><span class="sep">›</span><span class="here">Distribuição de Clientes</span>{% endblock %}
+{% block topbar_actions %}
+<a href="/usinas" class="btn btn-outline-secondary me-2"><i class="bi bi-arrow-left me-1"></i> Voltar</a>
+{% if total_alocados > 0 %}
+<button form="form_confirmar" type="submit" class="btn btn-cta"
+    onclick="return confirm('Confirmar distribuição? Os vínculos atuais de TODOS os clientes serão substituídos.')">
+    <i class="bi bi-check-lg me-1"></i> Confirmar Distribuição
+</button>
+{% endif %}
+{% endblock %}
+{% block content %}
+
+{# ── Banner de rascunho restaurado ─────────────────────────────── #}
+<div id="bannerRascunho" class="alert alert-warning mb-3 d-none align-items-center justify-content-between"
+     style="font-size:13px">
+    <div>
+        <i class="bi bi-bookmark-check-fill me-1" style="color:var(--or)"></i>
+        <strong>Arranjo restaurado do rascunho local.</strong>
+        <span id="bannerInfo" class="text-muted ms-1"></span>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDescartarRascunho">
+        <i class="bi bi-trash me-1"></i>Descartar rascunho e voltar à distribuição automática
+    </button>
+</div>
+
+{# ── Resumo ─────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-2">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:26px;font-weight:700;color:var(--db)">{{ total_clientes }}</div>
+            <div class="text-muted" style="font-size:11px">Total clientes</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:26px;font-weight:700;color:#22c55e">{{ total_alocados }}</div>
+            <div class="text-muted" style="font-size:11px">Alocados</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:26px;font-weight:700;color:var(--or)">{{ splits }}</div>
+            <div class="text-muted" style="font-size:11px">Em 2 usinas</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:26px;font-weight:700;color:#3b82f6">{{ cobertos_saldo }}</div>
+            <div class="text-muted" style="font-size:11px">Cobertos p/ saldo</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-2">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:26px;font-weight:700;color:{% if total_sem_usina > 0 %}#dc3545{% else %}#6c757d{% endif %}">{{ total_sem_usina }}</div>
+            <div class="text-muted" style="font-size:11px">Sem usina</div>
+        </div></div>
+    </div>
+    {% if total_fixos > 0 %}
+    <div class="col-6 col-md-2">
+        <div class="card text-center" style="border-color:#7c3aed"><div class="card-body py-3">
+            <div style="font-size:26px;font-weight:700;color:#7c3aed">{{ total_fixos }}</div>
+            <div class="text-muted" style="font-size:11px">Vínculos fixos</div>
+        </div></div>
+    </div>
+    {% endif %}
+    <div class="col-12 col-md-2">
+        <div class="card h-100" style="border:1px dashed #ccc;background:#fafafa">
+            <div class="card-body d-flex flex-column align-items-center justify-content-center text-center py-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary mb-1"
+                        style="font-size:11px" data-bs-toggle="collapse" data-bs-target="#painelFiltros">
+                    <i class="bi bi-sliders me-1"></i>Ajustar filtros
+                </button>
+                <small class="text-muted" style="font-size:10px">
+                    Janela {{ janela_dias }}d ·
+                    {% if excesso_pct %}+{{ excesso_pct }}%{% endif %}{% if excesso_pct and folga_pct %} / {% endif %}{% if folga_pct %}−{{ folga_pct }}%{% endif %}{% if not excesso_pct and not folga_pct %}estrito{% endif %}
+                    {% if ignorar_saldo %}· s/saldo{% endif %}
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Painel de filtros configuráveis ─────────────────────────────────── #}
+<div class="collapse mb-3" id="painelFiltros">
+    <div class="card border-warning">
+        <div class="card-body p-3">
+            <form method="get" action="" class="row g-3 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Janela após leitura</label>
+                    <select name="janela_dias" class="form-select form-select-sm">
+                        {% for d in [3, 5, 7, 10, 14, 21, 30] %}
+                        <option value="{{ d }}" {% if d == janela_dias %}selected{% endif %}>{{ d }} dias</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">
+                        Excesso permitido
+                        <i class="bi bi-question-circle text-muted ms-1" style="cursor:help"
+                           title="Até quanto ACIMA da geração o algoritmo aceita encaixar (hard limit). 0 = estrito, nunca ultrapassa."></i>
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">+</span>
+                        <input type="number" name="excesso_pct" step="1" min="0" max="50"
+                               value="{{ excesso_pct }}"
+                               class="form-control form-control-sm text-end">
+                        <span class="input-group-text">%</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">
+                        Folga (reserva)
+                        <i class="bi bi-question-circle text-muted ms-1" style="cursor:help"
+                           title="Quanto da geração o algoritmo PREFERE deixar livre (soft target). 0 = preenche tudo. Se nada couber respeitando a folga, usa o excesso como fallback."></i>
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">−</span>
+                        <input type="number" name="folga_pct" step="1" min="0" max="50"
+                               value="{{ folga_pct }}"
+                               class="form-control form-control-sm text-end">
+                        <span class="input-group-text">%</span>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-check mt-3">
+                        <input type="checkbox" class="form-check-input" id="chkIgnorarSaldo"
+                               name="ignorar_saldo" value="1" {% if ignorar_saldo %}checked{% endif %}>
+                        <label class="form-check-label small" for="chkIgnorarSaldo">Ignorar saldo</label>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="chkSplit"
+                               name="permitir_split" value="1" {% if permitir_split %}checked{% endif %}>
+                        <label class="form-check-label small" for="chkSplit">Permitir split (2 usinas)</label>
+                    </div>
+                </div>
+                <div class="col-md-3 text-end">
+                    <a href="?" class="btn btn-sm btn-outline-secondary me-1">Resetar</a>
+                    <button type="submit" class="btn btn-sm btn-warning">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Aplicar
+                    </button>
+                </div>
+                <div class="col-12">
+                    <small class="text-muted" style="font-size:11px">
+                        <strong>Janela</strong>: dias do cliente APÓS a leitura da usina (maior = mais clientes compatíveis).
+                        <strong>Excesso (+%)</strong>: teto absoluto acima da geração.
+                        <strong>Folga (−%)</strong>: alvo preferencial de reserva. Se nada couber respeitando a folga, algoritmo recorre ao excesso como fallback.
+                        <strong>Combinar</strong>: ex. folga 10% + excesso 0% = sempre 10% livres (estrito); folga 5% + excesso 10% = tenta 5% livres mas aceita até +10% se necessário.
+                    </small>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<form method="POST" id="form_confirmar">
+    <input type="hidden" name="payload_json" value="{{ payload_json }}">
+
+{# ── Usinas ──────────────────────────────────────────────────────── #}
+{% for uid, bloco in alocacao.items() %}
+{% if bloco.itens %}
+{% set usina = bloco.usina %}
+{% set pct_uso = [(bloco.kwh_alocado / bloco.kwh_geracao * 100) if bloco.kwh_geracao else 0, 0] | max %}
+{% set pct_uso = [pct_uso, 120] | min %}
+{% set cor_barra = '#22c55e' if pct_uso <= 90 else ('#f59e0b' if pct_uso <= 105 else '#dc3545') %}
+
+<div class="card mb-3">
+    <div class="card-header d-flex align-items-center justify-content-between py-2 px-4"
+         style="background:var(--db);color:white">
+        <div class="d-flex align-items-center gap-3">
+            <i class="bi bi-sun-fill" style="color:var(--or)"></i>
+            <strong>{{ usina.desc_nome }}</strong>
+            {% if usina._cidade_uf %}
+            <small class="opacity-75" style="font-size:11px"><i class="bi bi-geo-alt me-1"></i>{{ usina._cidade_uf }}</small>
+            {% endif %}
+        </div>
+        <div class="d-flex align-items-center gap-3" style="font-size:12px">
+            <span><i class="bi bi-calendar2 me-1 opacity-75"></i>Leitura dia <strong>{{ usina.qtd_dia_leitura }}</strong></span>
+            {% if bloco.kwh_fixo and bloco.kwh_fixo > 0 %}
+            <span title="Geração total {{ bloco.kwh_geracao_total|fmt_kwh_br }} kWh menos {{ bloco.kwh_fixo|fmt_kwh_br }} kWh comprometidos via FIXO">
+                <i class="bi bi-lightning-charge me-1 opacity-75"></i>
+                Disponível <strong>{{ bloco.kwh_geracao|fmt_kwh_br }} kWh</strong>
+                <small class="opacity-75">de {{ bloco.kwh_geracao_total|fmt_kwh_br }} (−{{ bloco.kwh_fixo|fmt_kwh_br }} FIXO)</small>
+            </span>
+            {% else %}
+            <span><i class="bi bi-lightning-charge me-1 opacity-75"></i>Geração <strong>{{ bloco.kwh_geracao|fmt_kwh_br }} kWh</strong></span>
+            {% endif %}
+            <span><i class="bi bi-people me-1 opacity-75"></i><strong data-vinc-count>{{ bloco.itens | length }}</strong> vínculo(s)</span>
+            <div class="form-check form-switch mb-0 ms-1" style="padding-left:2em">
+                <input class="form-check-input toggle-saldo-usina" type="checkbox"
+                       id="togSaldo{{ usina.id_usina }}"
+                       data-id-usina="{{ usina.id_usina }}"
+                       checked
+                       style="cursor:pointer">
+                <label class="form-check-label" for="togSaldo{{ usina.id_usina }}"
+                       style="font-size:11px;opacity:0.85;cursor:pointer"
+                       title="Liga/desliga o desconto do saldo na demanda efetiva (apenas visual, não afeta o payload)">
+                    <span data-saldo-label>com saldo</span>
+                </label>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-light ms-2 btn-salvar-usina"
+                    data-id-usina="{{ usina.id_usina }}"
+                    title="Salva o arranjo desta usina localmente (volta intacto ao recarregar a página)"
+                    style="font-size:11px;padding:3px 10px">
+                <i class="bi bi-floppy me-1"></i><span data-salvar-label>Salvar</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-cta ms-2 btn-confirmar-usina"
+                    data-id-usina="{{ usina.id_usina }}"
+                    data-nome-usina="{{ usina.desc_nome }}"
+                    title="Confirma só esta usina e abre o rateio para ajustes finais"
+                    style="font-size:11px;padding:3px 10px">
+                <i class="bi bi-check-lg me-1"></i>Confirmar
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0" data-usina-card="{{ usina.id_usina }}">
+        {# Barra de utilização (baseada em kwh_efetivo) #}
+        <div class="px-4 pt-3 pb-2">
+            <div class="d-flex justify-content-between mb-1" style="font-size:12px">
+                <span class="text-muted">
+                    Demanda efetiva (líq. saldo):
+                    <strong data-kwh-alocado-label>{{ bloco.kwh_alocado|fmt_kwh_br }}</strong> kWh
+                </span>
+                <span data-pct-uso-label style="color:{{ cor_barra }};font-weight:600">{{ "%.1f"|format(pct_uso) }}%</span>
+            </div>
+            <div style="height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden">
+                <div data-barra-uso style="width:{{ [pct_uso,100]|min }}%;height:100%;background:{{ cor_barra }};border-radius:4px"></div>
+            </div>
+            {% set sobra = bloco.kwh_geracao - bloco.kwh_alocado %}
+            <div data-sobra-label style="font-size:11px;color:#888;margin-top:4px">
+                {% if sobra > 0 %}
+                    <i class="bi bi-arrow-down-circle text-success me-1"></i>Sobra {{ sobra|fmt_kwh_br }} kWh/mês após saldo
+                {% elif sobra < 0 %}
+                    <i class="bi bi-exclamation-triangle text-warning me-1"></i>Excede em {{ (-sobra)|fmt_kwh_br }} kWh/mês
+                {% else %}
+                    <i class="bi bi-check-circle text-success me-1"></i>Perfeito
+                {% endif %}
+            </div>
+        </div>
+
+        {# Tabela de clientes #}
+        <div class="table-responsive">
+        <table class="table table-sm mb-0" style="font-size:12px;table-layout:fixed;width:100%">
+            <colgroup>
+                <col style="width:60px">
+                <col>
+                <col style="width:90px">
+                <col style="width:140px">
+                <col style="width:130px">
+                <col style="width:150px">
+                <col style="width:90px">
+            </colgroup>
+            <thead>
+                <tr style="background:#f8f9fa;border-top:1px solid #e8edf2">
+                    <th class="ps-3 py-2 text-center">
+                        <input type="checkbox" class="form-check-input cli-check-all" title="Selecionar todos desta usina">
+                    </th>
+                    <th class="py-2 th-sort" data-sort-key="nome" data-sort-type="str">
+                        Cliente <span class="sort-ind" style="opacity:0.3">⇅</span>
+                    </th>
+                    <th class="text-center th-sort" data-sort-key="dia-cli" data-sort-type="num">
+                        Dia leit. <span class="sort-ind" style="opacity:0.3">⇅</span>
+                    </th>
+                    <th class="text-end th-sort" data-sort-key="kwh-bruto" data-sort-type="num">
+                        Consumo médio <span class="sort-ind" style="opacity:0.3">⇅</span>
+                    </th>
+                    <th class="text-end th-sort" data-sort-key="saldo" data-sort-type="num">
+                        Saldo <span class="sort-ind" style="opacity:0.3">⇅</span>
+                    </th>
+                    <th class="text-end th-sort" data-sort-key="kwh-efetivo" data-sort-type="num">
+                        Demanda efetiva <span class="sort-ind" style="opacity:0.3">⇅</span>
+                    </th>
+                    <th class="text-center th-sort" data-sort-key="pct" data-sort-type="num">
+                        Rateio <span class="sort-ind" style="opacity:0.3">⇅</span>
+                    </th>
+                </tr>
+            </thead>
+            <tbody class="sortable-clientes"
+                   data-id-usina="{{ usina.id_usina }}"
+                   data-dia-usina="{{ usina.qtd_dia_leitura or 0 }}"
+                   data-kwh-geracao="{{ bloco.kwh_geracao }}"
+                   data-janela-dias="{{ janela_dias }}">
+            {% for item in bloco.itens %}
+            {% set cli = item.cliente %}
+            {% set dia_c = cli.proxima_leitura[8:10] if cli.proxima_leitura and cli.proxima_leitura|length >= 10 else '?' %}
+            <tr class="cli-row" style="border-bottom:1px solid #f5f5f5;{% if item.coberto_saldo %}background:#f0fff4;{% endif %}cursor:move"
+                data-id-cliente="{{ cli.id_cliente }}"
+                data-nome="{{ cli.desc_nome or cli.desc_apelido or '—' }}"
+                data-cod-uc="{{ cli.cod_uc or '' }}"
+                data-kwh-bruto="{{ item.kwh_bruto }}"
+                data-saldo="{{ item.saldo }}"
+                data-kwh-efetivo="{{ item.kwh_efetivo }}"
+                data-pct="{{ item.pct }}"
+                data-coberto-saldo="{{ '1' if item.coberto_saldo else '0' }}"
+                data-dia-cli="{{ dia_c }}">
+                <td class="ps-3 text-muted" style="user-select:none;white-space:nowrap">
+                    <input type="checkbox" class="form-check-input cli-check me-1" style="vertical-align:middle">
+                    <i class="bi bi-grip-vertical" style="color:#bbb;vertical-align:middle"></i>
+                </td>
+                <td class="py-2">
+                    <strong>{{ cli.desc_nome or cli.desc_apelido or '—' }}</strong>
+                    {% if cli.cod_uc %}
+                    <small class="text-muted ms-1" style="font-size:10px"><code>{{ cli.cod_uc | fmt_uc15 }}</code></small>
+                    {% endif %}
+                    {% if item.coberto_saldo %}
+                    <span class="badge ms-1" style="background:#dcfce7;color:#16a34a;font-size:10px">
+                        <i class="bi bi-piggy-bank me-1"></i>saldo cobre
+                    </span>
+                    {% endif %}
+                    {% if item.pct < 100 %}
+                    <span class="badge badge-split ms-1" style="background:rgba(245,166,35,0.15);color:var(--or);font-size:10px">split</span>
+                    {% endif %}
+                </td>
+                <td class="text-center py-2">
+                    <span class="badge dia-leitura-badge" style="background:rgba(26,42,74,0.08);color:var(--db)">{{ dia_c }}</span>
+                </td>
+                <td class="text-end py-2">
+                    {{ item.kwh_bruto|fmt_kwh_br }} kWh
+                </td>
+                <td class="text-end py-2">
+                    {% if item.saldo > 0 %}
+                    <span style="color:#16a34a;font-weight:600">
+                        {{ item.saldo|fmt_kwh_br }} kWh
+                    </span>
+                    {% else %}
+                    <span class="text-muted">—</span>
+                    {% endif %}
+                </td>
+                <td class="text-end py-2 td-demanda">
+                    {% if item.coberto_saldo %}
+                    <span style="color:#16a34a;font-size:11px">0,00 kWh</span>
+                    {% else %}
+                    <strong>{{ item.kwh_efetivo|fmt_kwh_br }} kWh</strong>
+                    {% endif %}
+                </td>
+                <td class="text-center py-2 td-rateio">
+                    {% if item.pct == 100 %}
+                    <span class="text-muted">100%</span>
+                    {% else %}
+                    <strong style="color:var(--or)">{{ item.pct }}%</strong>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{# ── Usinas sem clientes ─────────────────────────────────────────── #}
+{% set usinas_vazias = alocacao.values() | selectattr("itens", "equalto", []) | list %}
+{% if usinas_vazias %}
+<div class="card mb-3 border-warning">
+    <div class="card-header py-2 px-4" style="background:#fff8e1">
+        <strong style="color:#856404"><i class="bi bi-exclamation-triangle me-2"></i>Usinas sem clientes alocados</strong>
+    </div>
+    <div class="card-body p-3">
+        <div class="d-flex flex-wrap gap-2">
+        {% for bloco in usinas_vazias %}
+        <span class="badge" style="background:rgba(133,100,4,0.1);color:#856404;font-size:12px;padding:6px 10px">
+            <i class="bi bi-sun me-1"></i>{{ bloco.usina.desc_nome }}
+            {% if bloco.usina.qtd_dia_leitura %}
+            <small>(dia {{ bloco.usina.qtd_dia_leitura }})</small>
+            {% else %}
+            <small class="opacity-75">— sem dia de leitura</small>
+            {% endif %}
+        </span>
+        {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Clientes sem usina ──────────────────────────────────────────── #}
+{% if sem_usina %}
+<div class="card mb-3 border-danger">
+    <div class="card-header py-2 px-4" style="background:#fff5f5">
+        <strong style="color:#dc3545">
+            <i class="bi bi-person-x me-2"></i>{{ sem_usina|length }} cliente(s) sem usina compatível
+        </strong>
+        <small class="ms-2 text-muted">Preencha o consumo médio e/ou a data de leitura e refaça</small>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-size:12px">
+            <thead>
+                <tr style="background:#f8f9fa">
+                    <th class="ps-4 py-2">Cliente</th>
+                    <th>Consumo médio</th>
+                    <th>Saldo atual</th>
+                    <th>Próxima leitura</th>
+                    <th>Motivo</th>
+                    <th class="pe-4 text-end">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for s in sem_usina %}
+            {% set cli = s.cliente %}
+            <tr style="border-bottom:1px solid #f5f5f5">
+                <td class="ps-4 py-2"><strong>{{ cli.desc_nome or '—' }}</strong></td>
+                <td class="py-2">
+                    {% if cli.qtd_consumo_medio_kwh %}
+                    {{ cli.qtd_consumo_medio_kwh|fmt_kwh_br }} kWh
+                    {% else %}<span class="text-danger">não preenchido</span>{% endif %}
+                </td>
+                <td class="py-2">
+                    {% if cli._saldo_atual > 0 %}
+                    <span style="color:#16a34a">{{ cli._saldo_atual|fmt_kwh_br }} kWh</span>
+                    {% else %}<span class="text-muted">—</span>{% endif %}
+                </td>
+                <td class="py-2">
+                    {% if cli.proxima_leitura %}
+                    <code>{{ cli.proxima_leitura[:10] }}</code>
+                    <small class="text-muted">(dia {{ cli.proxima_leitura[8:10] }})</small>
+                    {% else %}<span class="text-danger">não preenchida</span>{% endif %}
+                </td>
+                <td class="py-2 text-muted">{{ s.motivo }}</td>
+                <td class="pe-4 py-2 text-end">
+                    <a href="/clientes/editar/{{ cli.cod_uc }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                        <i class="bi bi-pencil"></i> Editar
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Clientes com vínculos FIXO ──────────────────────────────────── #}
+{% if clientes_fixos %}
+<div class="card mb-3" style="border-color:#7c3aed">
+    <div class="card-header py-2 px-4" style="background:#f5f3ff">
+        <strong style="color:#7c3aed">
+            <i class="bi bi-lock-fill me-2"></i>{{ clientes_fixos|length }} cliente(s) com vínculo fixo — não afetados pela distribuição
+        </strong>
+        <small class="ms-2 text-muted">Estes vínculos são pré-configurados e nunca serão sobrescritos</small>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-size:12px">
+            <thead>
+                <tr style="background:#f8f9fa">
+                    <th class="ps-4 py-2">Cliente</th>
+                    <th>UC</th>
+                    <th>Usinas vinculadas</th>
+                    <th class="pe-4 text-end">Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for c in clientes_fixos %}
+            <tr style="border-bottom:1px solid #f5f5f5">
+                <td class="ps-4 py-2"><strong>{{ c.desc_nome or c.desc_apelido or '—' }}</strong></td>
+                <td class="py-2">
+                    {% if c.cod_uc %}<code style="font-size:10px">{{ c.cod_uc | fmt_uc15 }}</code>{% endif %}
+                </td>
+                <td class="py-2">
+                    {% for v in c._vinculos_fixos %}
+                    <span class="badge me-1" style="background:rgba(124,58,237,0.12);color:#7c3aed;font-size:11px">
+                        <i class="bi bi-lock me-1"></i>{{ v.nome_usina }}
+                        {% if v.pct != 100 %}<strong> {{ v.pct }}%</strong>{% endif %}
+                    </span>
+                    {% endfor %}
+                </td>
+                <td class="pe-4 py-2 text-end">
+                    <a href="/clientes/editar/{{ c.cod_uc }}" class="btn btn-sm btn-outline-secondary" target="_blank">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{# ── Confirmação ─────────────────────────────────────────────────── #}
+{% if total_alocados > 0 %}
+<div class="text-end mt-3 mb-5">
+    <a href="/usinas" class="btn btn-outline-secondary me-2">Cancelar</a>
+    <button form="form_confirmar" type="submit" class="btn btn-cta btn-lg px-5"
+        onclick="return confirm('Confirmar distribuição?\n\nOs vínculos de {{ total_alocados }} cliente(s) serão atualizados.\n{% if total_fixos > 0 %}Os {{ total_fixos }} vínculos fixos NÃO serão alterados.{% endif %}')">
+        <i class="bi bi-check-lg me-1"></i> Confirmar e Vincular {{ total_alocados }} Clientes
+    </button>
+</div>
+{% endif %}
+
+</form>
+
+{# ── Indicador "modificado manualmente" ─────────────────────────── #}
+<div id="modManualBadge" class="position-fixed bottom-0 end-0 m-4 d-none" style="z-index:1050">
+    <div class="alert alert-warning shadow-sm mb-0 py-2 px-3" style="font-size:12px">
+        <i class="bi bi-pencil-square me-1"></i>
+        <strong>Distribuição modificada manualmente.</strong> Confirme para salvar.
+    </div>
+</div>
+
+{# ── Barra de ações para seleção múltipla ──────────────────────── #}
+<div id="barraSelecao" class="position-fixed bottom-0 start-50 translate-middle-x mb-3 d-none"
+     style="z-index:1060;background:var(--db);color:white;border-radius:12px;padding:10px 16px;box-shadow:0 8px 24px rgba(0,0,0,0.25);min-width:520px">
+    <div class="d-flex align-items-center gap-3">
+        <span style="font-size:13px">
+            <i class="bi bi-check-square-fill me-1" style="color:var(--or)"></i>
+            <strong id="contadorSelecao">0</strong> cliente(s) selecionado(s)
+        </span>
+        <div class="vr" style="background:rgba(255,255,255,0.2);height:24px"></div>
+        <label class="mb-0" style="font-size:12px;opacity:0.7">Transferir para:</label>
+        <select id="selectUsinaDestino" class="form-select form-select-sm" style="font-size:12px;max-width:240px">
+            <option value="">— selecione a usina —</option>
+        </select>
+        <button type="button" class="btn btn-sm btn-cta" id="btnTransferirLote" disabled
+                style="font-size:12px;padding:4px 12px">
+            <i class="bi bi-arrow-right-circle me-1"></i>Transferir
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-light" id="btnCancelarSelecao"
+                style="font-size:12px;padding:4px 10px">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+<script>
+(function() {
+    // ── Estado: lista atual de alocações por usina ──
+    // Reconstruída lendo DOM ao iniciar e a cada drop.
+
+    function fmtKwhBR(v) {
+        var n = Number(v) || 0;
+        var parts = n.toFixed(2).split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return parts.join(',');
+    }
+
+    function corBarra(pct) {
+        if (pct <= 90)  return '#22c55e';
+        if (pct <= 105) return '#f59e0b';
+        return '#dc3545';
+    }
+
+    function diasApos(uDay, cDay) {
+        // mesma lógica de _dias_apos do backend (mod 30)
+        uDay = parseInt(uDay) || 0;
+        cDay = parseInt(cDay) || 0;
+        if (!uDay || !cDay) return 99;
+        var d = ((cDay - uDay) % 30 + 30) % 30;
+        return d;
+    }
+
+    function diaCompativel(uDay, cDay, janela) {
+        var d = diasApos(uDay, cDay);
+        return d >= 1 && d <= (janela || 7);
+    }
+
+    // ── Recalcula totais e atualiza UI de UMA usina ──
+    function recalcularUsina(tbody) {
+        var card = tbody.closest('[data-usina-card]');
+        if (!card) return;
+        var kwhGeracao = parseFloat(tbody.dataset.kwhGeracao) || 0;
+        var diaUsina   = parseInt(tbody.dataset.diaUsina) || 0;
+        var janela     = parseInt(tbody.dataset.janelaDias) || 7;
+        // Modo de visualização: 'com' (padrão, desconta saldo) ou 'sem' (consumo bruto)
+        var modoSaldo = tbody.dataset.modoSaldo || 'com';
+
+        var kwhAlocado = 0;
+        var rows = tbody.querySelectorAll('tr.cli-row');
+        rows.forEach(function(r) {
+            // Marca incompatibilidade de dia
+            var diaCli = parseInt(r.dataset.diaCli) || 0;
+            var badge = r.querySelector('.dia-leitura-badge');
+            if (badge) {
+                if (diaCli && !diaCompativel(diaUsina, diaCli, janela)) {
+                    badge.style.background = 'rgba(220,53,69,0.12)';
+                    badge.style.color = '#dc3545';
+                    badge.title = 'Incompatível: cliente lê dia ' + diaCli + ' vs usina dia ' + diaUsina + ' (janela ' + janela + 'd)';
+                    badge.innerHTML = '⚠ ' + diaCli;
+                } else {
+                    badge.style.background = 'rgba(26,42,74,0.08)';
+                    badge.style.color = 'var(--db)';
+                    badge.title = '';
+                    badge.innerHTML = diaCli || '?';
+                }
+            }
+            // Calcula bruto e efetivo baseado no pct atual (consolidação de split)
+            var bruto = parseFloat(r.dataset.kwhBruto) || 0;
+            var saldo = parseFloat(r.dataset.saldo)    || 0;
+            var pct   = parseFloat(r.dataset.pct)      || 100;
+            var brutoOrig = bruto / (pct / 100);
+            var saldoOrig = saldo / (pct / 100);
+            var efetivoComSaldo = Math.max(0, brutoOrig - saldoOrig);
+            // Acumula conforme o modo de visualização
+            kwhAlocado += (modoSaldo === 'sem') ? brutoOrig : efetivoComSaldo;
+            // Atualiza visual da coluna "Demanda efetiva" da linha
+            var tdDemanda = r.querySelector('.td-demanda');
+            if (tdDemanda) {
+                if (modoSaldo === 'sem') {
+                    // Sem saldo: mostra sempre o bruto, sem destacar "saldo cobre"
+                    tdDemanda.innerHTML = '<strong>' + fmtKwhBR(brutoOrig) + ' kWh</strong>';
+                    r.style.background = '';
+                } else {
+                    if (efetivoComSaldo === 0) {
+                        tdDemanda.innerHTML = '<span style="color:#16a34a;font-size:11px">0,00 kWh</span>';
+                        r.style.background = '#f0fff4';
+                    } else {
+                        tdDemanda.innerHTML = '<strong>' + fmtKwhBR(efetivoComSaldo) + ' kWh</strong>';
+                        r.style.background = '';
+                    }
+                }
+            }
+        });
+
+        // Atualiza label kwh_alocado
+        var lbl = card.querySelector('[data-kwh-alocado-label]');
+        if (lbl) lbl.textContent = fmtKwhBR(kwhAlocado);
+
+        // Atualiza pct + barra
+        var pct = kwhGeracao > 0 ? (kwhAlocado / kwhGeracao * 100) : 0;
+        var pctClamp = Math.max(0, Math.min(120, pct));
+        var cor = corBarra(pct);
+        var lblPct = card.querySelector('[data-pct-uso-label]');
+        if (lblPct) { lblPct.textContent = pct.toFixed(1) + '%'; lblPct.style.color = cor; }
+        var barra = card.querySelector('[data-barra-uso]');
+        if (barra) {
+            barra.style.width = Math.min(pctClamp, 100) + '%';
+            barra.style.background = cor;
+        }
+
+        // Atualiza sobra/excede
+        var sobra = kwhGeracao - kwhAlocado;
+        var lblSob = card.querySelector('[data-sobra-label]');
+        if (lblSob) {
+            if (sobra > 0) {
+                lblSob.innerHTML = '<i class="bi bi-arrow-down-circle text-success me-1"></i>Sobra ' + fmtKwhBR(sobra) + ' kWh/mês após saldo';
+            } else if (sobra < 0) {
+                lblSob.innerHTML = '<i class="bi bi-exclamation-triangle text-warning me-1"></i>Excede em ' + fmtKwhBR(-sobra) + ' kWh/mês';
+            } else {
+                lblSob.innerHTML = '<i class="bi bi-check-circle text-success me-1"></i>Perfeito';
+            }
+        }
+
+        // Atualiza contador no header da usina
+        var header = card.parentElement.querySelector('.card-header');
+        if (header) {
+            var spanVinc = header.querySelector('[data-vinc-count]');
+            if (spanVinc) spanVinc.textContent = rows.length;
+        }
+    }
+
+    // ── Reconstrói payload_json a partir do DOM ──
+    function reconstruirPayload() {
+        var proposta = [];
+        document.querySelectorAll('tbody.sortable-clientes').forEach(function(tbody) {
+            var idUsina = parseInt(tbody.dataset.idUsina);
+            tbody.querySelectorAll('tr.cli-row').forEach(function(r) {
+                var idCli = parseInt(r.dataset.idCliente);
+                var pct   = parseFloat(r.dataset.pct) || 100;
+                var saldo = parseFloat(r.dataset.saldo) || 0;
+                proposta.push({
+                    id_cliente: idCli,
+                    id_usina:   idUsina,
+                    pct:        pct,
+                    saldo_kwh:  Math.round(saldo * 100) / 100
+                });
+            });
+        });
+        var inp = document.querySelector('input[name="payload_json"]');
+        if (inp) inp.value = JSON.stringify(proposta);
+    }
+
+    // ── Consolida split: ao mover uma metade, remove a outra e fica 100% destino ──
+    function consolidarSplit(rowMoved) {
+        var idCli = rowMoved.dataset.idCliente;
+        if (!idCli) return;
+        // Acha outras linhas do mesmo cliente em outras usinas
+        var outras = document.querySelectorAll('tr.cli-row[data-id-cliente="' + idCli + '"]');
+        if (outras.length <= 1) return;
+        // Restaura bruto/saldo originais (já que pct era < 100)
+        var brutoTotal = 0, saldoTotal = 0;
+        outras.forEach(function(o) {
+            var b = parseFloat(o.dataset.kwhBruto) || 0;
+            var s = parseFloat(o.dataset.saldo)    || 0;
+            var p = parseFloat(o.dataset.pct)      || 100;
+            brutoTotal += b / (p / 100);
+            saldoTotal += s / (p / 100);
+        });
+        // Remove todas as outras linhas (que não a movida)
+        var removidasUsinas = new Set();
+        outras.forEach(function(o) {
+            if (o !== rowMoved) {
+                var t = o.closest('tbody.sortable-clientes');
+                if (t) removidasUsinas.add(t);
+                o.remove();
+            }
+        });
+        // Atualiza a linha que sobrou: pct=100, bruto/saldo/efetivo restaurados
+        rowMoved.dataset.pct        = '100';
+        rowMoved.dataset.kwhBruto   = brutoTotal.toFixed(2);
+        rowMoved.dataset.saldo      = saldoTotal.toFixed(2);
+        var efetivo = Math.max(0, brutoTotal - saldoTotal);
+        rowMoved.dataset.kwhEfetivo = efetivo.toFixed(2);
+        // Atualiza visuais da linha
+        var rateioCell = rowMoved.querySelector('.td-rateio');
+        if (rateioCell) rateioCell.innerHTML = '<span class="text-muted">100%</span>';
+        var demandaCell = rowMoved.querySelector('.td-demanda');
+        if (demandaCell) {
+            demandaCell.innerHTML = efetivo > 0
+                ? '<strong>' + fmtKwhBR(efetivo) + ' kWh</strong>'
+                : '<span style="color:#16a34a;font-size:11px">0,00 kWh</span>';
+        }
+        // Remove badge "split"
+        var bSplit = rowMoved.querySelector('.badge-split');
+        if (bSplit) bSplit.remove();
+        // Recalcula usinas que perderam a parcela
+        removidasUsinas.forEach(recalcularUsina);
+    }
+
+    // ── Mostra indicador de modificação manual ──
+    function marcarModificado() {
+        var b = document.getElementById('modManualBadge');
+        if (b) b.classList.remove('d-none');
+    }
+
+    // ── Inicializa Sortable em cada tbody de usina ──
+    document.querySelectorAll('tbody.sortable-clientes').forEach(function(tbody) {
+        new Sortable(tbody, {
+            group: 'clientes-usinas',  // grupo compartilhado: permite mover entre tbodies
+            animation: 150,
+            handle: '.bi-grip-vertical',  // só arrasta pelo ícone grip (evita conflito com cliques)
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onEnd: function(evt) {
+                var movedRow = evt.item;
+                var fromTbody = evt.from;
+                var toTbody   = evt.to;
+                // Se moveu entre usinas
+                if (fromTbody !== toTbody) {
+                    // Consolida split (se era)
+                    consolidarSplit(movedRow);
+                    // Recalcula origem + destino
+                    recalcularUsina(fromTbody);
+                    recalcularUsina(toTbody);
+                    marcarModificado();
+                    // Origem e destino sofreram mudança estrutural → não mais "salvo"
+                    if (typeof marcarUsinaComoNaoSalva === 'function') {
+                        marcarUsinaComoNaoSalva(fromTbody.dataset.idUsina);
+                        marcarUsinaComoNaoSalva(toTbody.dataset.idUsina);
+                    }
+                } else {
+                    // Reordem na mesma usina: só atualiza payload (não precisa recalcular totais)
+                    marcarModificado();
+                }
+                reconstruirPayload();
+            }
+        });
+    });
+
+    // Cursor grab estiloso
+    var style = document.createElement('style');
+    style.textContent = '.cli-row:hover .bi-grip-vertical{color:var(--or)!important}'
+                     + '.sortable-ghost{opacity:0.4;background:#fff3cd!important}'
+                     + '.sortable-chosen{background:#fffbe6!important}'
+                     + '.sortable-drag{background:#fff!important;box-shadow:0 4px 12px rgba(0,0,0,0.15)}'
+                     + '.th-sort:hover{background:#eef2f7!important}'
+                     + '.th-sort:hover .sort-ind{opacity:1!important;color:var(--or)}';
+    document.head.appendChild(style);
+
+    // ── Ordenação por coluna (clique no <th>) ───────────────────
+    // Cada tabela ordena INDEPENDENTE da outra (estado guardado no próprio thead).
+    document.querySelectorAll('th.th-sort').forEach(function(th) {
+        th.style.cursor = 'pointer';
+        th.style.userSelect = 'none';
+        th.addEventListener('click', function() {
+            var thead = th.closest('thead');
+            var tbody = th.closest('table').querySelector('tbody.sortable-clientes');
+            if (!tbody) return;
+
+            var key  = th.dataset.sortKey;     // ex: 'nome', 'kwh-bruto'
+            var type = th.dataset.sortType;    // 'str' ou 'num'
+
+            // Alterna direção (asc → desc → asc …)
+            var dirAtual = th.dataset.sortDir || '';
+            var novaDir  = (dirAtual === 'asc') ? 'desc' : 'asc';
+
+            // Limpa indicadores das outras th da MESMA tabela
+            thead.querySelectorAll('th.th-sort').forEach(function(t) {
+                t.dataset.sortDir = '';
+                var ind = t.querySelector('.sort-ind');
+                if (ind) { ind.textContent = '⇅'; ind.style.opacity = '0.3'; }
+            });
+            th.dataset.sortDir = novaDir;
+            var ind = th.querySelector('.sort-ind');
+            if (ind) { ind.textContent = novaDir === 'asc' ? '↑' : '↓'; ind.style.opacity = '1'; }
+
+            // Ordena as linhas
+            var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.cli-row'));
+            rows.sort(function(a, b) {
+                var va = a.dataset[toCamel(key)] || '';
+                var vb = b.dataset[toCamel(key)] || '';
+                if (type === 'num') {
+                    va = parseFloat(va) || 0;
+                    vb = parseFloat(vb) || 0;
+                    return novaDir === 'asc' ? (va - vb) : (vb - va);
+                }
+                // string
+                va = String(va).toLowerCase();
+                vb = String(vb).toLowerCase();
+                if (va < vb) return novaDir === 'asc' ? -1 : 1;
+                if (va > vb) return novaDir === 'asc' ?  1 : -1;
+                return 0;
+            });
+            // Re-anexa em nova ordem
+            rows.forEach(function(r) { tbody.appendChild(r); });
+
+            // Atualiza payload (ordem importa pro fluxo de confirmar)
+            reconstruirPayload();
+            marcarModificado();
+        });
+    });
+    function toCamel(key) {
+        // 'kwh-bruto' → 'kwhBruto' (dataset usa camelCase)
+        return key.replace(/-([a-z])/g, function(_, c) { return c.toUpperCase(); });
+    }
+
+    // ── Botão "Confirmar" por usina ──────────────────────────────
+    // Envia POST com payload contendo APENAS as alocações da usina,
+    // backend fecha vínculos antigos dos clientes e cria novos.
+    document.querySelectorAll('.btn-confirmar-usina').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var idUsina = btn.dataset.idUsina;
+            var nomeUsina = btn.dataset.nomeUsina;
+            var tbody = document.querySelector('tbody.sortable-clientes[data-id-usina="' + idUsina + '"]');
+            if (!tbody) {
+                alert('Erro: tabela da usina não encontrada.');
+                return;
+            }
+            var rows = tbody.querySelectorAll('tr.cli-row');
+            if (rows.length === 0) {
+                alert('Esta usina não tem clientes para confirmar.');
+                return;
+            }
+            // Monta payload só com itens desta usina (atualizado do DOM)
+            var itens = [];
+            rows.forEach(function(r) {
+                itens.push({
+                    id_cliente: parseInt(r.dataset.idCliente),
+                    id_usina:   parseInt(idUsina),
+                    pct:        parseFloat(r.dataset.pct) || 100,
+                    saldo_kwh:  Math.round((parseFloat(r.dataset.saldo) || 0) * 100) / 100
+                });
+            });
+            var msg = 'Confirmar distribuição da ' + nomeUsina + '?\n\n'
+                    + rows.length + ' cliente(s) serão vinculados a esta usina.\n'
+                    + 'Vínculos antigos desses clientes em outras usinas serão fechados.\n\n'
+                    + 'Você será levado para a tela de rateio em seguida.';
+            if (!confirm(msg)) return;
+
+            // Cria form dinâmico e submete
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/usinas/distribuir/confirmar-usina/' + idUsina;
+            var inp = document.createElement('input');
+            inp.type  = 'hidden';
+            inp.name  = 'payload_json';
+            inp.value = JSON.stringify(itens);
+            form.appendChild(inp);
+            document.body.appendChild(form);
+            form.submit();
+        });
+    });
+
+    // ──────────────────────────────────────────────────────────────
+    // RASCUNHO LOCAL (salva/restaura arranjo manual no localStorage)
+    // ──────────────────────────────────────────────────────────────
+    var LS_PREFIX = 'solev_distribuir_snap_usina_';
+    function chaveSnap(idUsina) { return LS_PREFIX + idUsina; }
+
+    function salvarSnapshotUsina(idUsina) {
+        var tbody = document.querySelector('tbody.sortable-clientes[data-id-usina="' + idUsina + '"]');
+        if (!tbody) return false;
+        var rows = [];
+        tbody.querySelectorAll('tr.cli-row').forEach(function(r) {
+            rows.push({
+                id_cliente: parseInt(r.dataset.idCliente),
+                pct:        parseFloat(r.dataset.pct) || 100,
+                saldo:      parseFloat(r.dataset.saldo) || 0
+            });
+        });
+        var snap = { ts: Date.now(), rows: rows };
+        try {
+            localStorage.setItem(chaveSnap(idUsina), JSON.stringify(snap));
+            return true;
+        } catch(e) {
+            console.warn('Falha ao salvar snapshot:', e);
+            return false;
+        }
+    }
+
+    function listarSnapshotsSalvos() {
+        var out = {};
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.indexOf(LS_PREFIX) === 0) {
+                var idU = k.substring(LS_PREFIX.length);
+                try { out[idU] = JSON.parse(localStorage.getItem(k)); } catch(_e) {}
+            }
+        }
+        return out;
+    }
+
+    function descartarTodosSnapshots() {
+        var chaves = [];
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.indexOf(LS_PREFIX) === 0) chaves.push(k);
+        }
+        chaves.forEach(function(k) { localStorage.removeItem(k); });
+    }
+
+    function restaurarSnapshots() {
+        var snaps = listarSnapshotsSalvos();
+        var totalSnaps = Object.keys(snaps).length;
+        if (totalSnaps === 0) return;
+
+        // Monta mapa unificado: id_cliente → { id_usina_destino, pct, saldo, ts }
+        // Em caso de duplicação (mesmo cliente em 2 snapshots), o mais recente ganha.
+        var mapaDestinos = {};
+        Object.keys(snaps).forEach(function(idU) {
+            var snap = snaps[idU];
+            if (!snap || !Array.isArray(snap.rows)) return;
+            snap.rows.forEach(function(r) {
+                var existente = mapaDestinos[r.id_cliente];
+                if (!existente || (snap.ts || 0) > (existente.ts || 0)) {
+                    mapaDestinos[r.id_cliente] = {
+                        id_usina: idU,
+                        pct:      r.pct,
+                        saldo:    r.saldo,
+                        ts:       snap.ts
+                    };
+                }
+            });
+        });
+
+        // Aplica: move cada cliente pro tbody correto
+        var movidos = 0;
+        Object.keys(mapaDestinos).forEach(function(idCli) {
+            var dest = mapaDestinos[idCli];
+            var tr = document.querySelector('tr.cli-row[data-id-cliente="' + idCli + '"]');
+            if (!tr) return;  // cliente saiu (inativo, removido…)
+            var tbAlvo = document.querySelector('tbody.sortable-clientes[data-id-usina="' + dest.id_usina + '"]');
+            if (!tbAlvo) return;
+            if (tr.closest('tbody') !== tbAlvo) {
+                tbAlvo.appendChild(tr);
+                // Restaura pct/saldo se diferentes
+                if (dest.pct)   tr.dataset.pct   = dest.pct;
+                if (dest.saldo !== undefined) tr.dataset.saldo = dest.saldo;
+                movidos++;
+            }
+        });
+
+        // Recalcula todas as usinas que receberam movimentação
+        document.querySelectorAll('tbody.sortable-clientes').forEach(recalcularUsina);
+        reconstruirPayload();
+
+        // Banner informativo
+        var banner = document.getElementById('bannerRascunho');
+        if (banner) {
+            var info = document.getElementById('bannerInfo');
+            if (info) info.textContent = '— ' + totalSnaps + ' usina(s) restaurada(s), ' + movidos + ' cliente(s) movido(s).';
+            banner.classList.remove('d-none');
+            banner.classList.add('d-flex');
+        }
+
+        // Marca visualmente as usinas com snapshot
+        Object.keys(snaps).forEach(marcarUsinaComoSalva);
+    }
+
+    function marcarUsinaComoSalva(idUsina) {
+        var btn = document.querySelector('.btn-salvar-usina[data-id-usina="' + idUsina + '"]');
+        if (!btn) return;
+        btn.classList.remove('btn-outline-light');
+        btn.classList.add('btn-success');
+        var lbl = btn.querySelector('[data-salvar-label]');
+        if (lbl) lbl.textContent = 'Salvo';
+        var ic  = btn.querySelector('i');
+        if (ic) ic.className = 'bi bi-floppy-fill me-1';
+    }
+
+    function marcarUsinaComoNaoSalva(idUsina) {
+        var btn = document.querySelector('.btn-salvar-usina[data-id-usina="' + idUsina + '"]');
+        if (!btn) return;
+        btn.classList.remove('btn-success');
+        btn.classList.add('btn-outline-light');
+        var lbl = btn.querySelector('[data-salvar-label]');
+        if (lbl) lbl.textContent = 'Salvar';
+        var ic  = btn.querySelector('i');
+        if (ic) ic.className = 'bi bi-floppy me-1';
+    }
+
+    // Listener: botão "Salvar arranjo" em cada usina
+    document.querySelectorAll('.btn-salvar-usina').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var idU = btn.dataset.idUsina;
+            if (salvarSnapshotUsina(idU)) {
+                marcarUsinaComoSalva(idU);
+                // Pulso visual rápido
+                btn.style.transform = 'scale(1.08)';
+                setTimeout(function(){ btn.style.transform = ''; }, 200);
+            }
+        });
+    });
+
+    // Listener: botão "Descartar rascunho" no banner
+    var btnDescartar = document.getElementById('btnDescartarRascunho');
+    if (btnDescartar) {
+        btnDescartar.addEventListener('click', function() {
+            if (!confirm('Descartar todos os rascunhos locais? A página será recarregada com a distribuição automática original.')) return;
+            descartarTodosSnapshots();
+            window.location.reload();
+        });
+    }
+
+    // Restaura ao carregar (depois de Sortable já estar inicializado)
+    restaurarSnapshots();
+
+    // ── Toggle "com saldo" / "sem saldo" por usina ───────────────
+    document.querySelectorAll('.toggle-saldo-usina').forEach(function(tog) {
+        tog.addEventListener('change', function() {
+            var idU = tog.dataset.idUsina;
+            var tbody = document.querySelector('tbody.sortable-clientes[data-id-usina="' + idU + '"]');
+            if (!tbody) return;
+            var modo = tog.checked ? 'com' : 'sem';
+            tbody.dataset.modoSaldo = modo;
+            // Atualiza o label visual
+            var lbl = tog.closest('.form-check').querySelector('[data-saldo-label]');
+            if (lbl) lbl.textContent = (modo === 'com') ? 'com saldo' : 'sem saldo';
+            recalcularUsina(tbody);
+        });
+    });
+
+    // ── Seleção múltipla + transferência em lote ────────────────
+    var barra        = document.getElementById('barraSelecao');
+    var contador     = document.getElementById('contadorSelecao');
+    var selectDest   = document.getElementById('selectUsinaDestino');
+    var btnTransfer  = document.getElementById('btnTransferirLote');
+    var btnCancelar  = document.getElementById('btnCancelarSelecao');
+
+    // Popula o select com todas as usinas disponíveis
+    document.querySelectorAll('tbody.sortable-clientes').forEach(function(tb) {
+        var idU = tb.dataset.idUsina;
+        var card = tb.closest('[data-usina-card]');
+        // Pega o nome da usina do header do card pai
+        var cardParent = card ? card.parentElement : null;
+        var nome = '';
+        if (cardParent) {
+            var h = cardParent.querySelector('.card-header strong');
+            if (h) nome = h.textContent.trim();
+        }
+        var opt = document.createElement('option');
+        opt.value = idU;
+        opt.textContent = nome || ('Usina ' + idU);
+        selectDest.appendChild(opt);
+    });
+
+    function atualizarSelecao() {
+        var marcados = document.querySelectorAll('tbody.sortable-clientes tr.cli-row input.cli-check:checked');
+        var n = marcados.length;
+        if (n > 0) {
+            contador.textContent = n;
+            barra.classList.remove('d-none');
+        } else {
+            barra.classList.add('d-none');
+            selectDest.value = '';
+        }
+        btnTransfer.disabled = (n === 0 || !selectDest.value);
+        // Atualiza estado do "selecionar todos" de cada usina
+        document.querySelectorAll('tbody.sortable-clientes').forEach(function(tb) {
+            var checkboxes = tb.querySelectorAll('tr.cli-row input.cli-check');
+            var marcadasTb = tb.querySelectorAll('tr.cli-row input.cli-check:checked');
+            var headerCheck = tb.closest('table').querySelector('input.cli-check-all');
+            if (!headerCheck) return;
+            if (marcadasTb.length === 0) {
+                headerCheck.checked = false;
+                headerCheck.indeterminate = false;
+            } else if (marcadasTb.length === checkboxes.length) {
+                headerCheck.checked = true;
+                headerCheck.indeterminate = false;
+            } else {
+                headerCheck.checked = false;
+                headerCheck.indeterminate = true;
+            }
+        });
+    }
+
+    // Listener: checkboxes individuais
+    document.addEventListener('change', function(e) {
+        if (e.target.classList && e.target.classList.contains('cli-check')) {
+            atualizarSelecao();
+        }
+    });
+
+    // Listener: checkboxes "selecionar todos desta usina"
+    document.querySelectorAll('input.cli-check-all').forEach(function(chk) {
+        chk.addEventListener('change', function() {
+            var tb = chk.closest('table').querySelector('tbody.sortable-clientes');
+            if (!tb) return;
+            tb.querySelectorAll('tr.cli-row input.cli-check').forEach(function(c) {
+                c.checked = chk.checked;
+            });
+            atualizarSelecao();
+        });
+    });
+
+    // Listener: select usina destino
+    selectDest.addEventListener('change', function() {
+        btnTransfer.disabled = (!selectDest.value);
+    });
+
+    // Botão Cancelar
+    btnCancelar.addEventListener('click', function() {
+        document.querySelectorAll('tr.cli-row input.cli-check:checked').forEach(function(c) {
+            c.checked = false;
+        });
+        atualizarSelecao();
+    });
+
+    // Botão Transferir em lote
+    btnTransfer.addEventListener('click', function() {
+        var idDest = selectDest.value;
+        if (!idDest) return;
+        var tbodyDest = document.querySelector('tbody.sortable-clientes[data-id-usina="' + idDest + '"]');
+        if (!tbodyDest) { alert('Usina destino não encontrada.'); return; }
+
+        var marcados = document.querySelectorAll('tbody.sortable-clientes tr.cli-row input.cli-check:checked');
+        if (marcados.length === 0) return;
+
+        var nomeDest = selectDest.options[selectDest.selectedIndex].textContent;
+        if (!confirm('Transferir ' + marcados.length + ' cliente(s) para ' + nomeDest + '?')) return;
+
+        // Origens afetadas (pra recalcular)
+        var origensAfetadas = new Set();
+        marcados.forEach(function(chk) {
+            var tr = chk.closest('tr.cli-row');
+            if (!tr) return;
+            var tbOrig = tr.closest('tbody.sortable-clientes');
+            if (tbOrig && tbOrig !== tbodyDest) {
+                origensAfetadas.add(tbOrig);
+            }
+            // Move o tr pra usina destino
+            tbodyDest.appendChild(tr);
+            // Consolida split se for o caso
+            consolidarSplit(tr);
+            // Desmarca o checkbox após transferir
+            chk.checked = false;
+        });
+
+        // Recalcula origens + destino
+        origensAfetadas.forEach(recalcularUsina);
+        recalcularUsina(tbodyDest);
+        // Marca como "não mais salvo" (rascunho desatualizado)
+        if (typeof marcarUsinaComoNaoSalva === 'function') {
+            origensAfetadas.forEach(function(tb) { marcarUsinaComoNaoSalva(tb.dataset.idUsina); });
+            marcarUsinaComoNaoSalva(tbodyDest.dataset.idUsina);
+        }
+        reconstruirPayload();
+        marcarModificado();
+        atualizarSelecao();
+    });
+})();
+</script>
+{% endblock %}

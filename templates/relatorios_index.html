@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Relatórios{% endblock %}
+{% block topbar_breadcrumb %}<span>Análise</span><span class="sep">›</span><span class="here">Relatórios</span>{% endblock %}
+{% block content %}
+
+<div class="container-fluid p-4">
+    <div class="mb-4">
+        <h1 class="mb-1"><i class="bi bi-bar-chart-fill me-2" style="color:var(--or)"></i>Relatórios</h1>
+        <p class="text-muted mb-0">Visões consolidadas do negócio para análise e tomada de decisão.</p>
+    </div>
+
+    <div class="row g-3">
+        {# ── Comercialização Mensal ── #}
+        <div class="col-md-4">
+            <a href="{{ url_for('relatorio_comercializacao') }}" class="card h-100 text-decoration-none"
+               style="cursor:pointer;transition:all 0.2s;border:1px solid #e0e6ed">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-start gap-3">
+                        <div style="width:48px;height:48px;background:rgba(245,166,35,0.1);border-radius:10px;
+                                    display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="bi bi-lightning-charge-fill" style="font-size:22px;color:var(--or)"></i>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1" style="color:var(--db)">Comercialização Mensal</h6>
+                            <p class="text-muted mb-0" style="font-size:12px">
+                                Quanto de geração já foi vendido e quanto ainda está disponível para
+                                novos clientes. Quebra FIXO vs Normal e por usina.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        {# ── Faturamento (apontando pro /relatorio existente) ── #}
+        <div class="col-md-4">
+            <a href="{{ url_for('relatorio') }}" class="card h-100 text-decoration-none"
+               style="cursor:pointer;transition:all 0.2s;border:1px solid #e0e6ed">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-start gap-3">
+                        <div style="width:48px;height:48px;background:rgba(34,197,94,0.1);border-radius:10px;
+                                    display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="bi bi-cash-coin" style="font-size:22px;color:#22c55e"></i>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1" style="color:var(--db)">Faturamento Mensal</h6>
+                            <p class="text-muted mb-0" style="font-size:12px">
+                                Faturas geradas, pagas e pendentes por mês de referência.
+                                Total faturado, recebido e em aberto.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        {# ── Cards de "em breve" pra novos relatórios ── #}
+        <div class="col-md-4">
+            <div class="card h-100" style="border:1px dashed #ccc;background:#fafafa;opacity:0.7">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-start gap-3">
+                        <div style="width:48px;height:48px;background:rgba(0,0,0,0.05);border-radius:10px;
+                                    display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                            <i class="bi bi-plus-lg" style="font-size:22px;color:#999"></i>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1 text-muted">Novos relatórios em breve</h6>
+                            <p class="text-muted mb-0" style="font-size:12px">
+                                Inadimplência, economia gerada por cliente, performance das usinas…
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.card:not(.opacity-70):hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08) !important;
+    border-color: var(--or) !important;
+}
+</style>
+{% endblock %}
