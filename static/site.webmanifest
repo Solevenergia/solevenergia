@@ -1,24 +1,24 @@
 {
-  "name": "CONTALEV — Sistema de Gestão",
-  "short_name": "CONTALEV",
+  "name": "SoLev Energia — Sistema de Gestão",
+  "short_name": "SoLev",
   "description": "Sistema de gestão de cobranças de energia solar",
   "start_url": "/faturas",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0d1b2a",
-  "theme_color": "#0d1b2a",
+  "background_color": "#0E1B2E",
+  "theme_color": "#0E1B2E",
   "lang": "pt-BR",
   "icons": [
     {
-      "src": "/static/icon-192.png",
-      "sizes": "192x192",
+      "src": "/static/icons/apple-touch-icon-180.png",
+      "sizes": "180x180",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/static/icon-512.png",
-      "sizes": "512x512",
+      "src": "/static/icons/app-icon-1024.png",
+      "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any maskable"
     }
@@ -27,17 +27,17 @@
     {
       "name": "Faturas",
       "url": "/faturas",
-      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/icons/apple-touch-icon-180.png", "sizes": "180x180" }]
     },
     {
       "name": "Clientes",
       "url": "/clientes",
-      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/icons/apple-touch-icon-180.png", "sizes": "180x180" }]
     },
     {
       "name": "Gerar Cobrança",
       "url": "/gerar",
-      "icons": [{ "src": "/static/icon-192.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/static/icons/apple-touch-icon-180.png", "sizes": "180x180" }]
     }
   ]
 }

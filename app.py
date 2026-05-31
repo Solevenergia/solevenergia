@@ -866,12 +866,9 @@ def portal_cliente(token):
     )
 
 
-@app.route("/logo/<filename>")
-def serve_logo(filename):
-    filepath = os.path.join(_DIR, filename)
-    if os.path.exists(filepath):
-        return send_file(filepath)
-    return "", 404
+# Rota /logo/<filename> removida em 30/05/2026 — servia logos antigas da raiz
+# do projeto (logo_blue_v_colored.svg etc) que foram deletadas. Tudo usa
+# /static/logo/ ou /static/icons/ agora via Flask static serve.
 
 
 # ──────────────────────────────────────────────────────────────
