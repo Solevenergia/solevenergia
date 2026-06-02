@@ -743,7 +743,14 @@ def _dict_para_contexto(d: dict, qr_b64: str, bar_b64: str) -> dict:
     # - NAO COMPENSA (sem_bandeira): apenas o percentual cadastrado, sem calculo
     desconto_cadastro = float(d.get("desconto_pct", 0) or 0) * 100
     _modo_band = (d.get("modo_bandeira") or "com_bandeira").strip().lower()
-    if _modo_band == "com_bandeira":
+    _comp_kwh = float(d.get("consumo_compensado", 0) or 0)
+    _is_fixo_badge = float(d.get("fio_b_deducao", 0) or 0) > 0
+    if _comp_kwh <= 0 and not _is_fixo_badge:
+        # Sem energia compensada o desconto nao incide em nada -> 0% real.
+        # (usina nao gerou/alocou no mes; cliente paga cheio, economia = 0).
+        # FIXO tem logica propria (compra geracao), nao entra aqui.
+        pct_float = 0.0
+    elif _modo_band == "com_bandeira":
         _t_eq    = float(d.get("tarifa_sem", 0) or 0)
         _b_am    = float(d.get("bandeira_tarifa_amar", 0) or 0)
         _b_vm    = float(d.get("bandeira_tarifa_verm", 0) or 0)
