@@ -26,6 +26,10 @@ _backup_*/
 backups/
 cadastro_usinas_template.xlsx.bak
 
+# Paliativo boleto manual (remover apos integracao Banco Inter)
+_gerar_champion_boleto.py
+static/boletos_manuais/
+
 # Dados locais do launcher
 .chrome_app_profile/
 .webview_storage/

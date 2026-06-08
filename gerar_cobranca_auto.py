@@ -355,6 +355,22 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
     except Exception as _e:
         print(f"   ⚠️ Falha ao buscar multa/juros anterior em tb_faturas: {_e}")
 
+    # Idempotencia da economia acumulada (mesma logica do app.py gerar_manual):
+    # desconta a economia ja registrada na fatura deste mes (se houver) para
+    # regerar a mesma cobranca NAO duplicar a economia no PDF.
+    _eco_acum_ant = cliente.get("economia_acumulada_anterior", 0.0) or 0
+    try:
+        from db import tb_get_cliente_por_uc as _gc_eco, tb_economia_mes_fatura as _emf_eco
+        import re as _re_eco_a
+        _mm_eco = _re_eco_a.match(r"^(\d{1,2})/(\d{4})$", str(mr or "").strip())
+        if _mm_eco:
+            _ctb_eco = _gc_eco(chave_uc)
+            if _ctb_eco and _ctb_eco.get("id_cliente"):
+                _eco_acum_ant = max(0.0, float(_eco_acum_ant) - _emf_eco(
+                    _ctb_eco["id_cliente"], _mm_eco.group(2), _mm_eco.group(1)))
+    except Exception as _e_eco:
+        print(f"   ⚠️ idempotencia economia (auto): {_e_eco}")
+
     dados = {
         # ── Do cliente ──
         "nome":               cliente["nome"],
@@ -366,7 +382,7 @@ def montar_dados(equatorial, cliente, chave_uc, pdf_equatorial, tarifa_override=
         "valor_cobranca_anterior":      cliente.get("valor_cobranca_anterior", 0.0) or 0,
         "venc_solev_anterior":       cliente.get("venc_solev_anterior", ""),
         "data_pagamento_anterior":      cliente.get("data_pagamento_anterior", ""),
-        "economia_acumulada_anterior":  cliente.get("economia_acumulada_anterior", 0.0) or 0,
+        "economia_acumulada_anterior":  _eco_acum_ant,
 
         # ── Multa/juros CONTALEV deste mes — vem de tb_faturas (single source of truth)
         # Quando preenchidos, o calculador usa esses valores e ignora o
