@@ -59,8 +59,11 @@ def parse_consumo_scee(texto: str, texto_completo: str) -> dict:
             r["tarifa_convencional"]  = _n(conv.group(2))
 
     # Injecoes SCEE (GD II e GD I) — soma multiplas linhas
+    # UC opcional: quando ha 2+ usinas injetando, uma das linhas vem SEM "UC <n> -"
+    # (ex: "INJECAO SCEE - GD II 2 kWh 640,00"). Sem o opcional, essa injecao seria
+    # ignorada -> os kWh dela virariam "nao compensado" e o valor viraria DIFCI falsa.
     inj2 = re.findall(
-        r"INJE.{1,4}O\s+SCEE\s*-\s*UC\s+[\d.\-]+\s*-\s*GD\s+II\s+2\s+kWh\s+([\d.,]+)",
+        r"INJE.{1,4}O\s+SCEE\s*-\s*(?:UC\s+[\d.\-]+\s*-\s*)?GD\s+II\s+2\s+kWh\s+([\d.,]+)",
         texto, re.IGNORECASE,
     )
     inj1 = re.findall(
@@ -72,7 +75,7 @@ def parse_consumo_scee(texto: str, texto_completo: str) -> dict:
 
     # DIFCI
     inj2_tf = re.findall(
-        r"INJE.{1,4}O\s+SCEE\s*-\s*UC\s+[\d.\-]+\s*-\s*GD\s+II\s+2\s+kWh\s+([\d.,]+)\s+([\d.,]+)",
+        r"INJE.{1,4}O\s+SCEE\s*-\s*(?:UC\s+[\d.\-]+\s*-\s*)?GD\s+II\s+2\s+kWh\s+([\d.,]+)\s+([\d.,]+)",
         texto, re.IGNORECASE,
     )
     inj1_tf = re.findall(
