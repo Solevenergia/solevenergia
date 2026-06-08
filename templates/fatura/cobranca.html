@@ -311,7 +311,7 @@
       <span class="eyebrow">Cliente</span>
       <span class="name">{{ fatura.cliente.nome }}</span>
       <dl>
-        <dt>CPF</dt><dd class="mono">{{ fatura.cliente.cpf }}</dd>
+        <dt>CPF/CNPJ</dt><dd class="mono">{{ fatura.cliente.cpf }}</dd>
         <dt>Endereço</dt><dd>{{ fatura.cliente.endereco | replace('\n', '<br>') }}</dd>
         {% if fatura.cliente.cep %}<dt>CEP</dt><dd class="mono">{{ fatura.cliente.cep }}</dd>{% endif %}
       </dl>
