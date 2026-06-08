@@ -124,22 +124,27 @@ def buscar_credenciais_usina(uc: str) -> dict:
 
     cliente_tb = tb_get_cliente_por_uc(uc)
     if not cliente_tb:
+        print(f"  [DIAG] UC {uc}: cliente nao encontrado em tb_clientes")
         return {}
 
     id_cliente = cliente_tb.get("id_cliente")
     if not id_cliente:
+        print(f"  [DIAG] UC {uc}: cliente encontrado mas sem id_cliente")
         return {}
 
     vinculo = tb_get_vinculo_ativo_do_cliente(id_cliente)
     if not vinculo:
+        print(f"  [DIAG] UC {uc}: sem vinculo ativo em tb_cliente_usina (id_cliente={id_cliente})")
         return {}
 
     id_usina = vinculo.get("id_usina")
     if not id_usina:
+        print(f"  [DIAG] UC {uc}: vinculo encontrado mas sem id_usina")
         return {}
 
     usina = tb_get_usina(id_usina)
     if not usina:
+        print(f"  [DIAG] UC {uc}: usina id={id_usina} nao encontrada em tb_usinas")
         return {}
 
     # ── PRIORIDADE 1: titularidade própria do CLIENTE ───────────────────────
@@ -181,6 +186,10 @@ def buscar_credenciais_usina(uc: str) -> dict:
                 dn = (titular.get("dt_nascimento") or "").strip()
             if not nome:
                 nome = (titular.get("desc_nome") or "").strip()
+
+    if not cpf:
+        print(f"  [DIAG] UC {uc}: usina '{usina.get('desc_nome','')}' (id={id_usina}) — "
+              f"id_titular={id_titular}, desc_cpf_titular={usina.get('desc_cpf_titular')!r}")
 
     return {
         "id_usina":        id_usina,
@@ -515,10 +524,12 @@ def _baixar_pela_sessao(
     except Exception as _e_eq_res:
         print(f"  ⚠️  Resolver id_cliente (Equatorial) falhou: {_e_eq_res}")
 
+    from utils import uc_sufixo as _uc_suf
+    _suf = _uc_suf(uc)
     if _id_cli_eq:
         nome_arquivo = f"{mes_str_final}_Equatorial_{nome_camel}_{_id_cli_eq}.pdf"
     else:
-        nome_arquivo = f"{mes_str_final}-Equatorial{nome_camel}.pdf"
+        nome_arquivo = f"{mes_str_final}-Equatorial{nome_camel}{_suf}.pdf"
     caminho_destino = os.path.join(pasta_cliente, nome_arquivo)
 
     if os.path.exists(caminho_destino):
@@ -660,9 +671,11 @@ def processar_uc(playwright, uc: str, cliente: dict, mes_ref: str, headless: boo
     nome_usina      = creds.get("nome_usina", "")
 
     if not cpf_usina:
-        print(f"  ⚠️  Usina vinculada sem CPF do titular cadastrado (UC {uc})")
         if nome_usina:
-            print(f"     Usina: {nome_usina} — complete o cadastro da usina")
+            print(f"  ⚠️  Usina '{nome_usina}' sem CPF do titular — acesse /usinas/editar e preencha o titular")
+        else:
+            print(f"  ⚠️  Cliente sem usina vinculada (UC {uc})")
+            print(f"     → Acesse /clientes/editar/{uc} e selecione a usina correspondente")
         return None
 
     # Valida data de nascimento — rejeita vazio, "?", texto sem digitos
@@ -1136,11 +1149,13 @@ def gerar_cobranca_cliente(
             print(f"  ⚠️  Arquivo de cobranca nao encontrado apos geracao: {arquivo_gerado}")
             return None
 
-        # Nome do arquivo SoLev: YYYYMM-SoLevPrimeiroUltimo.pdf
+        # Nome do arquivo SoLev: YYYYMM-SoLevPrimeiroUltimoVV.pdf  (VV = 2 dígitos verificadores)
         # Usa mes_referencia ja extraido do PDF Equatorial (equatorial dict)
+        from utils import uc_sufixo as _uc_suf
         _mes_ref_extr = (equatorial.get("mes_referencia") or "").strip()
         mes_str_cob   = _mes_para_yyyymm(_mes_ref_extr) if _mes_ref_extr else mes_str
-        nome_arquivo = f"{mes_str_cob}-SoLev{nome_camel}.pdf"
+        _suf_uc = _uc_suf(uc_original)
+        nome_arquivo = f"{mes_str_cob}-SoLev{nome_camel}{_suf_uc}.pdf"
         destino = os.path.join(pasta_cliente, nome_arquivo)
         shutil.move(arquivo_gerado, destino)
         print(f"  ✅ Cobranca salva: {destino}")
@@ -1283,18 +1298,20 @@ def ja_baixado(
         nome_pasta  = _sanitizar_nome(f"{nome_camel}-{uc_pasta}")
         pasta_cli   = os.path.join(BASE_PASTA_USINAS, nome_usina, nome_pasta)
 
-        # Tenta formato atual YYYYMM primeiro
-        novo = os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}.pdf")
-        if os.path.exists(novo):
-            return novo
+        # Tenta formato atual YYYYMM com sufixo UC (novo) e sem sufixo (legado)
+        from utils import uc_sufixo as _uc_suf
+        _suf = _uc_suf(uc)
+        for _cand in [
+            os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}{_suf}.pdf"),
+            os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}.pdf"),
+            os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}{_suf}.pdf"),
+            os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}.pdf"),
+        ]:
+            if os.path.exists(_cand):
+                return _cand
 
-        # Compatibilidade retroativa: formato antigo MMYYYY
-        legado = os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}.pdf")
-        if os.path.exists(legado):
-            return legado
-
-        # Glob: qualquer arquivo *-EquatorialNome.pdf na pasta (safeguard)
-        matches = _glob.glob(os.path.join(pasta_cli, f"*-Equatorial{nome_camel}.pdf"))
+        # Glob: qualquer arquivo *-EquatorialNome*.pdf na pasta (safeguard)
+        matches = _glob.glob(os.path.join(pasta_cli, f"*Equatorial*{nome_camel}*.pdf"))
         for m in matches:
             # Verifica se e do mes correto pelo prefixo (YYYYMM ou MMYYYY)
             base = os.path.basename(m)

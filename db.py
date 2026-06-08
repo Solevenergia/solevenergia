@@ -681,6 +681,36 @@ def recalcular_economia_acumulada(id_cliente: int) -> float:
     return round(acum, 2)
 
 
+def tb_economia_mes_fatura(id_cliente: int, ano_ref, mes_ref) -> float:
+    """Economia (vlr_economia_mes) JÁ registrada na fatura nao-cancelada do
+    cliente naquele mes/ano. Retorna 0.0 se nao houver fatura.
+
+    Usado ao (re)gerar uma cobranca: o campo qtd_economia_acumulada do cliente
+    ja inclui a economia desta fatura quando ela foi gerada antes. Para o PDF
+    nao DUPLICAR a economia ao regerar o mesmo mes, descontamos este valor do
+    'acumulado anterior' — tornando a geracao idempotente.
+    """
+    try:
+        id_cliente = int(id_cliente); ano_ref = int(ano_ref); mes_ref = int(mes_ref)
+    except (TypeError, ValueError):
+        return 0.0
+    if not id_cliente or not ano_ref or not mes_ref:
+        return 0.0
+    rows = _db().select(
+        "tb_faturas",
+        filtros={"id_cliente": id_cliente,
+                 "ano_referencia": ano_ref,
+                 "mes_referencia": mes_ref},
+        columns="vlr_economia_mes,status",
+    )
+    total = 0.0
+    for r in rows:
+        if (r.get("status") or "") == "cancelado":
+            continue
+        total += float(r.get("vlr_economia_mes") or 0)
+    return round(total, 2)
+
+
 def tb_delete_cliente(id_cliente: int) -> None:
     """Remove um cliente pelo id_cliente."""
     _db().delete("tb_clientes", {"id_cliente": id_cliente})

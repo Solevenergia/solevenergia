@@ -90,7 +90,34 @@ def _gerar_assinatura_image_dinamica(uid):
 # Funcao principal — exportada
 # ─────────────────────────────────────────────────────────────
 
-def gerar_pdf_rateio(usina, uid, vinculados):
+def _nome_rateio_arquivo(usina, uid, mes_ref: str = "") -> str:
+    """Monta o nome do arquivo de rateio: YYYYMM-RateioNomeUsina.pdf
+
+    Ex: 202605-RateioUSDaniloEvangelista70.pdf
+    """
+    import re
+    from datetime import datetime
+
+    # Prefixo YYYYMM
+    if mes_ref:
+        partes = mes_ref.strip().split("/")
+        try:
+            yyyymm = f"{int(partes[-1])}{int(partes[0]):02d}" if len(partes) == 2 else mes_ref.replace("/", "")
+        except Exception:
+            yyyymm = datetime.now().strftime("%Y%m")
+    else:
+        yyyymm = datetime.now().strftime("%Y%m")
+
+    # Nome limpo da usina (remove espaços, acentos problemáticos e chars inválidos)
+    nome_base = usina.get("nome") or str(uid)
+    nome_limpo = re.sub(r"[\\/:*?\"<>|'\s]", "", nome_base)
+    if not nome_limpo:
+        nome_limpo = str(uid)
+
+    return f"{yyyymm}-Rateio{nome_limpo}.pdf"
+
+
+def gerar_pdf_rateio(usina, uid, vinculados, mes_ref: str = ""):
     """Gera PDF do formulario de rateio no padrao Equatorial (layout platypus)."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
@@ -100,7 +127,7 @@ def gerar_pdf_rateio(usina, uid, vinculados):
     from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
                                      TableStyle, KeepTogether, PageBreak)
 
-    output = os.path.join(_DIR, f"Rateio_{uid}.pdf")
+    output = os.path.join(_DIR, _nome_rateio_arquivo(usina, uid, mes_ref))
 
     # ── Paleta em cinza/formal ──
     c_dark   = colors.HexColor("#1f1f1f")

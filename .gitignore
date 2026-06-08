@@ -23,6 +23,8 @@ simulacoes.json
 
 # Backups locais
 _backup_*/
+backups/
+cadastro_usinas_template.xlsx.bak
 
 # Dados locais do launcher
 .chrome_app_profile/

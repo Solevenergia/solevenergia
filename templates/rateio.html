@@ -343,6 +343,34 @@
             </div>
         </div>
 
+        {# ══ RATEIO REGISTRADO (snapshot tb_rateios_mensais) ══ #}
+        {% if rateio_registrado and rateio_registrado.beneficiarios %}
+        <div class="card mb-3" style="border-left:4px solid var(--or)"><div class="card-body p-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <h6 class="fw-bold mb-0" style="color:var(--or)"><i class="bi bi-file-earmark-check me-1"></i>Rateio Registrado — {{ mes_sel }}</h6>
+                <span class="badge" style="background:{% if rateio_registrado.soma_percentual|round(2) == 100 %}rgba(16,185,129,0.12);color:var(--green){% else %}rgba(239,68,68,0.1);color:#ef4444{% endif %};font-size:11px">{{ "%.2f"|format(rateio_registrado.soma_percentual) }}%</span>
+            </div>
+            <div class="text-muted mb-2" style="font-size:11px">
+                <i class="bi bi-people me-1"></i>{{ rateio_registrado.beneficiarios|length }} beneficiário(s)
+                {% if rateio_registrado.data_registro %} · <i class="bi bi-clock me-1"></i>{% set _d = (rateio_registrado.data_registro|string)[:10].split('-') %}{% if _d|length == 3 %}{{ _d[2] }}/{{ _d[1] }}/{{ _d[0] }}{% else %}{{ rateio_registrado.data_registro }}{% endif %}{% endif %}
+            </div>
+            <div style="max-height:300px;overflow-y:auto">
+            <table class="table table-sm mb-0" style="font-size:11px">
+                <thead><tr><th>UC</th><th>Cliente</th><th class="text-end">Rateio</th></tr></thead>
+                <tbody>
+                {% for b in rateio_registrado.beneficiarios|sort(attribute='percentual', reverse=True) %}
+                <tr>
+                    <td><code style="font-size:10px">{{ b.uc }}</code></td>
+                    <td>{{ b.nome or '—' }}</td>
+                    <td class="text-end fw-bold">{{ "%.2f"|format(b.percentual) }}%</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div></div>
+        {% endif %}
+
         {# ══ PROTOCOLO ══ #}
         {% if protocolo_info.protocolo %}
         <div class="card mb-3" style="border-left:4px solid var(--green)"><div class="card-body p-3">

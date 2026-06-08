@@ -25,13 +25,21 @@
                     <input type="text" name="ate" class="form-control" value="{{ ate_br }}"
                            placeholder="DD/MM/AAAA" id="campo_ate">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <button type="submit" class="btn btn-cta px-4">
                         <i class="bi bi-funnel me-1"></i>Filtrar
                     </button>
                     <a href="{{ url_for('cobrancas_dia') }}" class="btn btn-outline-secondary ms-2">Reset</a>
                 </div>
-                <div class="col-md-3 text-end">
+                <div class="col-md-3">
+                    <label class="form-label small text-muted mb-1">Buscar UC ou nome</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" id="filtroBusca" class="form-control border-start-0"
+                               placeholder="Digite UC ou nome…" autocomplete="off">
+                    </div>
+                </div>
+                <div class="col-md-1 text-end">
                     <small class="text-muted">Hoje: <strong>{{ hoje_br }}</strong></small>
                 </div>
             </form>
@@ -76,17 +84,27 @@
                     </thead>
                     <tbody>
                         {% for c in clientes_lista %}
-                        <tr>
+                        <tr data-uc="{{ c.cod_uc|lower }}" data-nome="{{ c.desc_nome|lower }}">
                             <td>
                                 <input type="checkbox" name="ucs" value="{{ c.cod_uc }}"
                                        class="form-check-input row-check"
-                                       data-mes="{{ c._mes_ref }}">
+                                       data-mes="{{ c._mes_ref }}"
+                                       {% if not c._nome_usina %}disabled title="Vincule a usina antes de baixar"{% endif %}>
                             </td>
                             <td><code class="text-dark">{{ c.cod_uc }}</code></td>
                             <td>
                                 <a href="{{ url_for('cliente_editar', uc=c.cod_uc) }}" class="text-dark text-decoration-none">
                                     {{ c.desc_nome }}
                                 </a>
+                                {% if not c._nome_usina %}
+                                <a href="{{ url_for('cliente_editar', uc=c.cod_uc) }}"
+                                   class="badge bg-warning text-dark ms-1 text-decoration-none"
+                                   title="Cliente sem usina vinculada — clique para corrigir">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> Sem usina
+                                </a>
+                                {% else %}
+                                <small class="text-muted ms-1" style="font-size:11px">· {{ c._nome_usina }}</small>
+                                {% endif %}
                             </td>
                             <td class="text-center">
                                 <div>{{ c._proxima_leitura_br }}</div>
@@ -116,6 +134,14 @@
                                 {% if c._status == 'cobranca' or c._status == 'pago' or c._status == 'baixada' %}
                                 <a href="{{ url_for('cliente_ver', uc=c.cod_uc) }}" class="btn btn-sm btn-outline-secondary" title="Ver cliente">
                                     <i class="bi bi-eye"></i>
+                                </a>
+                                {% endif %}
+                                {% if c._id_fatura and c._status != 'pago' %}
+                                <a href="{{ url_for('fatura_excluir', id_fatura=c._id_fatura) }}"
+                                   class="btn btn-sm btn-outline-danger"
+                                   title="Excluir cobrança e voltar para baixar"
+                                   onclick="return confirm('Excluir cobrança de {{ c.desc_nome }} ({{ c._mes_ref }})?\nO cliente voltará para a fila de download.')">
+                                    <i class="bi bi-trash"></i>
                                 </a>
                                 {% endif %}
                             </td>
@@ -434,6 +460,30 @@
                 aviso.className = 'alert alert-danger mt-3 mb-0 py-2 small';
                 aviso.textContent = 'Erro: ' + e.message;
                 aviso.style.display = '';
+            }
+        });
+    }
+
+    // Filtro UC / Nome em tempo real
+    const filtroBusca = document.getElementById('filtroBusca');
+    const badgeTotal  = document.querySelector('.badge.bg-secondary');
+    const tabelaLinhas = document.querySelectorAll('tbody tr');
+    if (filtroBusca) {
+        filtroBusca.addEventListener('input', function () {
+            const q = this.value.trim().toLowerCase();
+            let visiveis = 0;
+            tabelaLinhas.forEach(tr => {
+                const uc   = (tr.dataset.uc   || '');
+                const nome = (tr.dataset.nome || '');
+                const bate = !q || uc.includes(q) || nome.includes(q);
+                tr.style.display = bate ? '' : 'none';
+                if (bate) visiveis++;
+            });
+            if (badgeTotal) {
+                const total = tabelaLinhas.length;
+                badgeTotal.textContent = q
+                    ? `${visiveis} de ${total} cliente(s)`
+                    : `${total} cliente(s) no intervalo`;
             }
         });
     }

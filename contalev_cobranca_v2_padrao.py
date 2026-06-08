@@ -479,6 +479,8 @@ def _html_para_pdf(html_str: str) -> bytes:
       - Timeout reduzido (8s vs 20s default)
       - Args do Chromium otimizados (sem GPU, sem sandbox)
     """
+    static_root = os.path.join(_DIR, "static").replace("\\", "/")
+    html_str = html_str.replace('src="/static/', f'src="file:///{static_root}/')
     with tempfile.NamedTemporaryFile(
         suffix=".html", mode="w", encoding="utf-8", delete=False
     ) as f:
@@ -486,40 +488,51 @@ def _html_para_pdf(html_str: str) -> bytes:
         tmp_path = f.name
     try:
         from playwright.sync_api import sync_playwright
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch(
-                args=[
-                    "--disable-gpu",
-                    "--disable-dev-shm-usage",
-                    "--no-sandbox",
-                ],
-            )
-            try:
-                page = browser.new_page()
-                # wait_until="load" garante que fontes e CSS externos terminaram
-                # de carregar antes do PDF ser gerado. Timeout maior (15s) acomoda
-                # redes mais lentas — Google Fonts pode demorar 3-5s no 1º load.
-                page.goto(
-                    "file:///" + tmp_path.replace("\\", "/"),
-                    wait_until="load",
-                    timeout=15000,
+
+        def _render() -> bytes:
+            # IMPORTANTE: roda numa worker thread isolada. O Playwright Sync nao
+            # pode iniciar dentro de um event loop asyncio ja ativo — e o
+            # baixar_equatorial.py ja roda tudo dentro de um sync_playwright
+            # (download), o que criava o erro "Sync API inside the asyncio loop".
+            # Uma thread nova nao tem loop rodando, entao o sync_playwright aqui
+            # funciona tanto no fluxo web (Flask) quanto no download em lote.
+            with sync_playwright() as pw:
+                browser = pw.chromium.launch(
+                    args=[
+                        "--disable-gpu",
+                        "--disable-dev-shm-usage",
+                        "--no-sandbox",
+                    ],
                 )
-                # Espera adicional para fontes via FontFace API (web fonts)
                 try:
-                    page.evaluate("document.fonts.ready")
-                    page.wait_for_function("document.fonts.status === 'loaded'", timeout=8000)
-                except Exception:
-                    pass
-                pdf_bytes = page.pdf(
-                    format="A4",
-                    print_background=True,
-                    margin={"top": "0mm", "right": "0mm",
-                            "bottom": "0mm", "left": "0mm"},
-                    prefer_css_page_size=True,
-                )
-            finally:
-                browser.close()
-        return pdf_bytes
+                    page = browser.new_page()
+                    # wait_until="load" garante que fontes e CSS externos terminaram
+                    # de carregar antes do PDF ser gerado. Timeout maior (15s) acomoda
+                    # redes mais lentas — Google Fonts pode demorar 3-5s no 1º load.
+                    page.goto(
+                        "file:///" + tmp_path.replace("\\", "/"),
+                        wait_until="load",
+                        timeout=15000,
+                    )
+                    # Espera adicional para fontes via FontFace API (web fonts)
+                    try:
+                        page.evaluate("document.fonts.ready")
+                        page.wait_for_function("document.fonts.status === 'loaded'", timeout=8000)
+                    except Exception:
+                        pass
+                    return page.pdf(
+                        format="A4",
+                        print_background=True,
+                        margin={"top": "0mm", "right": "0mm",
+                                "bottom": "0mm", "left": "0mm"},
+                        prefer_css_page_size=True,
+                    )
+                finally:
+                    browser.close()
+
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            return ex.submit(_render).result()
     finally:
         try:
             os.unlink(tmp_path)
@@ -962,24 +975,22 @@ def _mes_para_yyyymm(mes_ref):
 
 def gerar_cobranca(d):
     _preparar_logos()
-    # Nome do arquivo: padrao novo (YYYYMM)_SoLev_PrimeiroUltimo_idCliente.pdf
-    # Ver skill file-naming/SKILL.md para detalhes
+    # Nome do arquivo: YYYYMM-SoLevPrimeiroUltimoVV.pdf
+    # VV = 2 dígitos verificadores da UC (evita colisão entre clientes homônimos)
+    from utils import uc_sufixo as _uc_suf
     nome_arq = _nome_para_arquivo(d["nome"])
     yyyymm = _mes_para_yyyymm(d.get("mes_referencia", "01/2026"))
+    _suf = _uc_suf(d.get("unidade_consumidora", ""))
     id_cliente = d.get("id_cliente")
     if id_cliente:
-        # Padrao novo (preferido)
+        # Padrao novo (preferido): inclui id_cliente + sufixo UC para unicidade absoluta
         d["output_path"] = os.path.join(
-            _DIR, f"{yyyymm}_SoLev_{nome_arq}_{int(id_cliente)}.pdf"
+            _DIR, f"{yyyymm}_SoLev_{nome_arq}_{int(id_cliente)}{_suf}.pdf"
         )
     else:
-        # Fallback: padrao legado com sufixo de UC (compatibilidade)
-        uc_suffix = ""
-        if "unidade_consumidora" in d and d["unidade_consumidora"]:
-            uc = str(d["unidade_consumidora"]).strip().replace(".", "").replace("-", "")
-            uc_suffix = f"-{uc[-4:]}" if len(uc) >= 4 else f"-{uc}"
+        # Fallback: sufixo verificador da UC
         d["output_path"] = os.path.join(
-            _DIR, f"{yyyymm}-SoLev{nome_arq}{uc_suffix}.pdf"
+            _DIR, f"{yyyymm}-SoLev{nome_arq}{_suf}.pdf"
         )
     dados = calcular(d)
     base = dados["output_path"].replace(".pdf", "")

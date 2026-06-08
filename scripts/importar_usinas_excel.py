@@ -20,7 +20,7 @@ os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv; load_dotenv()
 from openpyxl import load_workbook
-from db import _db, tb_save_titular, tb_save_dono, tb_save_investidor, tb_save_endereco_usina
+from db import _db, tb_save_titular, tb_save_investidor, tb_save_endereco_usina
 from datetime import datetime
 
 DRY_RUN = "--aplicar" not in sys.argv
@@ -71,9 +71,6 @@ def main():
     titulares_existentes = {_digitos(t.get("desc_cpf_cnpj")): t
                             for t in (db.select("tb_titulares") or [])
                             if t.get("desc_cpf_cnpj")}
-    donos_existentes = {_digitos(d.get("desc_cpf_cnpj")): d
-                        for d in (db.select("tb_donos") or [])
-                        if d.get("desc_cpf_cnpj")}
     investidores_existentes = {_digitos(i.get("desc_cpf_cnpj")): i
                                for i in (db.select("tb_investidores") or [])
                                if i.get("desc_cpf_cnpj")}
@@ -81,7 +78,6 @@ def main():
                          for u in (db.select("tb_usinas") or [])
                          if u.get("cod_uc_geradora")}
     print(f"   Titulares: {len(titulares_existentes)}")
-    print(f"   Donos:     {len(donos_existentes)}")
     print(f"   Investidores: {len(investidores_existentes)}")
     print(f"   Usinas:    {len(usinas_existentes)}")
 
@@ -112,7 +108,7 @@ def main():
 
     # Processa cada linha
     print("\n3) Processando usinas...")
-    stats = {"titulares_novos": 0, "donos_novos": 0, "investidores_novos": 0,
+    stats = {"titulares_novos": 0, "investidores_novos": 0,
              "usinas_novas": 0, "usinas_atualizadas": 0, "enderecos": 0, "erros": 0}
 
     for i, l in enumerate(linhas, 1):
@@ -141,40 +137,23 @@ def main():
                     stats["titulares_novos"] += 1
                     print(f"  Titular (NOVO):     {l['tit_nome'][:40]}")
 
-            # ---- Dono ----
-            id_dono = None
-            dono_cpf_d = _digitos(l["dono_cpf"])
-            if l["dono_nome"]:
-                if dono_cpf_d and dono_cpf_d in donos_existentes:
-                    id_dono = donos_existentes[dono_cpf_d]["id_dono"]
-                    print(f"  Dono (existente):   {l['dono_nome'][:40]}  id={id_dono}")
-                else:
-                    dados = {"desc_nome": l["dono_nome"],
-                             "desc_cpf_cnpj": l["dono_cpf"],
-                             "desc_telefone": l["dono_tel"],
-                             "desc_email": l["dono_email"],
-                             "dt_nascimento": _data_iso(l["dono_nasc"])}
-                    if not DRY_RUN:
-                        d = tb_save_dono(dados)
-                        id_dono = d.get("id_dono")
-                        if dono_cpf_d: donos_existentes[dono_cpf_d] = d
-                    else:
-                        if dono_cpf_d: donos_existentes[dono_cpf_d] = {"id_dono": f"PLACEHOLDER_{dono_cpf_d}", **dados}
-                    stats["donos_novos"] += 1
-                    print(f"  Dono (NOVO):        {l['dono_nome'][:40]}")
-
-            # ---- Investidor (PIX) ----
+            # ---- Proprietário (investidor) ----
+            # dono == investidor (fusão de tb_donos → tb_investidores). A identidade
+            # vem das colunas DONO do Excel; dados bancários/PIX das colunas PIX
+            # (quando houver). Dedup por CPF/CNPJ.
             id_investidor = None
-            pix_cpf_d = _digitos(l["pix_cpf"])
-            if l["pix_nome"] and l["pix_chave"]:
-                if pix_cpf_d and pix_cpf_d in investidores_existentes:
-                    id_investidor = investidores_existentes[pix_cpf_d]["id_investidor"]
-                    print(f"  PIX (existente):    {l['pix_nome'][:40]}  id={id_investidor}")
+            prop_nome = l["dono_nome"] or l["pix_nome"]
+            prop_cpf  = l["dono_cpf"]  or l["pix_cpf"]
+            prop_cpf_d = _digitos(prop_cpf)
+            if prop_nome:
+                if prop_cpf_d and prop_cpf_d in investidores_existentes:
+                    id_investidor = investidores_existentes[prop_cpf_d]["id_investidor"]
+                    print(f"  Proprietário (existente): {prop_nome[:40]}  id={id_investidor}")
                 else:
-                    dados = {"desc_nome": l["pix_nome"],
-                             "desc_cpf_cnpj": l["pix_cpf"],
-                             "desc_telefone": l["pix_tel"],
-                             "desc_email": l["pix_email"],
+                    dados = {"desc_nome": prop_nome,
+                             "desc_cpf_cnpj": prop_cpf,
+                             "desc_telefone": l["dono_tel"] or l["pix_tel"],
+                             "desc_email": l["dono_email"] or l["pix_email"],
                              "desc_banco": l["banco"],
                              "desc_agencia": l["agencia"],
                              "desc_conta": l["conta"],
@@ -185,11 +164,11 @@ def main():
                     if not DRY_RUN:
                         i_obj = tb_save_investidor(dados)
                         id_investidor = i_obj.get("id_investidor")
-                        if pix_cpf_d: investidores_existentes[pix_cpf_d] = i_obj
+                        if prop_cpf_d: investidores_existentes[prop_cpf_d] = i_obj
                     else:
-                        if pix_cpf_d: investidores_existentes[pix_cpf_d] = {"id_investidor": f"PLACEHOLDER_{pix_cpf_d}", **dados}
+                        if prop_cpf_d: investidores_existentes[prop_cpf_d] = {"id_investidor": f"PLACEHOLDER_{prop_cpf_d}", **dados}
                     stats["investidores_novos"] += 1
-                    print(f"  PIX (NOVO):         {l['pix_nome'][:40]}")
+                    print(f"  Proprietário (NOVO):     {prop_nome[:40]}")
 
             # ---- Usina ----
             # cod_uc_geradora exige exatos 15 dígitos sem formatação (check constraint)
@@ -215,7 +194,6 @@ def main():
                 "desc_observacoes":           l["obs"] or "",
             }
             if id_titular: dados_usina["id_titular"] = id_titular
-            if id_dono: dados_usina["id_dono"] = id_dono
             if id_investidor: dados_usina["id_investidor"] = id_investidor
 
             id_usina = None
@@ -260,7 +238,6 @@ def main():
     print("\n" + "=" * 70)
     print(f"RESUMO ({'DRY-RUN' if DRY_RUN else 'APLICADO'}):")
     print(f"  Titulares novos:      {stats['titulares_novos']}")
-    print(f"  Donos novos:          {stats['donos_novos']}")
     print(f"  Investidores novos:   {stats['investidores_novos']}")
     print(f"  Usinas novas:         {stats['usinas_novas']}")
     print(f"  Usinas atualizadas:   {stats['usinas_atualizadas']}")

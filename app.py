@@ -382,6 +382,18 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
                 cliente.get("endereco_linha3", ""),
             ] if p)
 
+        # Idempotencia da economia acumulada (mesma logica do gerar_manual):
+        # desconta a economia ja registrada na fatura deste mes (se houver),
+        # para regerar a mesma cobranca nao duplicar — no PDF e no banco.
+        _eco_acum_ant = max(0, cliente.get("economia_acumulada_anterior", 0) or 0)
+        if cliente.get("_fonte") == "tb_clientes" and cliente.get("_id_cliente"):
+            import re as _re_eco_a
+            _mm_a = _re_eco_a.match(r"^\s*(\d{1,2})/(\d{4})\s*$", str(mes_ref or ""))
+            if _mm_a:
+                from db import tb_economia_mes_fatura
+                _eco_acum_ant = max(0.0, _eco_acum_ant - tb_economia_mes_fatura(
+                    cliente["_id_cliente"], _mm_a.group(2), _mm_a.group(1)))
+
         dados = {
             "nome": cliente["nome"], "cpf": cliente.get("cpf", ""),
             "endereco": _end,
@@ -393,7 +405,7 @@ def _gerar_uma_cobranca(pdf_path, uc_override=None):
             "valor_cobranca_anterior": cliente.get("valor_cobranca_anterior", 0) or 0,
             "venc_solev_anterior": cliente.get("venc_solev_anterior", ""),
             "data_pagamento_anterior": cliente.get("data_pagamento_anterior", ""),
-            "economia_acumulada_anterior": max(0, cliente.get("economia_acumulada_anterior", 0) or 0),
+            "economia_acumulada_anterior": _eco_acum_ant,
             "codigo_barras": cliente.get("codigo_barras", "CODIGO DE BARRA EM DESENVOLVIMENTO"),
             "linha_digitavel": cliente.get("linha_digitavel", "XXXX.XXXX  XXXXX.XXXXX  XXXXX.XXXXX  X  XXXXXXXXXXXXXX"),
             "pix_payload": cliente.get("pix_payload", ""),
@@ -624,6 +636,18 @@ def _montar_dados_de_pdf(pdf_path, uc_override=None):
                 cliente.get("endereco_linha3", ""),
             ] if p)
 
+        # Idempotencia da economia acumulada (mesma logica do gerar_manual):
+        # desconta a economia ja registrada na fatura deste mes (se houver),
+        # para regerar a mesma cobranca nao duplicar — no PDF e no banco.
+        _eco_acum_ant = max(0, cliente.get("economia_acumulada_anterior", 0) or 0)
+        if cliente.get("_fonte") == "tb_clientes" and cliente.get("_id_cliente"):
+            import re as _re_eco_a
+            _mm_a = _re_eco_a.match(r"^\s*(\d{1,2})/(\d{4})\s*$", str(mes_ref or ""))
+            if _mm_a:
+                from db import tb_economia_mes_fatura
+                _eco_acum_ant = max(0.0, _eco_acum_ant - tb_economia_mes_fatura(
+                    cliente["_id_cliente"], _mm_a.group(2), _mm_a.group(1)))
+
         dados = {
             "nome": cliente["nome"], "cpf": cliente.get("cpf", ""),
             "endereco": _end,
@@ -635,7 +659,7 @@ def _montar_dados_de_pdf(pdf_path, uc_override=None):
             "valor_cobranca_anterior": cliente.get("valor_cobranca_anterior", 0) or 0,
             "venc_solev_anterior": cliente.get("venc_solev_anterior", ""),
             "data_pagamento_anterior": cliente.get("data_pagamento_anterior", ""),
-            "economia_acumulada_anterior": max(0, cliente.get("economia_acumulada_anterior", 0) or 0),
+            "economia_acumulada_anterior": _eco_acum_ant,
             "codigo_barras": cliente.get("codigo_barras", "CODIGO DE BARRA EM DESENVOLVIMENTO"),
             "linha_digitavel": cliente.get("linha_digitavel", "XXXX.XXXX  XXXXX.XXXXX  XXXXX.XXXXX  X  XXXXXXXXXXXXXX"),
             "pix_payload": cliente.get("pix_payload", ""),
@@ -1546,6 +1570,12 @@ def cobrancas_dia():
             c["_dias_ate_leitura"]   = (pl - hoje).days
             no_intervalo.append(c)
 
+    # Busca vinculos (uc -> nome_usina) para indicar se cliente tem usina vinculada
+    from db import tb_mapa_uc_para_usina
+    mapa_usina = tb_mapa_uc_para_usina()
+    for c in no_intervalo:
+        c["_nome_usina"] = mapa_usina.get(c.get("cod_uc"), "")
+
     # Busca status em tb_faturas pro mes_ref de cada cliente (mes da leitura)
     if no_intervalo:
         # Indexa faturas por (id_cliente, ano, mes)
@@ -2309,6 +2339,17 @@ def gerar_manual():
                 eco_acum_anterior = float(economia_acum_manual.replace(",", "."))
             else:
                 eco_acum_anterior = max(0, cliente.get("economia_acumulada_anterior", 0) or 0)
+                # Idempotencia: se JA existe fatura deste mes (regeracao), o
+                # acumulado do cadastro ja contem a economia dela. Desconta para
+                # o PDF nao duplicar a economia ao regerar a mesma cobranca.
+                if cliente.get("_fonte") == "tb_clientes" and cliente.get("_id_cliente"):
+                    import re as _re_eco
+                    _mm = _re_eco.match(r"^\s*(\d{1,2})/(\d{4})\s*$", mes_ref or "")
+                    if _mm:
+                        from db import tb_economia_mes_fatura
+                        _eco_ja = tb_economia_mes_fatura(
+                            cliente["_id_cliente"], _mm.group(2), _mm.group(1))
+                        eco_acum_anterior = max(0.0, eco_acum_anterior - _eco_ja)
 
             dados = {
                 "nome": cliente["nome"],
@@ -2608,16 +2649,20 @@ def gerar_auto():
                 BASE_PASTA_USINAS, nome_usina,
                 _sanitizar_nome(f"{nome_camel}-{uc_nova}"),
             )
-            # Busca PDF Equatorial: YYYYMM, MMYYYY (legado) ou glob
+            # Busca PDF Equatorial: novo (com sufixo UC), legado (sem sufixo) ou glob
+            from utils import uc_sufixo as _uc_suf
+            _suf = _uc_suf(uc)
             pdf_eq = None
             for _cand in [
+                os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}{_suf}.pdf"),
                 os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}.pdf"),
+                os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}{_suf}.pdf"),
                 os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}.pdf"),
             ]:
                 if os.path.exists(_cand):
                     pdf_eq = _cand; break
             if not pdf_eq:
-                for _m in _glob.glob(os.path.join(pasta_cli, f"*-Equatorial{nome_camel}.pdf")):
+                for _m in _glob.glob(os.path.join(pasta_cli, f"*Equatorial*{nome_camel}*.pdf")):
                     if os.path.basename(_m).startswith((yyyymm, mes_str)):
                         pdf_eq = _m; break
             if not pdf_eq:
@@ -2666,28 +2711,33 @@ def gerar_auto():
             BASE_PASTA_USINAS, nome_usina,
             _sanitizar_nome(f"{nome_camel}-{uc_nova}"),
         )
-        # Procura PDF Equatorial: YYYYMM, MMYYYY (legado) ou glob
+        # Procura PDF Equatorial: novo (com sufixo UC), legado (sem sufixo) ou glob
+        from utils import uc_sufixo as _uc_suf
+        _suf = _uc_suf(uc)
         pdf_eq = None
         for _cand in [
+            os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}{_suf}.pdf"),
             os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}.pdf"),
+            os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}{_suf}.pdf"),
             os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}.pdf"),
         ]:
             if os.path.exists(_cand):
                 pdf_eq = _cand; break
         if not pdf_eq:
-            _matches = _glob.glob(os.path.join(pasta_cli, f"*-Equatorial{nome_camel}.pdf"))
+            _matches = _glob.glob(os.path.join(pasta_cli, f"*-Equatorial{nome_camel}*.pdf"))
             for _m in _matches:
                 if os.path.basename(_m).startswith((yyyymm, mes_str)):
                     pdf_eq = _m; break
-        # Procura cobranca SOLEV: canonico SoLev primeiro, depois legado v1
+        # Procura cobranca SOLEV: novo (com sufixo UC) primeiro, depois legados
         pdf_co = None
         for _cand in [
-            os.path.join(pasta_cli, f"{yyyymm}-SoLev{nome_camel}.pdf"),      # canonico SoLev
-            os.path.join(pasta_cli, f"{yyyymm}-ContaLev{nome_camel}.pdf"),   # legado v1
-            os.path.join(pasta_cli, f"{yyyymm}-Contalev{nome_camel}.pdf"),   # legado v1
-            os.path.join(pasta_cli, f"{yyyymm}-SOLEV{nome_camel}.pdf"),      # legado v1
-            os.path.join(pasta_cli, f"{mes_str}-{nome_camel}Contalev.pdf"),  # legado antigo
-            os.path.join(pasta_cli, f"{yyyymm}-{nome_camel}Contalev.pdf"),   # legado antigo
+            os.path.join(pasta_cli, f"{yyyymm}-SoLev{nome_camel}{_suf}.pdf"),  # novo padrão
+            os.path.join(pasta_cli, f"{yyyymm}-SoLev{nome_camel}.pdf"),        # canonico sem sufixo
+            os.path.join(pasta_cli, f"{yyyymm}-ContaLev{nome_camel}.pdf"),     # legado v1
+            os.path.join(pasta_cli, f"{yyyymm}-Contalev{nome_camel}.pdf"),     # legado v1
+            os.path.join(pasta_cli, f"{yyyymm}-SOLEV{nome_camel}.pdf"),        # legado v1
+            os.path.join(pasta_cli, f"{mes_str}-{nome_camel}Contalev.pdf"),    # legado antigo
+            os.path.join(pasta_cli, f"{yyyymm}-{nome_camel}Contalev.pdf"),     # legado antigo
         ]:
             if os.path.exists(_cand):
                 pdf_co = _cand; break
@@ -2908,18 +2958,21 @@ def gerar_auto_gerar_job():
                     _sanitizar_nome(f"{nome_camel}-{uc_nova}"),
                 )
 
-                # Busca o PDF Equatorial: tenta YYYYMM, depois MMYYYY (legado),
-                # depois qualquer *-EquatorialNome.pdf do mes correto (glob)
+                # Busca o PDF Equatorial: novo (com sufixo UC), legado (sem sufixo) ou glob
+                from utils import uc_sufixo as _uc_suf
+                _suf = _uc_suf(uc)
                 pdf_eq = None
                 for _candidato in [
+                    os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}{_suf}.pdf"),
                     os.path.join(pasta_cli, f"{yyyymm}-Equatorial{nome_camel}.pdf"),
+                    os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}{_suf}.pdf"),
                     os.path.join(pasta_cli, f"{mes_str}-Equatorial{nome_camel}.pdf"),
                 ]:
                     if os.path.exists(_candidato):
                         pdf_eq = _candidato
                         break
                 if not pdf_eq:
-                    for _m in _glob.glob(os.path.join(pasta_cli, f"*-Equatorial{nome_camel}.pdf")):
+                    for _m in _glob.glob(os.path.join(pasta_cli, f"*Equatorial*{nome_camel}*.pdf")):
                         _base = os.path.basename(_m)
                         if _base.startswith(yyyymm) or _base.startswith(mes_str):
                             pdf_eq = _m
@@ -3704,22 +3757,47 @@ def fatura_excluir(id_fatura):
             except OSError:
                 pass
 
+    # Guarda dt_leitura_atual da fatura antes de deletar (para restaurar proxima_leitura)
+    dt_leitura_fatura = fatura.get("dt_leitura_atual") or ""
+
     try:
         c_tb = tb_get_cliente_por_uc(uc)
         if c_tb:
             eco_tb = c_tb.get("qtd_economia_acumulada", 0) or 0
-            _get_db().patch("tb_clientes", {"id_cliente": c_tb["id_cliente"]}, {
+            patch_data = {
                 "qtd_economia_acumulada": round(max(0, eco_tb - eco_mes), 2),
                 "vlr_cobranca_anterior":  0,
-                "dt_venc_anterior":       "",
+                "dt_venc_anterior":       None,   # None, NUNCA "" (coluna date rejeita string vazia)
                 "dt_ultimo_pagamento":    None,
-            })
+            }
+            # Restaura proxima_leitura para a data de leitura da fatura excluída,
+            # para que o cliente reapareça em Cobranças do Dia com o intervalo correto
+            if dt_leitura_fatura:
+                patch_data["proxima_leitura"] = dt_leitura_fatura
+            _get_db().patch("tb_clientes", {"id_cliente": c_tb["id_cliente"]}, patch_data)
     except Exception as e:
         app.logger.warning(f"[fatura_excluir] reverter cliente falhou: {e}")
 
     tb_delete_fatura(id_fatura)
 
     flash(f"Cobranca de {nome} ({mes_ref}) excluida.", "warning")
+
+    next_url = request.args.get("next", "").strip()
+    if next_url:
+        from urllib.parse import unquote
+        return redirect(unquote(next_url))
+
+    # Se veio de Cobranças do Dia e há data de leitura, redireciona com intervalo ampliado
+    if dt_leitura_fatura:
+        try:
+            from datetime import date as _date, timedelta as _td
+            _leit = _date.fromisoformat(dt_leitura_fatura[:10])
+            _de  = (_leit - _td(days=2)).strftime("%d/%m/%Y")
+            _ate = (_leit + _td(days=5)).strftime("%d/%m/%Y")
+            return redirect(url_for("cobrancas_dia", de=_de, ate=_ate))
+        except Exception:
+            pass
+
     return redirect(url_for("faturas"))
 
 
@@ -5699,25 +5777,30 @@ def _calcular_resumo_rateio_consolidado(mes_sel: str = ""):
         compensado_total = 0.0
         n_com_fatura = 0
         for cli in clientes_da_usina:
+            # REGRA: fatura que compensa = leitura POSTERIOR a leitura da usina (1a apos)
             kwh_compensado = 0
             tem_fatura = False
-            mes_busca = mes_norm
-            if data_leitura_usina:
-                for item in historico:
-                    h_mes = _norm_mes_cmp(item.get("mes_referencia", ""))
-                    h_uc = str(item.get("uc", "")).lstrip("0")
-                    if h_mes == mes_norm and h_uc == str(cli["uc"]).lstrip("0"):
-                        dl_cli = (item.get("data_leitura_atual", "") or "").strip()
-                        if dl_cli and dl_cli == data_leitura_usina.strip():
-                            mes_busca = _prox_mes(mes_norm)
-                        break
+            def _dia_br_c(s):
+                s = str(s or "").strip()
+                for _f in ("%d/%m/%Y", "%Y-%m-%d"):
+                    try:
+                        return datetime.strptime(s[:10], _f).date()
+                    except ValueError:
+                        continue
+                return None
+            _leit_u = _dia_br_c(data_leitura_usina)
+            _uc_lst = str(cli["uc"]).lstrip("0")
+            _cands = []
             for item in historico:
-                h_mes = _norm_mes_cmp(item.get("mes_referencia", ""))
-                h_uc = str(item.get("uc", "")).lstrip("0")
-                if h_mes == mes_busca and h_uc == str(cli["uc"]).lstrip("0"):
-                    kwh_compensado = item.get("compensado_kwh", 0) or 0
-                    tem_fatura = True
-                    break
+                if str(item.get("uc", "")).lstrip("0") != _uc_lst:
+                    continue
+                _dl = _dia_br_c(item.get("data_leitura_atual", ""))
+                if _leit_u and _dl and _dl > _leit_u:
+                    _cands.append((_dl, item))
+            if _cands:
+                _cands.sort(key=lambda x: x[0])
+                kwh_compensado = _cands[0][1].get("compensado_kwh", 0) or 0
+                tem_fatura = True
 
             if tem_fatura:
                 n_com_fatura += 1
@@ -6362,9 +6445,12 @@ def rateio_dashboard(uid):
     # Mes atual (proxima leitura / ciclo em andamento)
     mes_atual = f"{datetime.now().month}/{datetime.now().year}"
 
-    # Meses disponiveis: meses com fatura + mes atual (estimativa)
+    # Meses disponiveis: meses com fatura/geracao + mes atual + meses com rateio registrado
+    from db import tb_get_rateios_usina
+    rateios_usina = tb_get_rateios_usina(id_usina) if id_usina else {}
     meses_set = set(geracao_mensal_all.keys())
     meses_set.add(mes_atual)
+    meses_set.update(rateios_usina.keys())  # inclui meses que tem rateio registrado (ex: 5/2026)
     def _sort_mes(m):
         try:
             p = m.split("/")
@@ -6375,9 +6461,11 @@ def rateio_dashboard(uid):
 
     mes_sel = request.args.get("mes", "")
     if not mes_sel:
-        # Padrão: mês mais recente com geração real; fallback mês atual
+        # Padrão: mês mais recente com geração real; senão mês com rateio; senão mês atual
         if geracao_mensal_all:
             mes_sel = max(geracao_mensal_all.keys(), key=_sort_mes)
+        elif rateios_usina:
+            mes_sel = max(rateios_usina.keys(), key=_sort_mes)
         else:
             mes_sel = mes_atual
 
@@ -6471,34 +6559,38 @@ def rateio_dashboard(uid):
         kwh_esperado = base_kwh * (pct / 100) if pct > 0 else 0
 
         # Busca fatura do cliente neste mes (compensado = kWh creditado real)
-        # Se a leitura do cliente cai no mesmo dia da usina, usa a fatura
-        # do mes seguinte (os creditos dessa geracao so aparecem la).
+        # REGRA: a fatura que COMPENSA esta geracao e a do cliente cuja leitura e
+        # POSTERIOR a leitura da usina (a primeira apos). Faturas de leitura anterior
+        # compensam o ciclo anterior, nao esta geracao.
         kwh_compensado = 0
         consumo_cliente = 0
         saldo_cliente = c.get("saldo_kwh", 0) or 0
         tem_fatura = False
 
-        # 1) Determina o mes correto de busca para este cliente
-        mes_busca = mes_norm
-        if data_leitura_usina:
-            for item in historico:
-                h_mes = _norm_mes_cmp(item.get("mes_referencia", ""))
-                h_uc = str(item.get("uc", "")).lstrip("0")
-                if h_mes == mes_norm and h_uc == str(uc).lstrip("0"):
-                    dl_cli = item.get("data_leitura_atual", "").strip()
-                    if dl_cli and dl_cli == data_leitura_usina.strip():
-                        mes_busca = _prox_mes(mes_norm)
-                    break
+        def _dia_br(s):
+            s = str(s or "").strip()
+            for _f in ("%d/%m/%Y", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(s[:10], _f).date()
+                except ValueError:
+                    continue
+            return None
 
-        # 2) Busca a fatura no mes correto
+        leit_usina = _dia_br(data_leitura_usina)
+        uc_lst = str(uc).lstrip("0")
+        candidatas = []
         for item in historico:
-            h_mes = _norm_mes_cmp(item.get("mes_referencia", ""))
-            h_uc = str(item.get("uc", "")).lstrip("0")
-            if h_mes == mes_busca and h_uc == str(uc).lstrip("0"):
-                kwh_compensado = item.get("compensado_kwh", 0) or 0
-                consumo_cliente = item.get("consumo_kwh", 0) or 0
-                tem_fatura = True
-                break
+            if str(item.get("uc", "")).lstrip("0") != uc_lst:
+                continue
+            dl = _dia_br(item.get("data_leitura_atual", ""))
+            if leit_usina and dl and dl > leit_usina:
+                candidatas.append((dl, item))
+        if candidatas:
+            candidatas.sort(key=lambda x: x[0])  # a 1a leitura posterior a da usina
+            item = candidatas[0][1]
+            kwh_compensado = item.get("compensado_kwh", 0) or 0
+            consumo_cliente = item.get("consumo_kwh", 0) or 0
+            tem_fatura = True
 
         diferenca = kwh_compensado - kwh_esperado if tem_fatura and kwh_compensado > 0 else 0
 
@@ -6616,6 +6708,8 @@ def rateio_dashboard(uid):
         "via_envio":      rateio_mes.get("via_envio", ""),
         "data_protocolo": rateio_mes.get("data_protocolo", ""),
     }
+    # Snapshot do rateio registrado (tb_rateios_mensais) para exibir como controle
+    rateio_registrado = rateios_usina.get(_mes_key) or rateios_usina.get(mes_sel) or {}
 
     return render_template("rateio.html",
         usina=usina, uid=uid_leg, id_usina=id_usina, alocacoes=alocacoes,
@@ -6632,7 +6726,7 @@ def rateio_dashboard(uid):
         dias_registrados=dias_registrados, media_diaria=round(media_diaria, 1),
         mes_sel=mes_sel, meses_disponiveis=meses_disponiveis,
         sugestoes=sugestoes, todas_faturas=todas_faturas,
-        protocolo_info=protocolo_info,
+        protocolo_info=protocolo_info, rateio_registrado=rateio_registrado,
         soma_necessidade=round(_soma_nec, 1),
         base_para_sugestao="necessidade" if _soma_nec > 0 else "previsao",
         fmt=_fmt_brl,
@@ -6837,13 +6931,15 @@ def rateio_gerar_pdf(uid):
             vinculados = [(uc, c) for uc, c in clientes.items() if c.get("usina_id") == uid]
             vinculados.sort(key=lambda x: -(x[1].get("rateio_pct", 0) or 0))
 
-        pdf_path = gerar_pdf_rateio(usina, uid, vinculados)
+        _mes_ref_rat = request.args.get("mes", "")
+        pdf_path = gerar_pdf_rateio(usina, uid, vinculados, mes_ref=_mes_ref_rat)
+        nome_download = os.path.basename(pdf_path)
         with open(pdf_path, "rb") as f:
             pdf_bytes = f.read()
         return Response(
             pdf_bytes,
             mimetype="application/pdf",
-            headers={"Content-Disposition": f"attachment; filename=Rateio_{uid}.pdf"}
+            headers={"Content-Disposition": f"attachment; filename={nome_download}"}
         )
     except Exception as e:
         return f"Erro ao gerar rateio: {e}", 500
@@ -6930,7 +7026,8 @@ def rateio_enviar_email(uid):
         vinculados.sort(key=lambda x: -(x[1].get("rateio_pct", 0) or 0))
 
     try:
-        pdf_path = gerar_pdf_rateio(usina, uid, vinculados)
+        _mes_ref_email = request.args.get("mes", "")
+        pdf_path = gerar_pdf_rateio(usina, uid, vinculados, mes_ref=_mes_ref_email)
     except Exception as e:
         flash(f"Erro ao gerar PDF: {e}", "danger")
         return redirect(url_for("rateio_dashboard", uid=uid))

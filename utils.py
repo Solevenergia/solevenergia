@@ -264,6 +264,20 @@ def _carregar_cliente_hibrido(uc: str) -> tuple:
 
 # ── Tarifas ──────────────────────────────────────────────────
 
+def uc_sufixo(uc: str) -> str:
+    """Retorna os 2 dígitos verificadores da UC para compor nomes de arquivo.
+
+    Ex: '1.211.836.012-07' → '07'
+        '1211836012-07'    → '07'
+        '121183601207'     → '07'   (sem traço — últimos 2 do número limpo)
+    """
+    uc = str(uc or "").strip()
+    if "-" in uc:
+        return uc.split("-")[-1][-2:].zfill(2)
+    digitos = re.sub(r"\D", "", uc)
+    return digitos[-2:] if len(digitos) >= 2 else digitos.zfill(2)
+
+
 def obter_tarifa_mes(mes_ref):
     """Retorna tarifa e bandeiras para um mes de referencia, ou None.
     Aceita tanto '3/2026' quanto '03/2026'."""
