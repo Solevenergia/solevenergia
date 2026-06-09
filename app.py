@@ -6237,35 +6237,8 @@ def rateio_dashboard(uid):
     todos_clientes  = tb_carregar_clientes()
     clientes_id_map = {c["id_cliente"]: c for c in todos_clientes}
 
-    vinculados     = {}
-    vinculados_ucs = set()
-    for v in vinculos_lista:
-        id_c = v.get("id_cliente")
-        c_tb = clientes_id_map.get(id_c, {})
-        uc   = c_tb.get("cod_uc", "")
-        if uc:
-            pct = v.get("pct_rateio", 0) or 0
-            uc_alt = c_tb.get("cod_uc", "") or ""
-            vinculados[uc] = {
-                "nome":              c_tb.get("desc_nome", uc),
-                "rateio_pct":        round(pct, 2),
-                "saldo_kwh":         v.get("qtd_saldo_kwh", 0) or 0,
-                "dt_saldo_conferido": v.get("dt_saldo_conferido", "") or "",
-                "desc_saldo_obs":    v.get("desc_saldo_obs", "") or "",
-                "uc_display":        _fmt_uc15(uc_alt) if uc_alt else uc,
-            }
-            vinculados_ucs.add(uc)
-
-    # Nao vinculados — legado para compatibilidade com form /vincular
-    clientes_leg  = carregar_clientes()
-    _uc_alt_map = {c["cod_uc"]: _fmt_uc15(c.get("cod_uc") or "") for c in todos_clientes}
-    nao_vinculados = {
-        uc: {**c, "uc_display": _uc_alt_map.get(uc) or uc}
-        for uc, c in clientes_leg.items()
-        if uc not in vinculados_ucs
-    }
-
-    # ── Mes de referencia ──────────────────────────────────
+    # ── Mes de referencia (precisa vir ANTES dos vinculos para sabermos se o
+    #    ciclo ja foi registrado/enviado — modo conferencia) ─────────────────
     geracao_mensal_all = carregar_geracao_mensal().get(uid, {})
     historico = carregar_faturas()
 
@@ -6295,6 +6268,72 @@ def rateio_dashboard(uid):
             mes_sel = max(rateios_usina.keys(), key=_sort_mes)
         else:
             mes_sel = mes_atual
+
+    # ── Snapshot do rateio registrado deste ciclo (tb_rateios_mensais) ─────────
+    # Se existe rateio registrado para o mes_sel, a tela entra em MODO CONFERENCIA:
+    # a tabela passa a refletir o RETRATO daquele mes (os beneficiarios e % que
+    # foram efetivamente registrados/enviados), travados — e nao os vinculos
+    # atuais. Para um ciclo ainda sem rateio registrado, segue o modo planejamento.
+    _mes_key = _norm_mes(mes_sel)
+    rateio_registrado = rateios_usina.get(_mes_key) or rateios_usina.get(mes_sel) or {}
+    modo_conferencia = bool(rateio_registrado.get("beneficiarios"))
+
+    # ── Vinculados ─────────────────────────────────────────────
+    import re as _re_uc
+    def _ucdig(s):
+        """UC reduzida a digitos, sem zeros a esquerda — para casar UC do snapshot
+        (so digitos) com o cod_uc do cliente atual."""
+        return _re_uc.sub(r"\D", "", str(s or "")).lstrip("0")
+
+    vinculados     = {}
+    vinculados_ucs = set()
+    if modo_conferencia:
+        # FONTE = snapshot do mes. Casa cada beneficiario com o cliente atual
+        # (pelos digitos da UC) para puxar saldo/nome/UC formatada.
+        _cli_por_ucdig = {_ucdig(c.get("cod_uc")): c for c in todos_clientes if c.get("cod_uc")}
+        _vinc_por_id   = {v.get("id_cliente"): v for v in vinculos_lista}
+        for b in rateio_registrado.get("beneficiarios", []):
+            ucd = _ucdig(b.get("uc", ""))
+            if not ucd:
+                continue
+            c_tb   = _cli_por_ucdig.get(ucd, {})
+            uc_key = c_tb.get("cod_uc") or b.get("uc", "")
+            vinc   = _vinc_por_id.get(c_tb.get("id_cliente")) if c_tb else None
+            vinculados[uc_key] = {
+                "nome":               c_tb.get("desc_nome") or b.get("nome") or uc_key,
+                "rateio_pct":         round(float(b.get("percentual", 0) or 0), 2),
+                "saldo_kwh":          (vinc or {}).get("qtd_saldo_kwh", 0) or 0,
+                "dt_saldo_conferido": (vinc or {}).get("dt_saldo_conferido", "") or "",
+                "desc_saldo_obs":     (vinc or {}).get("desc_saldo_obs", "") or "",
+                "uc_display":         _fmt_uc15(c_tb.get("cod_uc") or "") or _fmt_uc15(b.get("uc", "")) or uc_key,
+            }
+            vinculados_ucs.add(uc_key)
+    else:
+        for v in vinculos_lista:
+            id_c = v.get("id_cliente")
+            c_tb = clientes_id_map.get(id_c, {})
+            uc   = c_tb.get("cod_uc", "")
+            if uc:
+                pct = v.get("pct_rateio", 0) or 0
+                uc_alt = c_tb.get("cod_uc", "") or ""
+                vinculados[uc] = {
+                    "nome":              c_tb.get("desc_nome", uc),
+                    "rateio_pct":        round(pct, 2),
+                    "saldo_kwh":         v.get("qtd_saldo_kwh", 0) or 0,
+                    "dt_saldo_conferido": v.get("dt_saldo_conferido", "") or "",
+                    "desc_saldo_obs":    v.get("desc_saldo_obs", "") or "",
+                    "uc_display":        _fmt_uc15(uc_alt) if uc_alt else uc,
+                }
+                vinculados_ucs.add(uc)
+
+    # Nao vinculados — legado para compatibilidade com form /vincular
+    clientes_leg  = carregar_clientes()
+    _uc_alt_map = {c["cod_uc"]: _fmt_uc15(c.get("cod_uc") or "") for c in todos_clientes}
+    nao_vinculados = {
+        uc: {**c, "uc_display": _uc_alt_map.get(uc) or uc}
+        for uc, c in clientes_leg.items()
+        if uc not in vinculados_ucs
+    }
 
     # ── Estimativa diaria (geracao em andamento) ──────────
     geracao_diaria = carregar_geracao()
@@ -6528,15 +6567,13 @@ def rateio_dashboard(uid):
             })
 
     _rateios_all = carregar_rateios_mensais()
-    _mes_key = _norm_mes(mes_sel)
     rateio_mes = _rateios_all.get(uid_leg, {}).get(_mes_key, {}) or _rateios_all.get(str(id_usina), {}).get(_mes_key, {})
     protocolo_info = {
         "protocolo":      rateio_mes.get("protocolo", ""),
         "via_envio":      rateio_mes.get("via_envio", ""),
         "data_protocolo": rateio_mes.get("data_protocolo", ""),
     }
-    # Snapshot do rateio registrado (tb_rateios_mensais) para exibir como controle
-    rateio_registrado = rateios_usina.get(_mes_key) or rateios_usina.get(mes_sel) or {}
+    # rateio_registrado, _mes_key e modo_conferencia ja foram calculados no topo.
 
     return render_template("rateio.html",
         usina=usina, uid=uid_leg, id_usina=id_usina, alocacoes=alocacoes,
@@ -6554,6 +6591,7 @@ def rateio_dashboard(uid):
         mes_sel=mes_sel, meses_disponiveis=meses_disponiveis,
         sugestoes=sugestoes, todas_faturas=todas_faturas,
         protocolo_info=protocolo_info, rateio_registrado=rateio_registrado,
+        modo_conferencia=modo_conferencia,
         soma_necessidade=round(_soma_nec, 1),
         base_para_sugestao="necessidade" if _soma_nec > 0 else "previsao",
         fmt=_fmt_brl,
