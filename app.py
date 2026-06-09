@@ -6445,18 +6445,32 @@ def rateio_dashboard(uid):
         leit_usina = _dia_br(data_leitura_usina)
         uc_lst = str(uc).lstrip("0")
         candidatas = []
+        anteriores = []   # faturas ate a leitura da usina — dao o saldo "da epoca" (tinha)
         for item in historico:
             if str(item.get("uc", "")).lstrip("0") != uc_lst:
                 continue
             dl = _dia_br(item.get("data_leitura_atual", ""))
-            if leit_usina and dl and dl > leit_usina:
+            if not dl:
+                continue
+            if leit_usina and dl > leit_usina:
                 candidatas.append((dl, item))
+            elif leit_usina and dl <= leit_usina:
+                anteriores.append((dl, item))
+        saldo_fim = None   # saldo apos a fatura que compensa este ciclo (sobrou)
         if candidatas:
             candidatas.sort(key=lambda x: x[0])  # a 1a leitura posterior a da usina
             item = candidatas[0][1]
             kwh_compensado = item.get("compensado_kwh", 0) or 0
             consumo_cliente = item.get("consumo_kwh", 0) or 0
+            # fatura usa coluna 'qtd_saldo_kwh' (carregar_faturas nao cria alias 'saldo_kwh')
+            saldo_fim = item.get("qtd_saldo_kwh", 0) or 0
             tem_fatura = True
+        # Saldo "da epoca" (tinha): ultima fatura ate a leitura da usina; senao saldo conferido
+        if anteriores:
+            anteriores.sort(key=lambda x: x[0])
+            saldo_inicio = anteriores[-1][1].get("qtd_saldo_kwh", 0) or 0
+        else:
+            saldo_inicio = c.get("saldo_kwh", 0) or 0
 
         diferenca = kwh_compensado - kwh_esperado if tem_fatura and kwh_compensado > 0 else 0
 
@@ -6487,6 +6501,8 @@ def rateio_dashboard(uid):
             "kwh_compensado": round(kwh_compensado, 1),
             "consumo_cliente": round(consumo_cliente, 1),
             "saldo_kwh": round(saldo_cliente, 1),
+            "saldo_inicio": round(saldo_inicio, 1),
+            "saldo_fim": (round(saldo_fim, 1) if saldo_fim is not None else None),
             "saldo_equatorial": round(saldo_equatorial, 1),
             "data_saldo_eq": data_saldo_eq,
             "divergencia_saldo": divergencia_saldo,

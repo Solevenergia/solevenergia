@@ -123,12 +123,12 @@
             <tr>
                 <th style="font-size:11px">UC / Cliente</th>
                 <th class="text-end" style="font-size:11px">
-                    Saldo atual
-                    <i class="bi bi-question-circle text-muted ms-1" title="Saldo de créditos kWh acumulado. Clique para conferir." style="cursor:help"></i>
+                    {% if modo_conferencia %}Tinha (saldo){% else %}Saldo atual{% endif %}
+                    <i class="bi bi-question-circle text-muted ms-1" title="{% if modo_conferencia %}Saldo de créditos que o cliente tinha quando o rateio foi enviado (última fatura até a leitura da usina).{% else %}Saldo de créditos kWh acumulado. Clique para conferir.{% endif %}" style="cursor:help"></i>
                 </th>
-                <th class="text-end col-plan" style="font-size:11px">
-                    Prev. consumo
-                    <i class="bi bi-question-circle text-muted ms-1" title="Previsão de consumo no próximo ciclo (máx. 3 meses + 10% margem)." style="cursor:help"></i>
+                <th class="text-end {% if not modo_conferencia %}col-plan{% endif %}" style="font-size:11px">
+                    {% if modo_conferencia %}Consumo{% else %}Prev. consumo{% endif %}
+                    <i class="bi bi-question-circle text-muted ms-1" title="{% if modo_conferencia %}Consumo do cliente no ciclo (da fatura que compensa esta geração).{% else %}Previsão de consumo no próximo ciclo (máx. 3 meses + 10% margem).{% endif %}" style="cursor:help"></i>
                 </th>
                 <th class="text-end col-plan" style="font-size:11px">
                     Necessidade
@@ -138,7 +138,7 @@
                 <th class="text-center" style="font-size:11px; min-width:110px">% Rateio</th>
                 <th class="text-end" style="font-size:11px; background:rgba(245,166,35,.06)">kWh Alocado</th>
                 <th class="text-end" style="font-size:11px">kWh Compensado</th>
-                <th class="text-end" style="font-size:11px">Δ</th>
+                <th class="text-end" style="font-size:11px">{% if modo_conferencia %}Sobrou{% else %}Δ{% endif %}</th>
                 <th class="text-center" style="font-size:11px">Status</th>
                 <th class="text-center" style="font-size:11px;width:50px"></th>
             </tr>
@@ -153,6 +153,9 @@
                     <br><code style="font-size:10px">{{ a.uc_display or (a.uc | fmt_uc15) }}</code>
                 </td>
                 <td class="text-end" style="position:relative">
+                    {% if modo_conferencia %}
+                    <span style="font-size:12px;font-weight:600;{% if a.saldo_inicio > 0 %}color:#3b82f6{% elif a.saldo_inicio < 0 %}color:#ef4444{% endif %}">{{ a.saldo_inicio|fmt_kwh_br }}</span>
+                    {% else %}
                     <div class="input-group input-group-sm" style="max-width:100px;margin-left:auto">
                         <input type="text"
                                class="form-control form-control-sm text-end input-edit-base input-saldo"
@@ -160,13 +163,17 @@
                                data-campo="saldo_kwh"
                                data-original="{{ "%.2f"|format(a.saldo_kwh)|replace(".", ",") }}"
                                style="font-size:11px;{% if a.saldo_kwh > 0 %}color:#3b82f6;font-weight:600{% elif a.saldo_kwh < 0 %}color:#ef4444;font-weight:600{% endif %}"
-                               {% if modo_conferencia %}readonly{% endif %}
                                title="Editar saldo. Sera sobrescrito pela proxima fatura.">
                     </div>
                     {% if a.dt_saldo_conferido %}<small class="text-success" style="font-size:9px"><i class="bi bi-patch-check-fill"></i> {{ a.dt_saldo_conferido[:10] }}</small>{% endif %}
                     {% if a.tem_divergencia %}<br><small style="color:#eab308;font-size:10px"><i class="bi bi-exclamation-triangle-fill"></i> Eq: {{ a.saldo_equatorial|fmt_kwh_br }}</small>{% endif %}
+                    {% endif %}
                 </td>
-                <td class="text-end col-plan">
+                <td class="text-end {% if not modo_conferencia %}col-plan{% endif %}">
+                    {% if modo_conferencia %}
+                    {% if a.tem_fatura %}<span style="font-size:12px">{{ a.consumo_cliente|fmt_kwh_br }}</span>
+                    {% else %}<span class="text-muted" title="Aguardando a fatura que compensa este ciclo">—</span>{% endif %}
+                    {% else %}
                     <div class="input-group input-group-sm" style="max-width:100px;margin-left:auto">
                         <input type="text"
                                class="form-control form-control-sm text-end input-edit-base input-consumo"
@@ -178,6 +185,7 @@
                                title="Editar previsao de consumo. Pre-preenchida com calculo automatico (fatura > cadastro).">
                     </div>
                     {% if a.qtd_meses %}<small class="text-muted" style="font-size:10px">{{ a.qtd_meses }}m</small>{% endif %}
+                    {% endif %}
                 </td>
                 <td class="text-end col-plan">
                     {% if a.necessidade > 0 %}
@@ -214,11 +222,16 @@
                     {% else %}<span class="text-muted" style="font-size:11px">—</span>{% endif %}
                 </td>
                 <td class="text-end">
-                    {% if a.tem_fatura and a.kwh_compensado > 0 %}
-                        {% if a.diferenca > 0 %}<span style="color:var(--green);font-weight:600">+{{ a.diferenca|fmt_kwh_br }}</span>
-                        {% elif a.diferenca < 0 %}<span style="color:#ef4444;font-weight:600">{{ a.diferenca|fmt_kwh_br }}</span>
-                        {% else %}<span class="text-muted">0,00</span>{% endif %}
-                    {% else %}<span class="text-muted">—</span>{% endif %}
+                    {% if modo_conferencia %}
+                        {% if a.saldo_fim is not none %}<strong style="{% if a.saldo_fim > 0 %}color:#3b82f6{% endif %}">{{ a.saldo_fim|fmt_kwh_br }}</strong>
+                        {% else %}<span class="text-muted" title="Aguardando a fatura que compensa este ciclo">—</span>{% endif %}
+                    {% else %}
+                        {% if a.tem_fatura and a.kwh_compensado > 0 %}
+                            {% if a.diferenca > 0 %}<span style="color:var(--green);font-weight:600">+{{ a.diferenca|fmt_kwh_br }}</span>
+                            {% elif a.diferenca < 0 %}<span style="color:#ef4444;font-weight:600">{{ a.diferenca|fmt_kwh_br }}</span>
+                            {% else %}<span class="text-muted">0,00</span>{% endif %}
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    {% endif %}
                 </td>
                 <td class="text-center">
                     {% if a.status == 'estimativa' %}<span class="badge" style="background:rgba(234,179,8,.15);color:#b45309;font-size:10px">Estimativa</span>
@@ -256,7 +269,7 @@
                 <tr style="background:var(--db);color:white;font-size:12px">
                     <td><strong>TOTAL</strong></td>
                     <td></td>
-                    <td class="text-end col-plan"><strong>{{ (alocacoes|sum(attribute='previsao'))|fmt_kwh_br }}</strong></td>
+                    <td class="text-end {% if not modo_conferencia %}col-plan{% endif %}"><strong>{% if modo_conferencia %}{{ (alocacoes|sum(attribute='consumo_cliente'))|fmt_kwh_br }}{% else %}{{ (alocacoes|sum(attribute='previsao'))|fmt_kwh_br }}{% endif %}</strong></td>
                     <td class="text-end col-plan"><strong>{{ (alocacoes|sum(attribute='necessidade'))|fmt_kwh_br }}</strong></td>
                     <td class="col-plan"></td>
                     <td class="text-center">
@@ -266,7 +279,7 @@
                     </td>
                     <td class="text-end"><strong id="totalKwhAlocado">{{ base_kwh|fmt_kwh_br }}</strong></td>
                     <td class="text-end"><strong>{{ (alocacoes|sum(attribute='kwh_compensado'))|fmt_kwh_br }}</strong></td>
-                    <td class="text-end"><strong>{{ (alocacoes|sum(attribute='diferenca'))|fmt_kwh_br }}</strong></td>
+                    <td class="text-end"><strong>{% if modo_conferencia %}{{ (alocacoes|selectattr('saldo_fim')|sum(attribute='saldo_fim'))|fmt_kwh_br }}{% else %}{{ (alocacoes|sum(attribute='diferenca'))|fmt_kwh_br }}{% endif %}</strong></td>
                     <td></td>
                     <td></td>
                 </tr>
