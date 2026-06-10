@@ -154,21 +154,28 @@
     </div>
 </div>
 
-{# ── Filtro por usina (lista TODAS as usinas cadastradas no sistema) ─── #}
+{# ── Filtros: por usina (todas as cadastradas) + busca por cliente ──── #}
 <div class="card mb-3" id="cardFiltroUsina">
     <div class="card-body py-2 px-3 d-flex align-items-center flex-wrap gap-2">
         <label for="filtroUsina" class="mb-0 fw-semibold" style="font-size:13px;color:var(--db)">
             <i class="bi bi-funnel-fill me-1" style="color:var(--or)"></i>Filtrar por usina
         </label>
-        <select id="filtroUsina" class="form-select form-select-sm" style="max-width:340px;font-size:13px">
+        <select id="filtroUsina" class="form-select form-select-sm" style="max-width:300px;font-size:13px">
             <option value="">Todas as usinas ({{ usinas_todas|length }})</option>
             {% for u in usinas_todas %}
             <option value="{{ u.id_usina }}">{{ u.desc_nome or ('Usina ' ~ u.id_usina) }}{% if u._cidade_uf %} — {{ u._cidade_uf }}{% endif %}</option>
             {% endfor %}
         </select>
-        <span id="filtroUsinaInfo" class="text-muted" style="font-size:12px"></span>
-        <button type="button" id="btnLimparFiltroUsina" class="btn btn-sm btn-outline-secondary d-none ms-auto" style="font-size:12px">
-            <i class="bi bi-x-lg me-1"></i>Mostrar todas
+
+        <label for="buscaCliente" class="mb-0 fw-semibold ms-md-3" style="font-size:13px;color:var(--db)">
+            <i class="bi bi-search me-1" style="color:var(--or)"></i>Buscar cliente
+        </label>
+        <input type="search" id="buscaCliente" class="form-control form-control-sm" autocomplete="off"
+               placeholder="nome ou UC…" style="max-width:240px;font-size:13px">
+
+        <span id="filtroInfo" class="text-muted" style="font-size:12px"></span>
+        <button type="button" id="btnLimparFiltros" class="btn btn-sm btn-outline-secondary d-none ms-auto" style="font-size:12px">
+            <i class="bi bi-x-lg me-1"></i>Limpar filtros
         </button>
     </div>
 </div>
@@ -1192,63 +1199,98 @@
     });
 })();
 
-// ── Filtro por usina (mostra só a usina escolhida) ──────────────────
+// ── Filtros (por usina + busca por cliente) — só visual, não mexe no payload ──
 (function() {
-    var sel = document.getElementById('filtroUsina');
-    if (!sel) return;
-    var info       = document.getElementById('filtroUsinaInfo');
-    var btnLimpar  = document.getElementById('btnLimparFiltroUsina');
+    var selUsina = document.getElementById('filtroUsina');
+    var inputCli = document.getElementById('buscaCliente');
+    if (!selUsina && !inputCli) return;
+    var info       = document.getElementById('filtroInfo');
+    var btnLimpar  = document.getElementById('btnLimparFiltros');
     var emptyState = document.getElementById('filtroUsinaVazio');
     var emptyMsg   = document.getElementById('filtroUsinaVazioMsg');
-    var KEY = 'solev_distribuir_filtro_usina';
+    var KEY_U = 'solev_distribuir_filtro_usina';
 
-    var blocos   = Array.prototype.slice.call(document.querySelectorAll('.usina-bloco'));
+    var blocos    = Array.prototype.slice.call(document.querySelectorAll('.usina-bloco'));
     var secoesAux = Array.prototype.slice.call(document.querySelectorAll('[data-filtro-aux]'));
 
-    function aplicar(idU) {
-        var algumVisivel = false;
-        blocos.forEach(function(b) {
-            var mostrar = !idU || b.dataset.usinaBloco === idU;
-            b.style.display = mostrar ? '' : 'none';
-            if (mostrar) algumVisivel = true;
-        });
-        // No modo focado (uma usina), esconde seções globais (vazias, sem usina, fixos)
-        secoesAux.forEach(function(s) { s.style.display = idU ? 'none' : ''; });
+    // minúsculas + sem acento, pra busca tolerante ("joao" acha "João")
+    function norm(s){ return (s == null ? '' : String(s)).toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 
-        if (idU) {
-            btnLimpar.classList.remove('d-none');
-            var nome = (sel.options[sel.selectedIndex] || {}).textContent || '';
-            if (algumVisivel) {
-                emptyState.classList.add('d-none');
-                if (info) info.textContent = '';
+    function aplicar() {
+        var idU   = selUsina ? selUsina.value : '';
+        var termoRaw = inputCli ? inputCli.value.trim() : '';
+        var termo = norm(termoRaw);
+        var temFiltro = !!idU || !!termo;
+
+        var algumCardVisivel = false;
+        var totalMatches = 0;
+
+        blocos.forEach(function(b) {
+            // 1) filtro por usina
+            if (idU && b.dataset.usinaBloco !== idU) { b.style.display = 'none'; return; }
+
+            var rows = b.querySelectorAll('tbody.sortable-clientes tr.cli-row');
+            if (termo) {
+                // 2) busca por cliente (nome ou UC) dentro do card
+                var matches = 0;
+                rows.forEach(function(r) {
+                    var alvo = norm(r.dataset.nome) + ' ' + norm(r.dataset.codUc);
+                    var ok = alvo.indexOf(termo) !== -1;
+                    r.style.display = ok ? '' : 'none';
+                    if (ok) matches++;
+                });
+                totalMatches += matches;
+                if (matches === 0) { b.style.display = 'none'; return; }
             } else {
-                emptyState.classList.remove('d-none');
-                if (emptyMsg) emptyMsg.textContent = 'A usina "' + nome + '" não está disponível para distribuição automática. '
-                    + 'Confira se ela tem dia de leitura e geração média cadastrados (ou se toda a geração já está comprometida em vínculos FIXO).';
-                if (info) info.textContent = '';
+                // sem termo: garante todas as linhas visíveis
+                rows.forEach(function(r){ r.style.display = ''; });
             }
-        } else {
-            btnLimpar.classList.add('d-none');
-            emptyState.classList.add('d-none');
-            if (info) info.textContent = '';
+            b.style.display = '';
+            algumCardVisivel = true;
+        });
+
+        // Seções auxiliares (sem usina / fixos) somem em qualquer modo de foco
+        secoesAux.forEach(function(s) { s.style.display = temFiltro ? 'none' : ''; });
+
+        btnLimpar.classList.toggle('d-none', !temFiltro);
+
+        // Empty-state + contador
+        emptyState.classList.add('d-none');
+        if (info) info.textContent = '';
+        if (temFiltro && !algumCardVisivel) {
+            emptyState.classList.remove('d-none');
+            if (termo) {
+                emptyMsg.textContent = 'Nenhum cliente encontrado para "' + termoRaw + '"'
+                    + (idU ? ' nesta usina.' : '.');
+            } else {
+                var nomeU = (selUsina.options[selUsina.selectedIndex] || {}).textContent || '';
+                emptyMsg.textContent = 'A usina "' + nomeU + '" não está disponível para distribuição automática. '
+                    + 'Confira se ela tem dia de leitura e geração média cadastrados (ou se toda a geração já está comprometida em vínculos FIXO).';
+            }
+        } else if (termo && info) {
+            info.textContent = totalMatches + ' cliente(s) encontrado(s).';
         }
     }
 
-    sel.addEventListener('change', function() {
-        try { sessionStorage.setItem(KEY, sel.value); } catch(e) {}
-        aplicar(sel.value);
+    if (selUsina) selUsina.addEventListener('change', function() {
+        try { sessionStorage.setItem(KEY_U, selUsina.value); } catch(e) {}
+        aplicar();
     });
+    if (inputCli) inputCli.addEventListener('input', aplicar);
+
     btnLimpar.addEventListener('click', function() {
-        sel.value = '';
-        try { sessionStorage.removeItem(KEY); } catch(e) {}
-        aplicar('');
+        if (selUsina) { selUsina.value = ''; try { sessionStorage.removeItem(KEY_U); } catch(e) {} }
+        if (inputCli) inputCli.value = '';
+        aplicar();
     });
 
-    // Restaura a seleção (sobrevive ao reload do painel "Ajustar filtros")
-    var salvo = '';
-    try { salvo = sessionStorage.getItem(KEY) || ''; } catch(e) {}
-    if (salvo && sel.querySelector('option[value="' + salvo + '"]')) sel.value = salvo;
-    aplicar(sel.value);
+    // Restaura a usina escolhida (sobrevive ao reload do painel "Ajustar filtros")
+    if (selUsina) {
+        var salvo = ''; try { salvo = sessionStorage.getItem(KEY_U) || ''; } catch(e) {}
+        if (salvo && selUsina.querySelector('option[value="' + salvo + '"]')) selUsina.value = salvo;
+    }
+    aplicar();
 })();
 </script>
 {% endblock %}
