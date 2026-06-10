@@ -982,9 +982,18 @@
             if (!tbAlvo) return;
             if (tr.closest('tbody') !== tbAlvo) {
                 tbAlvo.appendChild(tr);
-                // Restaura pct/saldo se diferentes
-                if (dest.pct)   tr.dataset.pct   = dest.pct;
-                if (dest.saldo !== undefined) tr.dataset.saldo = dest.saldo;
+                // Restaura a POSIÇÃO (e o split, via pct) do rascunho. Mas saldo/consumo
+                // SEMPRE vêm do render fresco (cadastro/vínculo atuais) — nunca do rascunho,
+                // que pode estar velho (ex.: saldo preenchido no cadastro depois de salvar).
+                // Re-deriva proporcional ao pct restaurado a partir dos valores cheios.
+                var pFresco   = parseFloat(tr.dataset.pct)      || 100;
+                var saldoFull = (parseFloat(tr.dataset.saldo)    || 0) / (pFresco / 100);
+                var brutoFull = (parseFloat(tr.dataset.kwhBruto) || 0) / (pFresco / 100);
+                var novoPct   = parseFloat(dest.pct) || 100;
+                tr.dataset.pct        = novoPct;
+                tr.dataset.saldo      = (saldoFull * novoPct / 100).toFixed(2);
+                tr.dataset.kwhBruto   = (brutoFull * novoPct / 100).toFixed(2);
+                tr.dataset.kwhEfetivo = Math.max(0, (brutoFull - saldoFull) * novoPct / 100).toFixed(2);
                 movidos++;
             }
         });
