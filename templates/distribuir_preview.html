@@ -185,14 +185,16 @@
     <input type="hidden" name="payload_json" value="{{ payload_json }}">
 
 {# ── Usinas ──────────────────────────────────────────────────────── #}
+{# Renderiza TODAS as usinas elegíveis (com dia de leitura + geração), inclusive #}
+{# as que ainda não receberam clientes — elas viram card normal (alvo de drop /   #}
+{# Transferir) pra poderem ser preenchidas e seguir pro rateio.                    #}
 {% for uid, bloco in alocacao.items() %}
-{% if bloco.itens %}
 {% set usina = bloco.usina %}
 {% set pct_uso = [(bloco.kwh_alocado / bloco.kwh_geracao * 100) if bloco.kwh_geracao else 0, 0] | max %}
 {% set pct_uso = [pct_uso, 120] | min %}
 {% set cor_barra = '#22c55e' if pct_uso <= 90 else ('#f59e0b' if pct_uso <= 105 else '#dc3545') %}
 
-<div class="card mb-3 usina-bloco" data-usina-bloco="{{ usina.id_usina }}">
+<div class="card mb-3 usina-bloco{% if not bloco.itens %} usina-vazia{% endif %}" data-usina-bloco="{{ usina.id_usina }}">
     <div class="card-header d-flex align-items-center justify-content-between py-2 px-4"
          style="background:var(--db);color:white">
         <div class="d-flex align-items-center gap-3">
@@ -370,37 +372,20 @@
                 </td>
             </tr>
             {% endfor %}
+            {# Placeholder/alvo de drop — visível só quando a usina está sem clientes #}
+            <tr class="cli-empty-hint">
+                <td colspan="7" class="text-center text-muted py-4" style="font-size:12px">
+                    <i class="bi bi-box-arrow-in-down me-1" style="color:var(--or)"></i>
+                    Nenhum cliente nesta usina. Arraste clientes para cá, ou marque clientes em outra usina e use <strong>Transferir</strong>.
+                </td>
+            </tr>
             </tbody>
         </table>
         </div>
     </div>
 </div>
-{% endif %}
 {% endfor %}
 
-{# ── Usinas sem clientes ─────────────────────────────────────────── #}
-{% set usinas_vazias = alocacao.values() | selectattr("itens", "equalto", []) | list %}
-{% if usinas_vazias %}
-<div class="card mb-3 border-warning" data-filtro-aux>
-    <div class="card-header py-2 px-4" style="background:#fff8e1">
-        <strong style="color:#856404"><i class="bi bi-exclamation-triangle me-2"></i>Usinas sem clientes alocados</strong>
-    </div>
-    <div class="card-body p-3">
-        <div class="d-flex flex-wrap gap-2">
-        {% for bloco in usinas_vazias %}
-        <span class="badge" style="background:rgba(133,100,4,0.1);color:#856404;font-size:12px;padding:6px 10px">
-            <i class="bi bi-sun me-1"></i>{{ bloco.usina.desc_nome }}
-            {% if bloco.usina.qtd_dia_leitura %}
-            <small>(dia {{ bloco.usina.qtd_dia_leitura }})</small>
-            {% else %}
-            <small class="opacity-75">— sem dia de leitura</small>
-            {% endif %}
-        </span>
-        {% endfor %}
-        </div>
-    </div>
-</div>
-{% endif %}
 
 {# ── Clientes sem usina ──────────────────────────────────────────── #}
 {% if sem_usina %}
@@ -760,6 +745,7 @@
             group: 'clientes-usinas',  // grupo compartilhado: permite mover entre tbodies
             animation: 150,
             handle: '.bi-grip-vertical',  // só arrasta pelo ícone grip (evita conflito com cliques)
+            filter: '.cli-empty-hint',    // placeholder de usina vazia nunca é arrastável
             ghostClass: 'sortable-ghost',
             chosenClass: 'sortable-chosen',
             dragClass: 'sortable-drag',
@@ -796,7 +782,11 @@
                      + '.sortable-chosen{background:#fffbe6!important}'
                      + '.sortable-drag{background:#fff!important;box-shadow:0 4px 12px rgba(0,0,0,0.15)}'
                      + '.th-sort:hover{background:#eef2f7!important}'
-                     + '.th-sort:hover .sort-ind{opacity:1!important;color:var(--or)}';
+                     + '.th-sort:hover .sort-ind{opacity:1!important;color:var(--or)}'
+                     // Placeholder de usina vazia: some assim que entra um cliente (:has reativo)
+                     + 'tbody.sortable-clientes:has(.cli-row) .cli-empty-hint{display:none}'
+                     + '.cli-empty-hint td{background:#fafbfc;border:1px dashed #d8dee6;border-radius:6px}'
+                     + '.usina-vazia .card-header{opacity:0.92}';
     document.head.appendChild(style);
 
     // ── Ordenação por coluna (clique no <th>) ───────────────────
@@ -1233,7 +1223,8 @@
                 if (info) info.textContent = '';
             } else {
                 emptyState.classList.remove('d-none');
-                if (emptyMsg) emptyMsg.textContent = 'Nenhum cliente alocado em "' + nome + '" nesta distribuição.';
+                if (emptyMsg) emptyMsg.textContent = 'A usina "' + nome + '" não está disponível para distribuição automática. '
+                    + 'Confira se ela tem dia de leitura e geração média cadastrados (ou se toda a geração já está comprometida em vínculos FIXO).';
                 if (info) info.textContent = '';
             }
         } else {

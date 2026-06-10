@@ -4734,6 +4734,11 @@ def usinas_distribuir():
         permitir_split=permitir_split,
     )
 
+    # Usinas COM clientes primeiro; usinas elegíveis mas vazias por último.
+    # Assim as vazias aparecem como card normal no fim, prontas pra receber
+    # clientes (arrastar / Transferir) e seguir pro rateio.
+    alocacao = dict(sorted(alocacao.items(), key=lambda kv: (0 if kv[1]["itens"] else 1)))
+
     # Payload para confirmação (inclui saldo proporcional por vínculo)
     proposta = []
     for uid, bloco in alocacao.items():
