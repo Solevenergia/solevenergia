@@ -6744,7 +6744,7 @@ def aplicar_sugestao_rateio(uid):
 # TESTE - Verificar se este servidor esta rodando
 @app.route("/teste-versao")
 def teste_versao():
-    return "SERVIDOR ATUALIZADO - v2026-04-13 OK", 200
+    return "SOLEV v2026-06-10 - login+pix+card OK", 200
 
 # ── SUPABASE — Sincronizacao (obsoleta: tudo ja esta no Supabase) ──
 @app.route("/sync")
