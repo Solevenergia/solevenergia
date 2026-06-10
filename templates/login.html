@@ -1,0 +1,52 @@
+{% from '_solev_brand.html' import solev_wordmark %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOLEV · Entrar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --ink:#0E1B2E; --accent:#E26A14; --areia:#F7F1E4; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; min-height:100%; font-family:'Manrope',system-ui,sans-serif;
+    background:radial-gradient(circle at 50% 32%, #1b3050 0%, #0E1B2E 62%); }
+  .wrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card{ width:100%; max-width:360px; background:rgba(255,255,255,0.04);
+    border:1px solid rgba(242,232,212,0.12); border-radius:16px; padding:38px 30px;
+    text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.38); }
+  .logo{ margin-bottom:18px; }
+  h1{ font-family:'Sora',sans-serif; color:var(--areia); font-size:14px; font-weight:600;
+    letter-spacing:.12em; text-transform:uppercase; opacity:.7; margin:0 0 24px; }
+  input{ width:100%; padding:13px 15px; border-radius:10px;
+    border:1px solid rgba(242,232,212,0.18); background:rgba(0,0,0,0.25);
+    color:var(--areia); font-size:15px; outline:none; margin-bottom:14px; }
+  input:focus{ border-color:var(--accent); }
+  input::placeholder{ color:rgba(242,232,212,0.45); }
+  button{ width:100%; padding:13px; border:0; border-radius:10px; background:var(--accent);
+    color:#fff; font-family:'Sora',sans-serif; font-weight:600; font-size:15px; cursor:pointer; }
+  button:hover{ background:#c95f12; }
+  .flash{ padding:10px 12px; border-radius:9px; font-size:13px; margin-bottom:14px; }
+  .flash.danger{ background:rgba(220,60,60,0.15); color:#ffb4b4; border:1px solid rgba(220,60,60,0.3); }
+  .foot{ margin-top:20px; font-size:11px; letter-spacing:.08em; color:rgba(242,232,212,0.4); }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="logo">{{ solev_wordmark(46, on_dark=True) }}</div>
+      <h1>Painel de cobrança</h1>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+      <form method="post">
+        <input type="hidden" name="next" value="{{ request.args.get('next','') }}">
+        <input type="password" name="senha" placeholder="Senha" autofocus required>
+        <button type="submit">Entrar</button>
+      </form>
+      <div class="foot">SOLEV ENERGIA</div>
+    </div>
+  </div>
+</body>
+</html>

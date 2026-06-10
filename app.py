@@ -7,7 +7,7 @@
 """
 import json, os, sys, shutil, threading, urllib.parse, traceback, logging
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, Response, session
 from dotenv import load_dotenv
 
 # Carrega as variáveis do arquivo .env
@@ -56,7 +56,8 @@ from utils import (
 )
 
 app = Flask(__name__)
-app.secret_key = "contalev-2026-secret"
+app.secret_key = os.environ.get("SECRET_KEY") or "contalev-2026-secret"  # chave forte vem do env (Railway); fallback só p/ dev local
+app.permanent_session_lifetime = timedelta(days=14)
 app.config["TEMPLATES_AUTO_RELOAD"] = True   # recarrega templates sem reiniciar
 
 # Atrás de proxy (Railway, Nginx, Cloudflare): respeita X-Forwarded-Proto/Host
@@ -64,6 +65,53 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True   # recarrega templates sem reiniciar
 # Sem isso, og:image vira http:// e WhatsApp/Telegram bloqueiam o preview.
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# ── Autenticação do admin ─────────────────────────────────────────────────
+# O painel (clientes, faturas, geração, usinas, rateio…) exige login. O portal
+# do cliente (/c/<token>), as páginas de pagamento e o health check ficam
+# PÚBLICOS. A senha e a chave de sessão vêm do ambiente (Railway). Se
+# ADMIN_PASSWORD não estiver setado (ex.: rodando local no localhost), o painel
+# fica aberto — a máquina local não está exposta na internet.
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+# Endpoints liberados SEM login (cliente / portal / pagamento / saúde)
+PUBLIC_ENDPOINTS = {
+    "static", "portal_cliente", "fatura_redirect", "pagar_pix",
+    "ping", "robots_txt", "teste_versao", "login", "logout",
+}
+
+@app.before_request
+def _exigir_login():
+    ep = request.endpoint
+    if ep is None or ep in PUBLIC_ENDPOINTS:
+        return  # rota pública (ou 404) — segue sem login
+    if session.get("auth"):
+        return  # já autenticado
+    if not ADMIN_PASSWORD:
+        return  # senha não configurada (dev local) → painel aberto
+    return redirect(url_for("login", next=request.full_path))
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if session.get("auth"):
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        import hmac
+        senha = request.form.get("senha", "")
+        if ADMIN_PASSWORD and hmac.compare_digest(senha, ADMIN_PASSWORD):
+            session.permanent = True
+            session["auth"] = True
+            nxt = request.values.get("next", "") or ""
+            if not nxt.startswith("/") or nxt.startswith("//"):  # evita open-redirect
+                nxt = url_for("dashboard")
+            return redirect(nxt)
+        flash("Senha incorreta.", "danger")
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 from routes.tarifas import bp as bp_tarifas
 from routes.recebedores import bp as bp_recebedores
