@@ -154,6 +154,33 @@
     </div>
 </div>
 
+{# ── Filtro por usina (lista TODAS as usinas cadastradas no sistema) ─── #}
+<div class="card mb-3" id="cardFiltroUsina">
+    <div class="card-body py-2 px-3 d-flex align-items-center flex-wrap gap-2">
+        <label for="filtroUsina" class="mb-0 fw-semibold" style="font-size:13px;color:var(--db)">
+            <i class="bi bi-funnel-fill me-1" style="color:var(--or)"></i>Filtrar por usina
+        </label>
+        <select id="filtroUsina" class="form-select form-select-sm" style="max-width:340px;font-size:13px">
+            <option value="">Todas as usinas ({{ usinas_todas|length }})</option>
+            {% for u in usinas_todas %}
+            <option value="{{ u.id_usina }}">{{ u.desc_nome or ('Usina ' ~ u.id_usina) }}{% if u._cidade_uf %} — {{ u._cidade_uf }}{% endif %}</option>
+            {% endfor %}
+        </select>
+        <span id="filtroUsinaInfo" class="text-muted" style="font-size:12px"></span>
+        <button type="button" id="btnLimparFiltroUsina" class="btn btn-sm btn-outline-secondary d-none ms-auto" style="font-size:12px">
+            <i class="bi bi-x-lg me-1"></i>Mostrar todas
+        </button>
+    </div>
+</div>
+
+{# Empty-state: usina filtrada sem clientes alocados nesta distribuição #}
+<div id="filtroUsinaVazio" class="card mb-3 d-none">
+    <div class="card-body text-center text-muted py-5">
+        <i class="bi bi-inbox" style="font-size:28px;display:block;margin-bottom:8px;opacity:0.5"></i>
+        <span id="filtroUsinaVazioMsg">Nenhum cliente alocado a esta usina nesta distribuição.</span>
+    </div>
+</div>
+
 <form method="POST" id="form_confirmar">
     <input type="hidden" name="payload_json" value="{{ payload_json }}">
 
@@ -165,7 +192,7 @@
 {% set pct_uso = [pct_uso, 120] | min %}
 {% set cor_barra = '#22c55e' if pct_uso <= 90 else ('#f59e0b' if pct_uso <= 105 else '#dc3545') %}
 
-<div class="card mb-3">
+<div class="card mb-3 usina-bloco" data-usina-bloco="{{ usina.id_usina }}">
     <div class="card-header d-flex align-items-center justify-content-between py-2 px-4"
          style="background:var(--db);color:white">
         <div class="d-flex align-items-center gap-3">
@@ -354,7 +381,7 @@
 {# ── Usinas sem clientes ─────────────────────────────────────────── #}
 {% set usinas_vazias = alocacao.values() | selectattr("itens", "equalto", []) | list %}
 {% if usinas_vazias %}
-<div class="card mb-3 border-warning">
+<div class="card mb-3 border-warning" data-filtro-aux>
     <div class="card-header py-2 px-4" style="background:#fff8e1">
         <strong style="color:#856404"><i class="bi bi-exclamation-triangle me-2"></i>Usinas sem clientes alocados</strong>
     </div>
@@ -377,7 +404,7 @@
 
 {# ── Clientes sem usina ──────────────────────────────────────────── #}
 {% if sem_usina %}
-<div class="card mb-3 border-danger">
+<div class="card mb-3 border-danger" data-filtro-aux>
     <div class="card-header py-2 px-4" style="background:#fff5f5">
         <strong style="color:#dc3545">
             <i class="bi bi-person-x me-2"></i>{{ sem_usina|length }} cliente(s) sem usina compatível
@@ -433,7 +460,7 @@
 
 {# ── Clientes com vínculos FIXO ──────────────────────────────────── #}
 {% if clientes_fixos %}
-<div class="card mb-3" style="border-color:#7c3aed">
+<div class="card mb-3" style="border-color:#7c3aed" data-filtro-aux>
     <div class="card-header py-2 px-4" style="background:#f5f3ff">
         <strong style="color:#7c3aed">
             <i class="bi bi-lock-fill me-2"></i>{{ clientes_fixos|length }} cliente(s) com vínculo fixo — não afetados pela distribuição
@@ -1173,6 +1200,64 @@
         marcarModificado();
         atualizarSelecao();
     });
+})();
+
+// ── Filtro por usina (mostra só a usina escolhida) ──────────────────
+(function() {
+    var sel = document.getElementById('filtroUsina');
+    if (!sel) return;
+    var info       = document.getElementById('filtroUsinaInfo');
+    var btnLimpar  = document.getElementById('btnLimparFiltroUsina');
+    var emptyState = document.getElementById('filtroUsinaVazio');
+    var emptyMsg   = document.getElementById('filtroUsinaVazioMsg');
+    var KEY = 'solev_distribuir_filtro_usina';
+
+    var blocos   = Array.prototype.slice.call(document.querySelectorAll('.usina-bloco'));
+    var secoesAux = Array.prototype.slice.call(document.querySelectorAll('[data-filtro-aux]'));
+
+    function aplicar(idU) {
+        var algumVisivel = false;
+        blocos.forEach(function(b) {
+            var mostrar = !idU || b.dataset.usinaBloco === idU;
+            b.style.display = mostrar ? '' : 'none';
+            if (mostrar) algumVisivel = true;
+        });
+        // No modo focado (uma usina), esconde seções globais (vazias, sem usina, fixos)
+        secoesAux.forEach(function(s) { s.style.display = idU ? 'none' : ''; });
+
+        if (idU) {
+            btnLimpar.classList.remove('d-none');
+            var nome = (sel.options[sel.selectedIndex] || {}).textContent || '';
+            if (algumVisivel) {
+                emptyState.classList.add('d-none');
+                if (info) info.textContent = '';
+            } else {
+                emptyState.classList.remove('d-none');
+                if (emptyMsg) emptyMsg.textContent = 'Nenhum cliente alocado em "' + nome + '" nesta distribuição.';
+                if (info) info.textContent = '';
+            }
+        } else {
+            btnLimpar.classList.add('d-none');
+            emptyState.classList.add('d-none');
+            if (info) info.textContent = '';
+        }
+    }
+
+    sel.addEventListener('change', function() {
+        try { sessionStorage.setItem(KEY, sel.value); } catch(e) {}
+        aplicar(sel.value);
+    });
+    btnLimpar.addEventListener('click', function() {
+        sel.value = '';
+        try { sessionStorage.removeItem(KEY); } catch(e) {}
+        aplicar('');
+    });
+
+    // Restaura a seleção (sobrevive ao reload do painel "Ajustar filtros")
+    var salvo = '';
+    try { salvo = sessionStorage.getItem(KEY) || ''; } catch(e) {}
+    if (salvo && sel.querySelector('option[value="' + salvo + '"]')) sel.value = salvo;
+    aplicar(sel.value);
 })();
 </script>
 {% endblock %}

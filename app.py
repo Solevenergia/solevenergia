@@ -4758,9 +4758,14 @@ def usinas_distribuir():
                           for item in bloco["itens"]
                           if item["coberto_saldo"] and item["pct"] == 100)
 
+    # Lista completa de usinas cadastradas (p/ o filtro por usina no topo).
+    # Inclui usinas que não entraram em `alocacao` (sem dia de leitura / sem geração).
+    usinas_todas = sorted(usinas, key=lambda u: (u.get("desc_nome") or "").lower())
+
     return render_template("distribuir_preview.html",
                            alocacao=alocacao,
                            sem_usina=sem_usina,
+                           usinas_todas=usinas_todas,
                            payload_json=payload_json,
                            total_clientes=len(clientes) + len(clientes_fixos),
                            total_alocados=total_alocados,
