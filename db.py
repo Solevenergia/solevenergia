@@ -978,29 +978,30 @@ def tb_delete_investidor(id_investidor: int) -> None:
     _db().delete("tb_investidores", {"id_investidor": id_investidor})
 
 
+# Chave PIX única de recebimento da SOLEV — CNPJ na conta do Banco Inter.
+# Desde 10/06/2026 TODAS as cobranças dos clientes recebem aqui (centralizado).
+PIX_RECEBIMENTO_SOLEV = "66917468000153"  # CNPJ 66.917.468/0001-53
+
+
 def tb_get_pix_da_usina(id_usina: int) -> Optional[dict]:
     """Retorna dados PIX para recebimento dos clientes vinculados à usina.
-    Prioridade: desc_pix_recebimento da própria usina → PIX do investidor (fallback legado).
-    Retorna dict compatível com desc_pix / desc_nome_pix / desc_cidade_pix."""
+
+    Desde 10/06/2026 a SOLEV centraliza o recebimento no CNPJ (Banco Inter):
+    toda cobrança usa PIX_RECEBIMENTO_SOLEV. O campo desc_pix_recebimento da
+    usina segue como override explícito (hoje vazio em todas), mas o padrão —
+    inclusive no lugar do antigo fallback de PIX do investidor — é o CNPJ.
+    O acerto com os investidores passa a ser feito por fora (não mais via PIX
+    direto do cliente)."""
     usina = tb_get_usina(id_usina)
     if not usina:
         return None
-    # 1) PIX próprio da usina (SOLEV recebe dos clientes)
-    pix_usina = (usina.get("desc_pix_recebimento") or "").strip()
-    if pix_usina:
-        return {
-            "desc_pix":       pix_usina,
-            "desc_nome_pix":  "SOLEV ENERGIA",
-            "desc_cidade_pix": "GOIANIA",
-            "desc_nome":       "SOLEV ENERGIA LTDA",
-        }
-    # 2) Fallback: PIX do investidor (comportamento anterior)
-    if not usina.get("id_investidor"):
-        return None
-    rec = tb_get_investidor(usina["id_investidor"])
-    if not rec or not rec.get("desc_pix"):
-        return None
-    return rec
+    chave = (usina.get("desc_pix_recebimento") or "").strip() or PIX_RECEBIMENTO_SOLEV
+    return {
+        "desc_pix":        chave,
+        "desc_nome_pix":   "SOLEV ENERGIA",
+        "desc_cidade_pix": "GOIANIA",
+        "desc_nome":       "SOLEV ENERGIA LTDA",
+    }
 
 
 # ==================================================================

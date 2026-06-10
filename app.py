@@ -3204,7 +3204,7 @@ def enviar_whatsapp_pix(id_fatura):
         app.logger.warning(f"[whatsapp-pix] Falha ao buscar telefone: {_e}")
 
     # Buscar chave PIX dinamicamente do banco por usina
-    pix_chave = "f6189239-d8ae-4edb-9d62-99299de54fc3"  # fallback padrão
+    pix_chave = "66917468000153"  # fallback: CNPJ SOLEV (Banco Inter)
     try:
         from db import tb_get_pix_da_usina
         id_cliente = item.get("id_cliente")
@@ -6488,7 +6488,9 @@ def rateio_dashboard(uid):
 
         # Saldo Equatorial: vem da fatura mais recente do cliente
         item_eq = saldo_eq_por_uc.get(str(uc).lstrip("0"))
-        saldo_equatorial = (item_eq or {}).get("saldo_kwh", 0) or 0
+        # item_eq e uma fatura de carregar_faturas() -> coluna 'qtd_saldo_kwh'
+        # (nao existe alias 'saldo_kwh'; ler errado zerava o saldo e acendia "Eq:")
+        saldo_equatorial = (item_eq or {}).get("qtd_saldo_kwh", 0) or 0
         data_saldo_eq    = (item_eq or {}).get("data_leitura_atual", "") or (item_eq or {}).get("mes_referencia", "") or ""
         # Divergencia: tolera ate 1 kWh de diferenca para arredondamento
         divergencia_saldo = round(saldo_cliente - saldo_equatorial, 1)

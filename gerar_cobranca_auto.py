@@ -39,7 +39,7 @@ TARIFAS_JSON  = os.path.join(_DIR, "tarifas.json")
 # ══════════════════════════════════════════════════════════════
 #  CHAVE PIX — Configure aqui os dados da sua conta Inter
 # ══════════════════════════════════════════════════════════════
-PIX_CHAVE        = ""           # CPF, e-mail, telefone ou chave aleatoria
+PIX_CHAVE        = "66917468000153"   # CNPJ SOLEV (Banco Inter) — recebimento centralizado
 PIX_NOME         = "SOLEV ENERGIA"
 PIX_CIDADE       = "GOIANIA"
 

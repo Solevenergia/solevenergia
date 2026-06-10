@@ -60,7 +60,7 @@ def _fmt_cep(v):
 
 # ── PIX ──────────────────────────────────────────────────────
 
-PIX_CHAVE  = "danilopetitpao@gmail.com"
+PIX_CHAVE  = "66917468000153"   # CNPJ SOLEV (Banco Inter) — recebimento centralizado
 PIX_NOME   = "SOLEV ENERGIA"
 PIX_CIDADE = "GOIANIA"
 
