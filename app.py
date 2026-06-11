@@ -66,6 +66,12 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True   # recarrega templates sem reiniciar
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
+# URL pública do portal do cliente — usada nos links enviados por WhatsApp.
+# Fixa o domínio de PRODUÇÃO pra que o link funcione mesmo quando o envio é feito
+# pelo localhost (o WhatsApp e o cliente não conseguem abrir/ler "localhost", então
+# o card OG não aparecia). Configurável por env (PORTAL_BASE_URL).
+PORTAL_BASE_URL = os.environ.get("PORTAL_BASE_URL", "https://app.solevenergia.com").rstrip("/")
+
 # ── Autenticação do admin ─────────────────────────────────────────────────
 # O painel (clientes, faturas, geração, usinas, rateio…) exige login. O portal
 # do cliente (/c/<token>), as páginas de pagamento e o health check ficam
@@ -3197,8 +3203,11 @@ def enviar_whatsapp(filename):
     nome_curto = nome.split()[0] if nome else "Cliente"
 
     # Link do portal do cliente (rota /c/<token>). Se nao tiver token, omite.
+    # Usa o domínio público fixo (PORTAL_BASE_URL) em vez do host da requisição,
+    # senão enviando pelo localhost o link viraria "localhost" e o WhatsApp não
+    # buscaria o card OG (nem o cliente abriria).
     token = item.get("token_acesso") or ""
-    link_portal = url_for("portal_cliente", token=token, _external=True) if token else ""
+    link_portal = f"{PORTAL_BASE_URL}/c/{token}" if token else ""
 
     # Acentos em \u escape para evitar problemas de encoding cp1252 no Windows
     linhas = [
