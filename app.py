@@ -5209,32 +5209,31 @@ def usinas_distribuir():
         pre_alocados=pre_alocados,
     )
 
-    # Ordena as usinas por DIA DE LEITURA (menor → maior), pra processar/finalizar
-    # as usinas na ordem em que as leituras chegam. Empate no mesmo dia: usinas
-    # COM clientes primeiro (as vazias do mesmo dia caem depois).
-    alocacao = dict(sorted(
-        alocacao.items(),
-        key=lambda kv: (int(kv[1]["usina"].get("qtd_dia_leitura") or 0),
-                        0 if kv[1]["itens"] else 1),
-    ))
+    # Ordena as usinas por DIA DE LEITURA (menor → maior) com desempate FIXO
+    # pelo nome (e id) — atributos imutáveis: a posição de um card NUNCA muda
+    # quando ele ganha/perde clientes ou quando o rateio do mês é executado.
+    # (Antes o desempate era "com clientes primeiro", que embaralhava os cards
+    # do mesmo dia conforme o conteúdo mudava.)
+    def _key_usina_ordem(u):
+        return (int(u.get("qtd_dia_leitura") or 0),
+                str(u.get("desc_nome") or "").lower(),
+                u.get("id_usina") or 0)
+
+    alocacao = dict(sorted(alocacao.items(),
+                           key=lambda kv: _key_usina_ordem(kv[1]["usina"])))
 
     # ── Fluxo ÚNICO ordenado por dia de leitura: cards abertos + travados
-    # intercalados. Travada fica NA POSIÇÃO do dia dela (antes ia pra uma
-    # seção separada no rodapé e "sumia" da sequência de leituras). Empate
-    # no dia: travada primeiro (já finalizada), depois abertas com clientes,
-    # por fim vazias.
+    # intercalados. Travada fica NA POSIÇÃO FIXA do dia/nome dela (antes ia
+    # pra uma seção separada no rodapé e "sumia" da sequência de leituras).
     cards_ordenados = [
         {"tipo": "aberta", "uid": uid_, "bloco": bloco,
-         "_dia": int(bloco["usina"].get("qtd_dia_leitura") or 0),
-         "_pri": 1 if bloco["itens"] else 2}
+         "_k": _key_usina_ordem(bloco["usina"])}
         for uid_, bloco in alocacao.items()
     ] + [
-        {"tipo": "travada", "t": t,
-         "_dia": int(t["usina"].get("qtd_dia_leitura") or 0),
-         "_pri": 0}
+        {"tipo": "travada", "t": t, "_k": _key_usina_ordem(t["usina"])}
         for t in usinas_travadas
     ]
-    cards_ordenados.sort(key=lambda c: (c["_dia"], c["_pri"]))
+    cards_ordenados.sort(key=lambda c: c["_k"])
 
     # Payload para confirmação (inclui saldo proporcional por vínculo)
     proposta = []
