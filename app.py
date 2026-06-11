@@ -5218,6 +5218,24 @@ def usinas_distribuir():
                         0 if kv[1]["itens"] else 1),
     ))
 
+    # ── Fluxo ÚNICO ordenado por dia de leitura: cards abertos + travados
+    # intercalados. Travada fica NA POSIÇÃO do dia dela (antes ia pra uma
+    # seção separada no rodapé e "sumia" da sequência de leituras). Empate
+    # no dia: travada primeiro (já finalizada), depois abertas com clientes,
+    # por fim vazias.
+    cards_ordenados = [
+        {"tipo": "aberta", "uid": uid_, "bloco": bloco,
+         "_dia": int(bloco["usina"].get("qtd_dia_leitura") or 0),
+         "_pri": 1 if bloco["itens"] else 2}
+        for uid_, bloco in alocacao.items()
+    ] + [
+        {"tipo": "travada", "t": t,
+         "_dia": int(t["usina"].get("qtd_dia_leitura") or 0),
+         "_pri": 0}
+        for t in usinas_travadas
+    ]
+    cards_ordenados.sort(key=lambda c: (c["_dia"], c["_pri"]))
+
     # Payload para confirmação (inclui saldo proporcional por vínculo)
     proposta = []
     for uid, bloco in alocacao.items():
@@ -5251,6 +5269,7 @@ def usinas_distribuir():
 
     return render_template("distribuir_preview.html",
                            alocacao=alocacao,
+                           cards_ordenados=cards_ordenados,
                            sem_usina=sem_usina,
                            usinas_todas=usinas_todas,
                            payload_json=payload_json,

@@ -260,11 +260,50 @@
 <form method="POST" id="form_confirmar">
     <input type="hidden" name="payload_json" value="{{ payload_json }}">
 
-{# ── Usinas ──────────────────────────────────────────────────────── #}
+{# ── Usinas — fluxo ÚNICO ordenado por dia de leitura ──────────────── #}
 {# Renderiza TODAS as usinas elegíveis (com dia de leitura + geração), inclusive #}
 {# as que ainda não receberam clientes — elas viram card normal (alvo de drop /   #}
-{# Transferir) pra poderem ser preenchidas e seguir pro rateio.                    #}
-{% for uid, bloco in alocacao.items() %}
+{# Transferir). Usinas com rateio do mês JÁ EXECUTADO aparecem INTERCALADAS na    #}
+{# posição do dia de leitura delas, como card travado (read-only).                #}
+{% for card in cards_ordenados %}
+{% if card.tipo == 'travada' %}
+{% set t = card.t %}
+<div class="card mb-3 usina-bloco" data-usina-bloco="{{ t.usina.id_usina }}" style="border-color:#16a34a">
+    <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2 py-2 px-4" style="background:#f0fdf4">
+        <div>
+            <i class="bi bi-lock-fill me-2" style="color:#16a34a"></i>
+            <strong style="color:#16a34a">{{ t.usina.desc_nome }}</strong>
+            <span class="badge ms-2" style="background:#dcfce7;color:#16a34a;font-size:11px">
+                <i class="bi bi-check2-circle me-1"></i>rateio {{ mes_sel }} realizado
+            </span>
+            {% if t.data_registro %}<small class="text-muted ms-2" style="font-size:11px">registrado {{ t.data_registro }}</small>{% endif %}
+        </div>
+        <div class="d-flex align-items-center gap-3" style="font-size:12px">
+            <span style="color:#16a34a"><i class="bi bi-calendar2 me-1"></i>Leitura dia <strong>{{ t.usina.qtd_dia_leitura }}</strong></span>
+            <span style="color:#16a34a"><i class="bi bi-people me-1"></i>{{ t.n_benef }} cliente(s) · {{ t.soma_pct }}%</span>
+            <a href="/usinas/rateio/{{ t.usina.id_usina }}?mes={{ mes_sel }}"
+               class="btn btn-sm btn-outline-secondary" style="font-size:11px"><i class="bi bi-eye me-1"></i>Ver rateio</a>
+            <button type="button" class="btn btn-sm btn-outline-warning btn-refazer-rateio"
+                    data-id-usina="{{ t.usina.id_usina }}" data-nome="{{ t.usina.desc_nome }}"
+                    data-mes="{{ mes_sel }}" style="font-size:11px">
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Refazer
+            </button>
+        </div>
+    </div>
+    <div class="card-body py-2 px-4">
+        <div class="d-flex flex-wrap gap-x-3 gap-y-1" style="font-size:11px;color:#555">
+            {% for b in t.beneficiarios %}
+            <span style="white-space:nowrap" class="me-3">
+                {{ b.nome }} <strong style="color:var(--db)">{{ b.pct }}%</strong>
+                <span class="text-muted">({{ b.kwh|fmt_kwh_br }} kWh)</span>
+            </span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% else %}
+{% set uid = card.uid %}
+{% set bloco = card.bloco %}
 {% set usina = bloco.usina %}
 {% set pct_uso = [(bloco.kwh_alocado / bloco.kwh_geracao * 100) if bloco.kwh_geracao else 0, 0] | max %}
 {% set pct_uso = [pct_uso, 120] | min %}
@@ -469,52 +508,8 @@
         </div>
     </div>
 </div>
-{% endfor %}
-
-
-{# ── Usinas TRAVADAS (rateio do mês já realizado) ────────────────── #}
-{% if usinas_travadas %}
-<div class="card mb-3" data-filtro-aux style="border-color:#16a34a">
-    <div class="card-header py-2 px-4" style="background:#f0fdf4">
-        <strong style="color:#16a34a"><i class="bi bi-lock-fill me-2"></i>Usinas com rateio realizado em {{ mes_sel }} — travadas</strong>
-        <small class="ms-2 text-muted">Read-only: não entram na distribuição automática nem podem receber/perder clientes. Para editar, use "Refazer".</small>
-    </div>
-    <div class="card-body p-0">
-        {% for t in usinas_travadas %}
-        <div class="px-4 py-3" style="border-top:1px solid #eef2f7">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <div>
-                    <i class="bi bi-sun-fill me-1" style="color:var(--or)"></i>
-                    <strong>{{ t.usina.desc_nome }}</strong>
-                    <small class="text-muted ms-2"><i class="bi bi-calendar2 me-1"></i>Leitura dia {{ t.usina.qtd_dia_leitura }}</small>
-                    <span class="badge ms-2" style="background:#dcfce7;color:#16a34a;font-size:11px">
-                        <i class="bi bi-people me-1"></i>{{ t.n_benef }} cliente(s) · {{ t.soma_pct }}%
-                    </span>
-                    {% if t.data_registro %}<small class="text-muted ms-1" style="font-size:11px">· registrado {{ t.data_registro }}</small>{% endif %}
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <a href="/usinas/rateio/{{ t.usina.id_usina }}?mes={{ mes_sel }}"
-                       class="btn btn-sm btn-outline-secondary" style="font-size:11px"><i class="bi bi-eye me-1"></i>Ver rateio</a>
-                    <button type="button" class="btn btn-sm btn-outline-warning btn-refazer-rateio"
-                            data-id-usina="{{ t.usina.id_usina }}" data-nome="{{ t.usina.desc_nome }}"
-                            data-mes="{{ mes_sel }}" style="font-size:11px">
-                        <i class="bi bi-arrow-counterclockwise me-1"></i>Refazer
-                    </button>
-                </div>
-            </div>
-            <div class="mt-2 d-flex flex-wrap gap-x-3 gap-y-1" style="font-size:11px;color:#555">
-                {% for b in t.beneficiarios %}
-                <span style="white-space:nowrap" class="me-3">
-                    {{ b.nome }} <strong style="color:var(--db)">{{ b.pct }}%</strong>
-                    <span class="text-muted">({{ b.kwh|fmt_kwh_br }} kWh)</span>
-                </span>
-                {% endfor %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-</div>
 {% endif %}
+{% endfor %}
 
 
 {# ── Clientes sem usina ──────────────────────────────────────────── #}
