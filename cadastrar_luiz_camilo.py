@@ -1,5 +1,11 @@
 """
 cadastrar_luiz_camilo.py
+
+⚠️ OBSOLETO — os ids de usina aqui (22/23) são PRÉ-incidente 03/06 e não
+   existem mais. Para (re)criar os vínculos FIXO do Luiz Camilo use:
+       python corrigir_fixo_luiz_camilo.py
+   (resolve clientes/usinas por UC, robusto a mudança de id, e fecha resíduos).
+
 Registra os 2 clientes (UCs) do Luiz Camilo de Oliveira e cria os vínculos
 FIXOS com as usinas USJoseOliveira93 e USJoseOliveira88.
 
