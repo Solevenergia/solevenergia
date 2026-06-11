@@ -3500,6 +3500,141 @@ def faturas():
 
 
 # ============================================================
+#  FATURAS DAS USINAS — boletos que a SoLev paga (aba em /faturas)
+# ============================================================
+@app.route("/faturas/usinas")
+def faturas_usinas():
+    """Controle dos boletos das usinas (fatura Equatorial da UC geradora)."""
+    from db import tb_carregar_faturas_usina
+    from datetime import date as _date
+
+    mes_br = request.args.get("mes", "").strip()
+    status = request.args.get("status", "todos").strip()
+    try:
+        usina_sel = int(request.args.get("usina", "") or 0) or None
+    except ValueError:
+        usina_sel = None
+
+    ano_f = mes_f = None
+    if mes_br:
+        import re as _re
+        m = _re.match(r"^(\d{1,2})/(\d{4})$", mes_br)
+        if m:
+            mes_f, ano_f = int(m.group(1)), int(m.group(2))
+
+    status_db = status if status in ("pendente", "pago", "cancelado") else None
+    try:
+        rows = tb_carregar_faturas_usina(ano=ano_f, mes=mes_f, status=status_db, id_usina=usina_sel)
+        tabela_ok = True
+    except Exception as e:
+        app.logger.warning(f"[faturas_usinas] tabela tb_faturas_usina indisponível: {e}")
+        rows, tabela_ok = [], False
+
+    so_vencidos = (status == "vencidos")
+    hoje = _date.today().isoformat()
+
+    usinas = carregar_usinas()
+    by_id = {}
+    for uid, u in usinas.items():
+        try:    by_id[int(uid)] = u
+        except (ValueError, TypeError): pass
+
+    total_pendente = total_vencido = total_pago = 0.0
+    n_pendente = n_vencido = n_pago = 0
+    out = []
+    for r in rows:
+        u = by_id.get(r.get("id_usina"), {})
+        r["_usina_nome"]   = u.get("nome") or f"Usina {r.get('id_usina')}"
+        r["_proprietario"] = u.get("investidor_nome") or ""
+        r["_uc_geradora"]  = u.get("uc_geradora") or ""
+        val  = float(r.get("vlr_fatura") or 0)
+        st   = r.get("status_pgto") or "pendente"
+        venc = r.get("dt_vencimento") or ""
+        vencido = (st == "pendente" and venc and venc < hoje)
+        if st == "pago":
+            r["_classe"] = "pago"; n_pago += 1; total_pago += val
+        elif st == "cancelado":
+            r["_classe"] = "cancelado"
+        elif vencido:
+            r["_classe"] = "vencido"; n_vencido += 1; total_vencido += val
+            n_pendente += 1; total_pendente += val
+        else:
+            r["_classe"] = "pendente"; n_pendente += 1; total_pendente += val
+        for iso_k, br_k in (("dt_vencimento", "_venc_br"),
+                            ("dt_pagamento", "_pgto_br"),
+                            ("dt_leitura",    "_leit_br")):
+            r[br_k] = _iso_to_br(r.get(iso_k)) if r.get(iso_k) else ""
+        if so_vencidos and r["_classe"] != "vencido":
+            continue
+        out.append(r)
+
+    usinas_lista = sorted(
+        ({"id": int(uid), "nome": u.get("nome", "")} for uid, u in usinas.items() if str(uid).isdigit()),
+        key=lambda x: (x["nome"] or "").lower()
+    )
+
+    resumo = {
+        "total_pendente": total_pendente, "total_vencido": total_vencido,
+        "total_pago": total_pago, "n_pendente": n_pendente,
+        "n_vencido": n_vencido, "n_pago": n_pago, "n_total": len(out),
+    }
+    return render_template("faturas_usinas.html",
+        faturas=out, resumo=resumo, usinas_lista=usinas_lista,
+        mes=mes_br, status=status, usina_sel=usina_sel, fmt=_fmt_brl,
+        tabela_ok=tabela_ok)
+
+
+@app.route("/faturas/usina/<int:id_fu>/baixa", methods=["POST"])
+def fatura_usina_baixa(id_fu):
+    from db import tb_patch_fatura_usina
+    from datetime import date as _date
+    dt = (request.form.get("dt_pagamento") or "").strip()
+    dt_iso = _data_br_para_iso(dt) if dt else _date.today().isoformat()
+    try:
+        tb_patch_fatura_usina(id_fu, {"status_pgto": "pago", "dt_pagamento": dt_iso})
+        flash("Boleto marcado como pago.", "success")
+    except Exception as e:
+        flash(f"Erro ao baixar: {e}", "danger")
+    return redirect(request.referrer or url_for("faturas_usinas"))
+
+
+@app.route("/faturas/usina/<int:id_fu>/reabrir", methods=["POST"])
+def fatura_usina_reabrir(id_fu):
+    from db import tb_patch_fatura_usina
+    try:
+        tb_patch_fatura_usina(id_fu, {"status_pgto": "pendente", "dt_pagamento": None})
+        flash("Boleto reaberto (pendente).", "warning")
+    except Exception as e:
+        flash(f"Erro: {e}", "danger")
+    return redirect(request.referrer or url_for("faturas_usinas"))
+
+
+@app.route("/faturas/usina/<int:id_fu>/excluir", methods=["POST"])
+def fatura_usina_excluir(id_fu):
+    from db import tb_delete_fatura_usina
+    try:
+        tb_delete_fatura_usina(id_fu)
+        flash("Registro de boleto excluído.", "warning")
+    except Exception as e:
+        flash(f"Erro ao excluir: {e}", "danger")
+    return redirect(request.referrer or url_for("faturas_usinas"))
+
+
+@app.route("/faturas/usina/<int:id_fu>/pdf")
+def fatura_usina_pdf(id_fu):
+    """Serve o PDF da fatura da usina (CDN se houver, senão arquivo local)."""
+    from db import tb_get_fatura_usina
+    fu = tb_get_fatura_usina(id_fu) or {}
+    if fu.get("pdf_url"):
+        return redirect(fu["pdf_url"])
+    path = fu.get("pdf_path") or ""
+    if path and os.path.exists(path):
+        return send_file(path, mimetype="application/pdf")
+    flash("PDF da fatura não encontrado.", "warning")
+    return redirect(request.referrer or url_for("faturas_usinas"))
+
+
+# ============================================================
 #  Cobrança consolidada FIXO
 # ============================================================
 @app.route("/fatura/consolidar-fixo/<int:id_fatura>", methods=["POST"])
@@ -5383,6 +5518,48 @@ def registrar_geracao_mensal(uid):
 
     geracao[uid][mes_ref] = entrada
     salvar_geracao_mensal(geracao)
+
+    # ── Captura o boleto (valor/vencimento/cód. barras/PIX) p/ a aba "Faturas
+    #    das Usinas". Envolto em try: não quebra a geração se a tabela ainda
+    #    não existir ou a extração não trouxer os campos do boleto.
+    try:
+        from db import tb_get_usina_por_nome, tb_upsert_fatura_usina
+        _id_usina = None
+        try:
+            _id_usina = int(uid)
+        except (ValueError, TypeError):
+            _nm = usinas.get(uid, {}).get("nome", "")
+            _u  = tb_get_usina_por_nome(_nm) if _nm else None
+            _id_usina = _u["id_usina"] if _u else None
+        if _id_usina:
+            def _iso(s):
+                try:    return _data_br_para_iso(s) if s else None
+                except Exception: return None
+            _mn = _ma = None
+            if "/" in (mes_ref or ""):
+                try:
+                    _p = mes_ref.split("/"); _mn, _ma = int(_p[0]), int(_p[1])
+                except Exception:
+                    pass
+            _row = {
+                "id_usina":        _id_usina,
+                "mes_referencia":  mes_ref,
+                "ano_referencia":  _ma,
+                "mes_num":         _mn,
+                "qtd_geracao_kwh": round(float(kwh or 0), 2),
+                "vlr_fatura":      round(float(extraido.get("total_fatura") or 0), 2) or None,
+                "dt_vencimento":   _iso(extraido.get("vencimento") or extraido.get("venc_equatorial")),
+                "dt_leitura":      _iso(data_atu),
+                "cod_barras":      (extraido.get("codigo_barras") or "").strip() or None,
+                "pix_copia_cola":  (extraido.get("pix_br_code") or "").strip() or None,
+                "pdf_path":        pdf_path,
+            }
+            # status_pgto fica de fora de propósito: na 1ª vez cai no default
+            # 'pendente'; em reupload, o merge preserva o que já estava.
+            tb_upsert_fatura_usina({k: v for k, v in _row.items() if v is not None})
+    except Exception as _e:
+        app.logger.warning(f"[fatura_usina] captura do boleto falhou: {_e}")
+
     flash(f"Fatura de {mes_ref} registrada: {kwh:,.0f} kWh em {n_dias} dias | Saldo: {saldo_kwh:,.2f} kWh", "success")
     return redirect(url_for("usina_ver", uid=uid))
 

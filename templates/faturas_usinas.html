@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Faturas das Usinas{% endblock %}
+{% block topbar_breadcrumb %}<span>Análise</span><span class="sep">›</span><span class="here">Faturas das Usinas</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="bi bi-receipt-cutoff me-2" style="color:var(--accent)"></i> Faturas das Usinas</h1>
+</div>
+
+{# ── Abas: Clientes | Usinas ─────────────────────────────────────── #}
+<ul class="nav nav-tabs mb-3" style="font-size:14px">
+    <li class="nav-item"><a class="nav-link" href="/faturas"><i class="bi bi-people me-1"></i>Clientes</a></li>
+    <li class="nav-item"><a class="nav-link active" href="/faturas/usinas"><i class="bi bi-sun me-1"></i>Usinas</a></li>
+</ul>
+
+{# ── Resumo ──────────────────────────────────────────────────────── #}
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:22px;font-weight:700;color:var(--or)">{{ fmt(resumo.total_pendente) }}</div>
+            <div class="text-muted" style="font-size:11px">A pagar ({{ resumo.n_pendente }})</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center" style="{% if resumo.n_vencido %}border-color:#dc3545{% endif %}"><div class="card-body py-3">
+            <div style="font-size:22px;font-weight:700;color:{% if resumo.n_vencido %}#dc3545{% else %}#6c757d{% endif %}">{{ fmt(resumo.total_vencido) }}</div>
+            <div class="text-muted" style="font-size:11px">Vencidos ({{ resumo.n_vencido }})</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:22px;font-weight:700;color:#22c55e">{{ fmt(resumo.total_pago) }}</div>
+            <div class="text-muted" style="font-size:11px">Pago ({{ resumo.n_pago }})</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="card text-center"><div class="card-body py-3">
+            <div style="font-size:22px;font-weight:700;color:var(--db)">{{ resumo.n_total }}</div>
+            <div class="text-muted" style="font-size:11px">Boletos no filtro</div>
+        </div></div>
+    </div>
+</div>
+
+{# ── Filtros ─────────────────────────────────────────────────────── #}
+<div class="card mb-3"><div class="card-body py-2 px-3">
+    <form method="GET" action="/faturas/usinas" class="row align-items-center g-2">
+        <div class="col-md-3">
+            <select name="usina" class="form-select form-select-sm">
+                <option value="">Todas as usinas</option>
+                {% for u in usinas_lista %}
+                <option value="{{ u.id }}" {% if usina_sel == u.id %}selected{% endif %}>{{ u.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-2">
+            <input type="text" name="mes" class="form-control form-control-sm" value="{{ mes }}"
+                   placeholder="MM/AAAA" inputmode="numeric">
+        </div>
+        <div class="col-md-3">
+            <select name="status" class="form-select form-select-sm">
+                {% for v, lbl in [('todos','Todos'),('pendente','Pendentes'),('vencidos','Vencidos'),('pago','Pagos')] %}
+                <option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ lbl }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4 text-end">
+            <a href="/faturas/usinas" class="btn btn-sm btn-outline-secondary me-1">Limpar</a>
+            <button type="submit" class="btn btn-sm btn-cta"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+        </div>
+    </form>
+</div></div>
+
+{# ── Tabela ──────────────────────────────────────────────────────── #}
+{% if faturas %}
+<div class="card"><div class="card-body p-0">
+<div class="table-responsive">
+<table class="table table-sm table-hover mb-0" style="font-size:13px">
+    <thead>
+        <tr style="background:#f8f9fa">
+            <th class="ps-3 py-2">Usina</th>
+            <th class="py-2">Mês</th>
+            <th class="py-2 text-end">Geração</th>
+            <th class="py-2 text-end">Valor</th>
+            <th class="py-2">Vencimento</th>
+            <th class="py-2 text-center">Status</th>
+            <th class="py-2 text-end pe-3">Ações</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for f in faturas %}
+    <tr>
+        <td class="ps-3 py-2">
+            <strong>{{ f._usina_nome }}</strong>
+            {% if f._proprietario %}<div class="text-muted" style="font-size:11px"><i class="bi bi-person me-1"></i>{{ f._proprietario }}</div>{% endif %}
+        </td>
+        <td class="py-2">{{ f.mes_referencia }}</td>
+        <td class="py-2 text-end">{{ "%.0f"|format(f.qtd_geracao_kwh or 0) }} kWh</td>
+        <td class="py-2 text-end"><strong>{{ fmt(f.vlr_fatura or 0) }}</strong></td>
+        <td class="py-2">
+            {{ f._venc_br or '—' }}
+            {% if f._classe == 'vencido' %}<span class="badge bg-danger ms-1" style="font-size:9px">vencido</span>{% endif %}
+        </td>
+        <td class="py-2 text-center">
+            {% if f._classe == 'pago' %}
+                <span class="badge" style="background:#dcfce7;color:#16a34a">pago{% if f._pgto_br %} {{ f._pgto_br }}{% endif %}</span>
+            {% elif f._classe == 'vencido' %}
+                <span class="badge bg-danger">vencido</span>
+            {% elif f._classe == 'cancelado' %}
+                <span class="badge bg-secondary">cancelado</span>
+            {% else %}
+                <span class="badge" style="background:rgba(245,166,35,0.15);color:var(--or)">pendente</span>
+            {% endif %}
+        </td>
+        <td class="py-2 text-end pe-3" style="white-space:nowrap">
+            {% if f.cod_barras %}
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-copiar" data-copia="{{ f.cod_barras }}"
+                    title="Copiar código de barras" style="padding:2px 7px"><i class="bi bi-upc-scan"></i></button>
+            {% endif %}
+            {% if f.pix_copia_cola %}
+            <button type="button" class="btn btn-sm btn-outline-secondary btn-copiar" data-copia="{{ f.pix_copia_cola }}"
+                    title="Copiar PIX copia-e-cola" style="padding:2px 7px"><i class="bi bi-qr-code"></i></button>
+            {% endif %}
+            {% if f.pdf_url or f.pdf_path %}
+            <a href="/faturas/usina/{{ f.id_fatura_usina }}/pdf" target="_blank"
+               class="btn btn-sm btn-outline-secondary" title="Ver fatura" style="padding:2px 7px"><i class="bi bi-file-earmark-pdf"></i></a>
+            {% endif %}
+            {% if f._classe == 'pago' %}
+            <form method="POST" action="/faturas/usina/{{ f.id_fatura_usina }}/reabrir" class="d-inline"
+                  onsubmit="return confirm('Reabrir este boleto como pendente?')">
+                <button class="btn btn-sm btn-outline-warning" title="Reabrir" style="padding:2px 7px"><i class="bi bi-arrow-counterclockwise"></i></button>
+            </form>
+            {% else %}
+            <form method="POST" action="/faturas/usina/{{ f.id_fatura_usina }}/baixa" class="d-inline">
+                <button class="btn btn-sm btn-success" title="Marcar como pago hoje" style="padding:2px 9px"><i class="bi bi-check-lg me-1"></i>Pagar</button>
+            </form>
+            {% endif %}
+            <form method="POST" action="/faturas/usina/{{ f.id_fatura_usina }}/excluir" class="d-inline"
+                  onsubmit="return confirm('Excluir o registro deste boleto? (não apaga a fatura/geração)')">
+                <button class="btn btn-sm btn-outline-danger" title="Excluir registro" style="padding:2px 7px"><i class="bi bi-trash"></i></button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+</div></div>
+{% elif tabela_ok is defined and not tabela_ok %}
+<div class="card border-warning"><div class="card-body text-center py-5" style="color:#856404">
+    <i class="bi bi-database-exclamation" style="font-size:30px;display:block;margin-bottom:10px"></i>
+    <strong>Tabela ainda não criada.</strong>
+    <div class="mt-2" style="font-size:13px">
+        Rode a migration <code>migration_faturas_usina.sql</code> no Supabase (SQL Editor) e recarregue esta página.
+    </div>
+</div></div>
+{% else %}
+<div class="card"><div class="card-body text-center text-muted py-5">
+    <i class="bi bi-inbox" style="font-size:30px;display:block;margin-bottom:10px;opacity:0.5"></i>
+    Nenhum boleto de usina {% if mes or status != 'todos' or usina_sel %}neste filtro{% else %}registrado ainda{% endif %}.
+    <div class="mt-2" style="font-size:13px">
+        Anexe a fatura de cada usina em <strong>Usinas → ver usina → registrar geração</strong>.
+        O valor e o vencimento do boleto são capturados automaticamente e aparecem aqui.
+    </div>
+</div></div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.btn-copiar').forEach(function(b){
+    b.addEventListener('click', function(){
+        var txt = b.getAttribute('data-copia') || '';
+        navigator.clipboard.writeText(txt).then(function(){
+            var ic = b.querySelector('i'); var old = ic ? ic.className : '';
+            if (ic) ic.className = 'bi bi-check-lg';
+            b.classList.add('btn-success'); b.classList.remove('btn-outline-secondary');
+            setTimeout(function(){
+                if (ic) ic.className = old;
+                b.classList.remove('btn-success'); b.classList.add('btn-outline-secondary');
+            }, 1200);
+        });
+    });
+});
+</script>
+{% endblock %}

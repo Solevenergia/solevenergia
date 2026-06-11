@@ -2058,6 +2058,51 @@ def salvar_geracao(dados: dict) -> None:
 
 
 # ==================================================================
+#  TB_FATURAS_USINA — boletos das usinas (SoLev paga, desconta do dono)
+# ==================================================================
+_COLS_FATURA_USINA = [
+    "id_fatura_usina", "id_usina", "mes_referencia", "ano_referencia", "mes_num",
+    "qtd_geracao_kwh", "vlr_fatura", "dt_vencimento", "dt_leitura",
+    "cod_barras", "pix_copia_cola", "status_pgto", "dt_pagamento",
+    "desc_obs", "pdf_path", "pdf_url",
+]
+
+
+def tb_carregar_faturas_usina(ano: int = None, mes: int = None,
+                              status: str = None, id_usina: int = None) -> list:
+    """Lista boletos das usinas (mais recentes primeiro). Filtros opcionais."""
+    raw = {}
+    if ano:      raw["ano_referencia"] = f"eq.{int(ano)}"
+    if mes:      raw["mes_num"]        = f"eq.{int(mes)}"
+    if id_usina: raw["id_usina"]       = f"eq.{int(id_usina)}"
+    if status in ("pendente", "pago", "cancelado"):
+        raw["status_pgto"] = f"eq.{status}"
+    rows = _db().select("tb_faturas_usina", raw_params=raw,
+                        order="ano_referencia.desc,mes_num.desc,dt_vencimento.asc")
+    return [_limpar_nulos(r) for r in rows]
+
+
+def tb_upsert_fatura_usina(dados: dict) -> None:
+    """Insere/atualiza um boleto de usina por (id_usina, mes_referencia)."""
+    row = {k: dados[k] for k in _COLS_FATURA_USINA if k in dados}
+    _db().upsert("tb_faturas_usina", row, on_conflict="id_usina,mes_referencia")
+
+
+def tb_get_fatura_usina(id_fatura_usina: int) -> Optional[dict]:
+    rows = _db().select("tb_faturas_usina",
+                        filtros={"id_fatura_usina": id_fatura_usina})
+    return _limpar_nulos(rows[0]) if rows else None
+
+
+def tb_patch_fatura_usina(id_fatura_usina: int, campos: dict) -> None:
+    _db().patch("tb_faturas_usina", {"id_fatura_usina": id_fatura_usina}, campos)
+
+
+def tb_delete_fatura_usina(id_fatura_usina: int) -> None:
+    _db().delete("tb_faturas_usina", {"id_fatura_usina": id_fatura_usina})
+
+
+# ==================================================================
 #  INVESTIDOR HISTORICO (lista)
 # ==================================================================
 _COLS_INV_HIST = [
