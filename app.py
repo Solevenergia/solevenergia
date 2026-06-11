@@ -4975,10 +4975,14 @@ def usinas_distribuir():
         modo=modo,
     )
 
-    # Usinas COM clientes primeiro; usinas elegíveis mas vazias por último.
-    # Assim as vazias aparecem como card normal no fim, prontas pra receber
-    # clientes (arrastar / Transferir) e seguir pro rateio.
-    alocacao = dict(sorted(alocacao.items(), key=lambda kv: (0 if kv[1]["itens"] else 1)))
+    # Ordena as usinas por DIA DE LEITURA (menor → maior), pra processar/finalizar
+    # as usinas na ordem em que as leituras chegam. Empate no mesmo dia: usinas
+    # COM clientes primeiro (as vazias do mesmo dia caem depois).
+    alocacao = dict(sorted(
+        alocacao.items(),
+        key=lambda kv: (int(kv[1]["usina"].get("qtd_dia_leitura") or 0),
+                        0 if kv[1]["itens"] else 1),
+    ))
 
     # Payload para confirmação (inclui saldo proporcional por vínculo)
     proposta = []
