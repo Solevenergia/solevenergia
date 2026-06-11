@@ -4618,7 +4618,8 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
                              excesso_pct: int = 5,
                              folga_pct: int = 0,
                              ordem: str = "maior",
-                             permitir_split: bool = True) -> tuple:
+                             permitir_split: bool = True,
+                             modo: str = "concentrar") -> tuple:
     """
     Distribui clientes entre usinas respeitando filtros configuráveis.
 
@@ -4715,12 +4716,21 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
                                "motivo": f"Nenhuma usina compatível (dia de leitura: {dia_c})"})
             continue
 
-        # Ordena por restante desc
+        # Ordena por restante desc (usado no split top-off)
         compat_rest = sorted(compat, key=lambda u: -_restante(u["id_usina"]))
 
+        # Modo de empacotamento:
+        #  'concentrar' (best-fit): enche poucas usinas até ~100% — cada usina ativa
+        #     fica bem aproveitada (default, pedido do negócio).
+        #  'espalhar'   (worst-fit): joga na usina mais vazia — carga equilibrada,
+        #     mas nenhuma usina chega perto de 100%.
+        concentrar = (modo != "espalhar")
+
         if kwh_efetivo == 0:
-            # Coberto pelo saldo: vincula à usina com mais restante (ocupa 0 kWh)
-            _registrar(compat_rest[0]["id_usina"], cli, 100, consumo_bruto, saldo)
+            # Coberto pelo saldo (ocupa 0 kWh): concentrar → junta numa usina já ativa
+            # (menor restante); espalhar → na com mais restante.
+            alvo = (min if concentrar else max)(compat, key=lambda u: _restante(u["id_usina"]))
+            _registrar(alvo["id_usina"], cli, 100, consumo_bruto, saldo)
             continue
 
         # Tenta encaixar em 1 usina em 2 fases:
@@ -4728,15 +4738,16 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
         # 2ª: usando excesso permitido (max = gen × (1 + excesso%))
         limite_target = kwh_efetivo / fator_target
         limite_max    = kwh_efetivo / fator_max
-        candidato = next(
-            (u for u in compat_rest if _restante(u["id_usina"]) >= limite_target),
-            None
-        )
-        if not candidato:
-            candidato = next(
-                (u for u in compat_rest if _restante(u["id_usina"]) >= limite_max),
-                None
-            )
+
+        def _melhor_encaixe(limite):
+            cabem = [u for u in compat if _restante(u["id_usina"]) >= limite]
+            if not cabem:
+                return None
+            # concentrar: MENOR restante que ainda comporta (best-fit, enche a usina)
+            # espalhar:   MAIOR restante (worst-fit, equilibra a carga)
+            return (min if concentrar else max)(cabem, key=lambda u: _restante(u["id_usina"]))
+
+        candidato = _melhor_encaixe(limite_target) or _melhor_encaixe(limite_max)
         if candidato:
             _registrar(candidato["id_usina"], cli, 100, consumo_bruto, saldo)
         elif permitir_split and len(compat_rest) >= 2:
@@ -4950,6 +4961,9 @@ def usinas_distribuir():
     try: folga_pct   = max(0, min(50, int(request.args.get("folga_pct",   "0"))))
     except Exception: folga_pct = 0
     permitir_split = request.args.get("permitir_split", "1") in ("1", "true", "on")
+    modo = request.args.get("modo", "concentrar")
+    if modo not in ("concentrar", "espalhar"):
+        modo = "concentrar"
 
     alocacao, sem_usina = _algoritmo_distribuicao(
         usinas, clientes, kwh_fixo_por_usina,
@@ -4958,6 +4972,7 @@ def usinas_distribuir():
         excesso_pct=excesso_pct,
         folga_pct=folga_pct,
         permitir_split=permitir_split,
+        modo=modo,
     )
 
     # Usinas COM clientes primeiro; usinas elegíveis mas vazias por último.
@@ -5009,7 +5024,8 @@ def usinas_distribuir():
                            janela_dias=janela_dias,
                            excesso_pct=excesso_pct,
                            folga_pct=folga_pct,
-                           permitir_split=permitir_split)
+                           permitir_split=permitir_split,
+                           modo=modo)
 
 
 # ============================================================

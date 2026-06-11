@@ -73,6 +73,7 @@
                     <i class="bi bi-sliders me-1"></i>Ajustar filtros
                 </button>
                 <small class="text-muted" style="font-size:10px">
+                    {% if modo == 'espalhar' %}Espalhar{% else %}Concentrar{% endif %} ·
                     Janela {{ janela_dias }}d ·
                     {% if excesso_pct %}+{{ excesso_pct }}%{% endif %}{% if excesso_pct and folga_pct %} / {% endif %}{% if folga_pct %}−{{ folga_pct }}%{% endif %}{% if not excesso_pct and not folga_pct %}estrito{% endif %}
                     {% if ignorar_saldo %}· s/saldo{% endif %}
@@ -87,6 +88,17 @@
     <div class="card border-warning">
         <div class="card-body p-3">
             <form method="get" action="" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small mb-1">
+                        Modo de distribuição
+                        <i class="bi bi-question-circle text-muted ms-1" style="cursor:help"
+                           title="Concentrar (best-fit): enche poucas usinas até ~100% — cada usina ativa fica bem aproveitada. Espalhar (worst-fit): distribui na usina mais vazia — carga equilibrada, mas nenhuma chega perto de 100%."></i>
+                    </label>
+                    <select name="modo" class="form-select form-select-sm">
+                        <option value="concentrar" {% if modo != 'espalhar' %}selected{% endif %}>Concentrar (perto de 100%)</option>
+                        <option value="espalhar" {% if modo == 'espalhar' %}selected{% endif %}>Espalhar (equilibrar)</option>
+                    </select>
+                </div>
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Janela após leitura</label>
                     <select name="janela_dias" class="form-select form-select-sm">
