@@ -9,22 +9,24 @@ import urllib.parse
 from datetime import datetime, timedelta
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 
-from db import carregar_usinas, carregar_clientes
+from db import carregar_usinas, carregar_clientes, carregar_geracao_mensal
 
 bp = Blueprint('whatsapp', __name__)
 
 # Placeholders para evitar import circular na inicializacao
 _carregar_rateios_mensais_fn = None
 _norm_mes_fn = None
+_geracao_efetiva_fn = None
 
 def _inicializar_funcoes():
     """Inicializa funcoes de app.py apos o modulo estar carregado."""
-    global _carregar_rateios_mensais_fn, _norm_mes_fn
+    global _carregar_rateios_mensais_fn, _norm_mes_fn, _geracao_efetiva_fn
     if _carregar_rateios_mensais_fn is None:
         try:
-            from app import carregar_rateios_mensais, _norm_mes
+            from app import carregar_rateios_mensais, _norm_mes, _geracao_efetiva_de_meses
             _carregar_rateios_mensais_fn = carregar_rateios_mensais
             _norm_mes_fn = _norm_mes
+            _geracao_efetiva_fn = _geracao_efetiva_de_meses
         except ImportError:
             pass
 
@@ -58,6 +60,7 @@ def _calcular_alertas_rateio():
     alertas = []
     rateios_todos = _carregar_rateios_mensais_fn()
     mes_atual_key = _norm_mes_fn(f"{hoje.month}/{hoje.year}")
+    geracao_mensal_all = carregar_geracao_mensal()  # geração real por usina (fatura)
 
     for uid, u in usinas.items():
         prox = u.get("proxima_leitura", "")
@@ -97,7 +100,8 @@ def _calcular_alertas_rateio():
             "status": status,
             "total_clientes": len(vinculados),
             "total_rateio_pct": round(total_rateio, 2),
-            "geracao_media": u.get("geracao_media_mensal", 0) or 0,
+            "geracao_media": (_geracao_efetiva_fn(u, geracao_mensal_all.get(uid, {}))
+                              if _geracao_efetiva_fn else (u.get("geracao_media_mensal", 0) or 0)),
         })
 
     alertas.sort(key=lambda x: x["dias_restantes"])

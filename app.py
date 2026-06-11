@@ -1757,10 +1757,16 @@ def api_scee_reconciliacao():
                                    columns="id_usina,desc_nome,cod_uc_geradora,qtd_geracao_media_mensal")
             for u in usinas:
                 if _norm_uc(u.get("cod_uc_geradora")) == alvo_uc:
-                    ger = u.get("qtd_geracao_media_mensal") or 0
-                    if ger and float(ger) > 0:
-                        resultado["geracao_real_usina"] = float(ger)
-                        resultado["fonte_geracao"] = f"cadastro usina '{u.get('desc_nome','')}' (id={u.get('id_usina')})"
+                    # Geração REAL do ciclo (fatura da usina em geracao_mensal); o
+                    # valor digitado no cadastro só entra se não houver fatura do ciclo.
+                    _gm = carregar_geracao_mensal().get(str(u.get("id_usina")), {})
+                    _real = float((_gm.get(_norm_mes(ciclo)) or _gm.get(ciclo) or {}).get("kwh_gerado") or 0)
+                    ger = _real if _real > 0 else float(u.get("qtd_geracao_media_mensal") or 0)
+                    if ger and ger > 0:
+                        resultado["geracao_real_usina"] = ger
+                        resultado["fonte_geracao"] = (
+                            f"fatura da usina '{u.get('desc_nome','')}' (ciclo {ciclo})" if _real > 0
+                            else f"cadastro usina '{u.get('desc_nome','')}' (id={u.get('id_usina')})")
                         # Guarda também o id_usina pra próxima etapa do rateio
                         resultado["_id_usina_match"] = u.get("id_usina")
                     break
@@ -1924,10 +1930,16 @@ def api_extrair_fatura_equatorial():
                                           columns="id_usina,desc_nome,cod_uc_geradora,qtd_geracao_media_mensal")
                 for u in usinas_db:
                     if _norm_uc(u.get("cod_uc_geradora")) == alvo_uc:
-                        ger = u.get("qtd_geracao_media_mensal") or 0
-                        if ger and float(ger) > 0:
-                            rec["geracao_real_usina"] = float(ger)
-                            rec["fonte_geracao"] = f"cadastro usina '{u.get('desc_nome','')}'"
+                        # Geração REAL do ciclo (fatura em geracao_mensal); cadastro
+                        # só se não houver fatura do ciclo.
+                        _gm = carregar_geracao_mensal().get(str(u.get("id_usina")), {})
+                        _real = float((_gm.get(_norm_mes(ciclo)) or _gm.get(ciclo) or {}).get("kwh_gerado") or 0)
+                        ger = _real if _real > 0 else float(u.get("qtd_geracao_media_mensal") or 0)
+                        if ger and ger > 0:
+                            rec["geracao_real_usina"] = ger
+                            rec["fonte_geracao"] = (
+                                f"fatura da usina '{u.get('desc_nome','')}' (ciclo {ciclo})" if _real > 0
+                                else f"cadastro usina '{u.get('desc_nome','')}'")
                         break
 
                 # 1b) Fallback: fatura da própria usina em tb_faturas
@@ -3844,6 +3856,12 @@ def relatorio_comercializacao():
     clientes = db.select("tb_clientes")
     vincs    = db.select("tb_cliente_usina", raw_params={"dt_fim": "is.null"})
 
+    # Geração (usina) e consumo (cliente) vêm da fatura Equatorial (média 6/3/última);
+    # o valor digitado no cadastro só entra quando ainda não há fatura.
+    from db import carregar_faturas, carregar_geracao_mensal
+    _consumos_uc = _consumos_por_uc(carregar_faturas())
+    _geracoes_u  = _geracoes_por_usina(carregar_geracao_mensal())
+
     # Indexa
     usinas_by_id   = {u["id_usina"]: u for u in usinas}
     clientes_by_id = {c["id_cliente"]: c for c in clientes}
@@ -3864,7 +3882,7 @@ def relatorio_comercializacao():
     ger_total = 0.0
     ger_por_usina = {}
     for u in usinas:
-        g = float(u.get("qtd_geracao_media_mensal") or 0)
+        g = _geracao_efetiva_usina(u, _geracoes_u)
         ger_por_usina[u["id_usina"]] = g
         ger_total += g
 
@@ -3891,7 +3909,7 @@ def relatorio_comercializacao():
         is_fixo = (v.get("desc_saldo_obs") or "").upper() == "FIXO"
         ger_u = ger_por_usina.get(id_u, 0)
         cli   = clientes_by_id.get(id_c, {})
-        consumo_med = float(cli.get("qtd_consumo_medio_kwh") or 0)
+        consumo_med = _consumo_efetivo_cliente(cli, _consumos_uc)
 
         cap_alocada  = pct * ger_u
         # Modo A — consumo médio (com ou sem saldo):
@@ -3947,7 +3965,7 @@ def relatorio_comercializacao():
         if str(cli.get("STATUS") or "").upper() == "INATIVO" or cli.get("STATUS") is False:
             continue
         id_c = cli["id_cliente"]
-        consumo_med = float(cli.get("qtd_consumo_medio_kwh") or 0)
+        consumo_med = _consumo_efetivo_cliente(cli, _consumos_uc)
         saldo_cli   = saldo_por_cliente.get(id_c, 0)
         cli_vincs   = vincs_por_cliente.get(id_c, [])
 
@@ -3982,7 +4000,7 @@ def relatorio_comercializacao():
                     continue
                 is_fixo = (v.get("desc_saldo_obs") or "").upper() == "FIXO"
                 usina = usinas_by_id.get(id_u, {})
-                ger_u = float(usina.get("qtd_geracao_media_mensal") or 0)
+                ger_u = _geracao_efetiva_usina(usina, _geracoes_u)
                 cap_alocada = (pct / 100.0) * ger_u
                 cons_bruto  = (pct / 100.0) * consumo_med
                 cons_liq    = (pct / 100.0) * max(0, consumo_med - saldo_cli)
@@ -4609,6 +4627,43 @@ def _geracoes_por_usina(geracao_mensal: dict) -> dict:
         itens = sorted(meses.items(), key=lambda kv: -_mes_ord_br(kv[0]))
         out[str(uid)] = [float(mv.get("kwh_gerado") or 0) for _, mv in itens]
     return out
+
+
+# ── Helpers de alto nível: valor EFETIVO (fatura > cadastro) ───────────────
+# Regra do negócio: o valor digitado no cadastro só vale ANTES da 1ª fatura.
+# Havendo histórico de fatura, usa a média (6/3/última) e atualiza a cada mês.
+def _consumo_efetivo_cliente(cliente: dict, consumos_uc: dict) -> float:
+    """Consumo médio do cliente: média das faturas (6/3/última) se houver;
+    senão o valor digitado no cadastro. `consumos_uc` = _consumos_por_uc(faturas)."""
+    uc = str(cliente.get("cod_uc") or cliente.get("uc") or "").lstrip("0")
+    d = _media_tiered(consumos_uc.get(uc, []))
+    if d and d > 0:
+        return d
+    return float(cliente.get("qtd_consumo_medio_kwh") or cliente.get("consumo_medio") or 0)
+
+
+def _geracao_efetiva_usina(usina: dict, geracoes_u: dict, uid=None) -> float:
+    """Geração média da usina: média das faturas (6/3/última) se houver; senão o
+    valor digitado no cadastro. `geracoes_u` = _geracoes_por_usina(geracao_mensal)."""
+    _uid = str(uid if uid is not None else (usina.get("id_usina") if usina else ""))
+    d = _media_tiered(geracoes_u.get(_uid, []))
+    if d and d > 0:
+        return d
+    return float((usina or {}).get("qtd_geracao_media_mensal")
+                 or (usina or {}).get("geracao_media_mensal") or 0)
+
+
+def _geracao_efetiva_de_meses(usina: dict, meses_usina: dict) -> float:
+    """Igual a _geracao_efetiva_usina, mas recebe os MESES de uma só usina
+    ({mes: {kwh_gerado,...}}) — usado onde já se tem geracao_mensal.get(uid)."""
+    serie = [(mv.get("kwh_gerado") or 0)
+             for _m, mv in sorted((meses_usina or {}).items(),
+                                   key=lambda kv: -_mes_ord_br(kv[0]))]
+    d = _media_tiered(serie)
+    if d and d > 0:
+        return d
+    return float((usina or {}).get("qtd_geracao_media_mensal")
+                 or (usina or {}).get("geracao_media_mensal") or 0)
 
 
 def _algoritmo_distribuicao(usinas: list, clientes: list,
@@ -5389,7 +5444,8 @@ def usina_ver(uid):
             pass
 
     total_rateio_pct  = sum((c.get("rateio_pct", 0) or 0) for c in vinculados.values())
-    geracao_mensal_prev = usina["geracao_media_mensal"]
+    # Geração prevista vem da fatura Equatorial (6/3/última); cadastro só sem histórico.
+    geracao_mensal_prev = _geracao_efetiva_de_meses(usina, geracao_mensal_all)
 
     # Base de kWh para rateio:
     #   Prioridade: fatura do ciclo atual > registros diarios > previsao mensal.
@@ -6386,14 +6442,9 @@ def rateio_planejar_old(uid):
 
     # Geracao prevista da usina (input)
     geracao_mensal_all = carregar_geracao_mensal().get(uid, {})
-    # default: media mensal cadastrada na usina; se nao tem, usa ultimo mes registrado
-    if usina.get("geracao_media_mensal") and float(usina["geracao_media_mensal"]) > 0:
-        ger_default = float(usina["geracao_media_mensal"])
-    else:
-        ultimos = sorted(geracao_mensal_all.items(),
-                         key=lambda kv: int(kv[0].split("/")[1]) * 100 + int(kv[0].split("/")[0])
-                         if "/" in kv[0] else 0, reverse=True)
-        ger_default = float((ultimos[0][1].get("kwh_gerado", 0) if ultimos else 0) or 0)
+    # default: PREVISÃO da fatura Equatorial (média 6/3/última); o valor digitado
+    # no cadastro só entra se a usina ainda não tem nenhuma fatura/geração.
+    ger_default = _geracao_efetiva_de_meses(usina, geracao_mensal_all)
     try:
         geracao_prevista = float(request.args.get("ger", "").replace(",", "."))
     except Exception:
