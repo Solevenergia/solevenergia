@@ -5154,20 +5154,38 @@ def usinas_distribuir():
     clientes_distrib = [c for c in clientes if _ucdig(c.get("cod_uc")) not in ucs_locked]
 
     # Pré-alocação: vínculos ativos (não-FIXO) já salvos em tb_cliente_usina.
-    # Cliente confirmado fica na usina/% em que foi salvo — independente de o
+    # Cliente confirmado fica na usina em que foi salvo — independente de o
     # rateio do mês ter sido registrado ou não — e o arranjo se projeta igual
     # para os meses seguintes até alguém mudar e confirmar de novo.
+    #
+    # ⚠️ pct_rateio tem SEMÂNTICA MISTA: a tela de Rateio grava % da GERAÇÃO
+    # da usina (0.1, 9, 25... somando 100 entre clientes); o Distribuir grava
+    # % do CONSUMO do cliente (split, soma 100 por cliente). Interpretar
+    # rateio-% como split gerava falsos "split 25%" aqui. Regra:
+    #   1 vínculo ativo  → cliente INTEIRO na usina (pct 100);
+    #   2+ vínculos      → split real: normaliza os pcts para somar 100.
     pre_alocados = []
     if manter_vinculos:
         ids_usinas_distrib = {u["id_usina"] for u in usinas_distrib}
         cli_por_id = {c["id_cliente"]: c for c in clientes_distrib}
+        vincs_cli: dict = {}
         for v in vinculos_ativos_full:
             if (v.get("desc_saldo_obs") or "").upper() == "FIXO":
                 continue
             cli = cli_por_id.get(v.get("id_cliente"))
             if not cli or v.get("id_usina") not in ids_usinas_distrib:
                 continue
-            pre_alocados.append((v["id_usina"], cli, float(v.get("pct_rateio") or 100)))
+            vincs_cli.setdefault(v["id_cliente"], []).append(v)
+        for id_c, vs in vincs_cli.items():
+            cli = cli_por_id[id_c]
+            if len(vs) == 1:
+                pre_alocados.append((vs[0]["id_usina"], cli, 100.0))
+                continue
+            soma_pct = sum(float(v.get("pct_rateio") or 0) for v in vs)
+            for v in vs:
+                p = float(v.get("pct_rateio") or 0)
+                pct = round(p / soma_pct * 100.0, 2) if soma_pct > 0 else round(100.0 / len(vs), 2)
+                pre_alocados.append((v["id_usina"], cli, pct))
 
     alocacao, sem_usina = _algoritmo_distribuicao(
         usinas_distrib, clientes_distrib, kwh_fixo_por_usina,
