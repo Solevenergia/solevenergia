@@ -1064,6 +1064,12 @@
             inp.name  = 'payload_json';
             inp.value = JSON.stringify(itens);
             form.appendChild(inp);
+            // Leva o mês selecionado junto — a tela de rateio abre no MESMO ciclo
+            var inpMes = document.createElement('input');
+            inpMes.type  = 'hidden';
+            inpMes.name  = 'mes';
+            inpMes.value = (document.getElementById('selMes') || {}).value || '';
+            form.appendChild(inpMes);
             document.body.appendChild(form);
             form.submit();
         });

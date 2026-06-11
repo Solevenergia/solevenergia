@@ -5033,9 +5033,10 @@ def usinas_distribuir():
     meses_set = {_mes_atual} | _meses_ger
     for _mm in rateios_all.values():        meses_set.update(_mm.keys())
     meses_disponiveis = sorted(meses_set, key=_ord_mes, reverse=True)
-    # Default: mês mais recente COM geração registrada (ciclo real); senão mês atual.
-    mes_sel = request.args.get("mes", "").strip() or (
-        max(_meses_ger, key=_ord_mes) if _meses_ger else _mes_atual)
+    # Default: MÊS VIGENTE (calendário). Antes era o mês mais recente com
+    # geração registrada — abria em maio enquanto o usuário planejava junho,
+    # confundindo toda volta à tela.
+    mes_sel = request.args.get("mes", "").strip() or _mes_atual
     mes_norm = _norm_mes(mes_sel)
 
     import re as _re_ucd
@@ -5374,8 +5375,10 @@ def usinas_distribuir_confirmar_usina(id_usina):
         flash("Nenhuma alteração aplicada." + (f" {erros} erro(s)." if erros else ""),
               "danger" if erros else "warning")
 
-    # Redireciona pra tela de rateio dessa usina
-    return redirect(url_for("rateio_dashboard", uid=id_usina))
+    # Redireciona pra tela de rateio dessa usina, no MESMO mês da distribuição
+    mes = (request.form.get("mes") or "").strip()
+    destino = url_for("rateio_dashboard", uid=id_usina)
+    return redirect(destino + (f"?mes={mes}" if mes else ""))
 
 
 @app.route("/usinas/distribuir/refazer-rateio/<int:id_usina>", methods=["POST"])
@@ -6882,15 +6885,9 @@ def rateio_dashboard(uid):
             return 0
     meses_disponiveis = sorted(meses_set, key=_sort_mes, reverse=True)
 
-    mes_sel = request.args.get("mes", "")
-    if not mes_sel:
-        # Padrão: mês mais recente com geração real; senão mês com rateio; senão mês atual
-        if geracao_mensal_all:
-            mes_sel = max(geracao_mensal_all.keys(), key=_sort_mes)
-        elif rateios_usina:
-            mes_sel = max(rateios_usina.keys(), key=_sort_mes)
-        else:
-            mes_sel = mes_atual
+    # Padrão: MÊS VIGENTE (calendário). Antes caía no mês mais recente com
+    # geração real (maio durante o planejamento de junho) — confundia.
+    mes_sel = request.args.get("mes", "") or mes_atual
 
     # ── Snapshot do rateio registrado deste ciclo (tb_rateios_mensais) ─────────
     # Se existe rateio registrado para o mes_sel, a tela entra em MODO CONFERENCIA:
