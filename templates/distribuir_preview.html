@@ -20,6 +20,7 @@
         </label>
         <form method="get" action="" class="d-inline mb-0">
             <input type="hidden" name="modo" value="{{ modo }}">
+            <input type="hidden" name="manter_vinculos" value="{{ '1' if manter_vinculos else '0' }}">
             <select id="selMes" name="mes" class="form-select form-select-sm d-inline-block"
                     style="width:auto;font-size:14px;font-weight:600" onchange="this.form.submit()">
                 {% for m in meses_disponiveis %}
@@ -32,8 +33,18 @@
             <i class="bi bi-lock-fill me-1"></i>{{ usinas_travadas|length }} usina(s) travada(s) neste mês
         </span>
         {% endif %}
+        {% if total_salvos %}
+        <span class="badge ms-2" style="background:#e0f2fe;color:#0369a1;font-size:12px"
+              title="Clientes confirmados anteriormente — mantidos na usina em que foram salvos">
+            <i class="bi bi-pin-angle-fill me-1"></i>{{ total_salvos }} cliente(s) mantido(s) do salvo
+        </span>
+        {% endif %}
         <small class="text-muted ms-auto" style="font-size:11px">
-            Usinas com rateio já realizado no mês ficam travadas (read-only).
+            {% if manter_vinculos %}
+            Vínculos confirmados são mantidos — o automático só distribui quem não tem vínculo. Usinas com rateio do mês ficam travadas.
+            {% else %}
+            <strong style="color:#d97706">Redistribuição do zero</strong> — vínculos salvos ignorados no preview (nada muda até confirmar).
+            {% endif %}
         </small>
     </div>
 </div>
@@ -170,6 +181,17 @@
                     </div>
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label small mb-1">
+                        Vínculos salvos
+                        <i class="bi bi-question-circle text-muted ms-1" style="cursor:help"
+                           title="Manter: clientes já confirmados ficam na usina/% em que foram salvos; o automático só distribui quem não tem vínculo. Redistribuir do zero: ignora o salvo e refaz a proposta inteira (nada muda no banco até você confirmar)."></i>
+                    </label>
+                    <select name="manter_vinculos" class="form-select form-select-sm">
+                        <option value="1" {% if manter_vinculos %}selected{% endif %}>Manter (padrão)</option>
+                        <option value="0" {% if not manter_vinculos %}selected{% endif %}>Redistribuir do zero</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <div class="form-check mt-3">
                         <input type="checkbox" class="form-check-input" id="chkIgnorarSaldo"
                                name="ignorar_saldo" value="1" {% if ignorar_saldo %}checked{% endif %}>
@@ -193,6 +215,7 @@
                         <strong>Excesso (+%)</strong>: teto absoluto acima da geração.
                         <strong>Folga (−%)</strong>: alvo preferencial de reserva. Se nada couber respeitando a folga, algoritmo recorre ao excesso como fallback.
                         <strong>Combinar</strong>: ex. folga 10% + excesso 0% = sempre 10% livres (estrito); folga 5% + excesso 10% = tenta 5% livres mas aceita até +10% se necessário.
+                        <strong>Vínculos salvos</strong>: "Manter" preserva o arranjo confirmado (badge <i class="bi bi-pin-angle-fill" style="color:#0369a1"></i> salvo) e distribui só os demais; "Redistribuir do zero" refaz tudo no preview.
                     </small>
                 </div>
             </form>
@@ -392,6 +415,12 @@
                     {% endif %}
                     {% if item.pct < 100 %}
                     <span class="badge badge-split ms-1" style="background:rgba(245,166,35,0.15);color:var(--or);font-size:10px">split</span>
+                    {% endif %}
+                    {% if item.salvo %}
+                    <span class="badge badge-salvo ms-1" style="background:#e0f2fe;color:#0369a1;font-size:10px"
+                          title="Vínculo salvo — mantido da última confirmação desta usina">
+                        <i class="bi bi-pin-angle-fill"></i> salvo
+                    </span>
                     {% endif %}
                 </td>
                 <td class="text-center py-2">
@@ -1016,6 +1045,11 @@
                     + 'Você será levado para a tela de rateio em seguida.';
             if (!confirm(msg)) return;
 
+            // Vínculos vão pro servidor (viram a base da tela ao recarregar) —
+            // rascunhos locais desta usina e referências a estes clientes em
+            // rascunhos de outras usinas ficam obsoletos e mascarariam o salvo.
+            limparRascunhosConfirmados(idUsina, itens.map(function(it) { return it.id_cliente; }));
+
             // Cria form dinâmico e submete
             var form = document.createElement('form');
             form.method = 'POST';
@@ -1076,6 +1110,32 @@
             if (k && k.indexOf(LS_PREFIX) === 0) chaves.push(k);
         }
         chaves.forEach(function(k) { localStorage.removeItem(k); });
+    }
+
+    // Após confirmar uma usina: o arranjo dela virou vínculo no servidor.
+    // Remove o rascunho da usina e tira estes clientes dos rascunhos das
+    // OUTRAS usinas — senão um rascunho velho re-moveria o cliente confirmado.
+    function limparRascunhosConfirmados(idUsinaConfirmada, idsClientes) {
+        try {
+            localStorage.removeItem(chaveSnap(idUsinaConfirmada));
+            var ids = {};
+            (idsClientes || []).forEach(function(id) { ids[id] = true; });
+            var chaves = [];
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && k.indexOf(LS_PREFIX) === 0) chaves.push(k);
+            }
+            chaves.forEach(function(k) {
+                try {
+                    var snap = JSON.parse(localStorage.getItem(k));
+                    if (!snap || !Array.isArray(snap.rows)) return;
+                    var rows = snap.rows.filter(function(r) { return !ids[r.id_cliente]; });
+                    if (rows.length === snap.rows.length) return;
+                    if (rows.length === 0) { localStorage.removeItem(k); }
+                    else { snap.rows = rows; localStorage.setItem(k, JSON.stringify(snap)); }
+                } catch(_e) {}
+            });
+        } catch(_e) {}
     }
 
     function restaurarSnapshots() {
@@ -1192,6 +1252,14 @@
 
     // Restaura ao carregar (depois de Sortable já estar inicializado)
     restaurarSnapshots();
+
+    // Confirmação GLOBAL: tudo vira vínculo no servidor → rascunhos obsoletos.
+    var formConfirmar = document.getElementById('form_confirmar');
+    if (formConfirmar) {
+        formConfirmar.addEventListener('submit', function() {
+            descartarTodosSnapshots();
+        });
+    }
 
     // ── Toggle "com saldo" / "sem saldo" por usina ───────────────
     document.querySelectorAll('.toggle-saldo-usina').forEach(function(tog) {

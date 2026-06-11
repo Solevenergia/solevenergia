@@ -4716,7 +4716,8 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
                              folga_pct: int = 0,
                              ordem: str = "maior",
                              permitir_split: bool = True,
-                             modo: str = "concentrar") -> tuple:
+                             modo: str = "concentrar",
+                             pre_alocados: list = None) -> tuple:
     """
     Distribui clientes entre usinas respeitando filtros configuráveis.
 
@@ -4732,6 +4733,9 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
                         Quando folga=5 e excesso=10 → tenta deixar 5%, aceita até +10% se necessário.
       ordem:            "maior" = clientes com maior demanda primeiro; "menor" = menor primeiro
       permitir_split:   True permite dividir cliente em 2 usinas
+      pre_alocados:     [(id_usina, cliente, pct)] — vínculos JÁ SALVOS (tb_cliente_usina):
+                        entram primeiro na usina/% exatos e o algoritmo não os move;
+                        só distribui automaticamente quem não tem vínculo salvo.
     Retorna:
       alocacao  = {id_usina: {'usina': {...}, 'itens': [...]}}
       sem_usina = [{'cliente': {...}, 'motivo': str}]
@@ -4783,6 +4787,21 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
             "coberto_saldo": coberto,
         })
         alocacao[id_u]["kwh_alocado"] += kwh_efetivo
+
+    # ── Pré-alocação: vínculos já salvos entram primeiro, na usina/% em que
+    # foram confirmados. Ocupam capacidade (via _registrar) e saem do pool do
+    # algoritmo — garante que o arranjo salvo volte intacto ao reabrir a tela.
+    ids_pre = set()
+    for id_u, cli, pct in (pre_alocados or []):
+        if id_u not in alocacao:
+            continue  # usina sem dia de leitura/geração disponível → cliente cai no algoritmo
+        consumo_bruto = float(cli.get("qtd_consumo_medio_kwh") or 0)
+        saldo         = 0.0 if ignorar_saldo else float(cli.get("_saldo_atual") or 0)
+        _registrar(id_u, cli, pct, consumo_bruto, saldo)
+        alocacao[id_u]["itens"][-1]["salvo"] = True
+        ids_pre.add(cli["id_cliente"])
+    if ids_pre:
+        clientes = [c for c in clientes if c["id_cliente"] not in ids_pre]
 
     # Ordena: por kwh_efetivo (maior ou menor primeiro conforme parâmetro)
     def _sort_key(c):
@@ -5124,11 +5143,31 @@ def usinas_distribuir():
     modo = request.args.get("modo", "concentrar")
     if modo not in ("concentrar", "espalhar"):
         modo = "concentrar"
+    # Manter vínculos salvos (default SIM): o arranjo confirmado volta intacto;
+    # "0" = redistribuir do zero (comportamento antigo, só preview — nada muda
+    # no banco até confirmar).
+    manter_vinculos = request.args.get("manter_vinculos", "1") != "0"
 
     # Distribuição automática só nas usinas NÃO-travadas, com clientes ainda
     # não comprometidos em usinas travadas deste mês.
     usinas_distrib   = [u for u in usinas if u["id_usina"] not in locked_ids]
     clientes_distrib = [c for c in clientes if _ucdig(c.get("cod_uc")) not in ucs_locked]
+
+    # Pré-alocação: vínculos ativos (não-FIXO) já salvos em tb_cliente_usina.
+    # Cliente confirmado fica na usina/% em que foi salvo — independente de o
+    # rateio do mês ter sido registrado ou não — e o arranjo se projeta igual
+    # para os meses seguintes até alguém mudar e confirmar de novo.
+    pre_alocados = []
+    if manter_vinculos:
+        ids_usinas_distrib = {u["id_usina"] for u in usinas_distrib}
+        cli_por_id = {c["id_cliente"]: c for c in clientes_distrib}
+        for v in vinculos_ativos_full:
+            if (v.get("desc_saldo_obs") or "").upper() == "FIXO":
+                continue
+            cli = cli_por_id.get(v.get("id_cliente"))
+            if not cli or v.get("id_usina") not in ids_usinas_distrib:
+                continue
+            pre_alocados.append((v["id_usina"], cli, float(v.get("pct_rateio") or 100)))
 
     alocacao, sem_usina = _algoritmo_distribuicao(
         usinas_distrib, clientes_distrib, kwh_fixo_por_usina,
@@ -5138,6 +5177,7 @@ def usinas_distribuir():
         folga_pct=folga_pct,
         permitir_split=permitir_split,
         modo=modo,
+        pre_alocados=pre_alocados,
     )
 
     # Ordena as usinas por DIA DE LEITURA (menor → maior), pra processar/finalizar
@@ -5165,6 +5205,9 @@ def usinas_distribuir():
     ids_alocados = {item["cliente"]["id_cliente"]
                     for bloco in alocacao.values() for item in bloco["itens"]}
     total_alocados  = len(ids_alocados)
+    total_salvos    = len({item["cliente"]["id_cliente"]
+                           for bloco in alocacao.values()
+                           for item in bloco["itens"] if item.get("salvo")})
     total_sem_usina = len(sem_usina)
     splits          = len({item["cliente"]["id_cliente"]
                            for bloco in alocacao.values()
@@ -5195,6 +5238,8 @@ def usinas_distribuir():
                            folga_pct=folga_pct,
                            permitir_split=permitir_split,
                            modo=modo,
+                           manter_vinculos=manter_vinculos,
+                           total_salvos=total_salvos,
                            mes_sel=mes_sel,
                            meses_disponiveis=meses_disponiveis,
                            usinas_travadas=usinas_travadas)
