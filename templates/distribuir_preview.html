@@ -396,7 +396,9 @@
                 data-kwh-bruto="{{ item.kwh_bruto }}"
                 data-saldo="{{ item.saldo }}"
                 data-kwh-efetivo="{{ item.kwh_efetivo }}"
-                data-pct="{{ item.pct }}"
+                {# %g normaliza 100.0 → "100": o CSS que mostra o botão Dividir
+                   compara a STRING data-pct="100" (float escondia o botão) #}
+                data-pct="{{ '%g'|format(item.pct) }}"
                 data-coberto-saldo="{{ '1' if item.coberto_saldo else '0' }}"
                 data-dia-cli="{{ dia_c }}">
                 <td class="ps-3 text-muted" style="user-select:none;white-space:nowrap">
@@ -449,7 +451,7 @@
                     {% if item.pct == 100 %}
                     <span class="text-muted">100%</span>
                     {% else %}
-                    <strong style="color:var(--or)">{{ item.pct }}%</strong>
+                    <strong style="color:var(--or)">{{ '%g'|format(item.pct) }}%</strong>
                     {% endif %}
                     <button type="button" class="btn-dividir" title="Dividir este cliente em 2 usinas"><i class="bi bi-diagram-2"></i></button>
                 </td>
@@ -949,10 +951,13 @@
                      + 'tbody.sortable-clientes:has(.cli-row) .cli-empty-hint{display:none}'
                      + '.cli-empty-hint td{background:#fafbfc;border:1px dashed #d8dee6;border-radius:6px}'
                      + '.usina-vazia .card-header{opacity:0.92}'
-                     // Botão "Dividir": some em linhas já em split (só divide quem está 100%)
-                     + '.btn-dividir{border:none;background:transparent;color:#c2c7cf;cursor:pointer;font-size:12px;padding:0 3px;margin-left:5px;line-height:1}'
-                     + '.btn-dividir:hover{color:var(--or)}'
-                     + '.cli-row:not([data-pct="100"]) .btn-dividir{display:none}';
+                     // Botão "Dividir": some em linhas já em split (só divide quem está 100%).
+                     // data-pct é comparado como STRING — o backend renderiza com %g ("100",
+                     // nunca "100.0"); o :not([data-pct="100.0"]) é cinto de segurança p/
+                     // valores setados via JS.
+                     + '.btn-dividir{border:1px solid #dfe4ea;border-radius:6px;background:#fff;color:#6b7280;cursor:pointer;font-size:13px;padding:1px 6px;margin-left:6px;line-height:1.2;vertical-align:middle}'
+                     + '.btn-dividir:hover{color:#fff;background:var(--or);border-color:var(--or)}'
+                     + '.cli-row:not([data-pct="100"]):not([data-pct="100.0"]) .btn-dividir{display:none}';
     document.head.appendChild(style);
 
     // ── Ordenação por coluna (clique no <th>) ───────────────────
