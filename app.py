@@ -6026,7 +6026,16 @@ def _calcular_resumo_rateio_consolidado(mes_sel: str = ""):
         ger_diaria_prev = u.get("geracao_prevista_diaria", 0) or 0
         media_diaria = total_diario / dias_reg if dias_reg > 0 else ger_diaria_prev
         estimativa_30d = media_diaria * 30
-        ger_prev_mensal = u.get("geracao_media_mensal", 0) or 0
+        # Previsão = média da fatura Equatorial (6/3/última); fallback cadastro só
+        # sem histórico de geração. (Mesma regra do Distribuir/Rateio individual.)
+        _serie_ger = [
+            (mv.get("kwh_gerado") or 0)
+            for _m, mv in sorted(geracao_mensal_all.get(uid, {}).items(),
+                                 key=lambda kv: -_sort_mes(kv[0]))
+        ]
+        _ger_fatura = _media_tiered(_serie_ger)
+        ger_prev_mensal = _ger_fatura if (_ger_fatura and _ger_fatura > 0) \
+                          else (u.get("geracao_media_mensal", 0) or 0)
 
         if tem_geracao_real:
             base_kwh = kwh_gerado_real
