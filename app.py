@@ -4414,6 +4414,68 @@ def _dias_apos(dia_usina: int, dia_cliente: int) -> int:
     return (dia_cliente - dia_usina) % 30
 
 
+# ──────────────────────────────────────────────────────────────────
+#  Dados mais fiéis: consumo/geração derivados das faturas Equatorial
+#  Prioridade: ≥6 meses → média dos 6; 3-5 → média dos disponíveis;
+#  1-2 → o último valor; sem histórico → None (cai no cadastro).
+# ──────────────────────────────────────────────────────────────────
+def _mes_ord_br(mes) -> int:
+    """'M/AAAA' ou 'AAAA-MM' → AAAA*100+MM (p/ ordenar). 0 se inválido."""
+    s = str(mes or "").strip()
+    if "/" in s:
+        p = s.split("/")
+        try:    return int(p[1]) * 100 + int(p[0])
+        except (ValueError, IndexError): return 0
+    if "-" in s:
+        p = s.split("-")
+        try:    return int(p[0]) * 100 + int(p[1])
+        except (ValueError, IndexError): return 0
+    return 0
+
+
+def _media_tiered(valores: list):
+    """valores = lista MAIS-RECENTE-PRIMEIRO. Só conta meses com valor > 0.
+    ≥6 → média dos 6 mais recentes; 3-5 → média dos disponíveis; 1-2 → o último;
+    vazio → None (sinaliza que deve cair no fallback do cadastro)."""
+    vals = [float(v) for v in valores if v is not None and float(v) > 0]
+    n = len(vals)
+    if n >= 6: return sum(vals[:6]) / 6.0
+    if n >= 3: return sum(vals[:n]) / float(n)
+    if n >= 1: return vals[0]
+    return None
+
+
+def _consumos_por_uc(faturas: list) -> dict:
+    """{uc_sem_zeros_a_esq: [consumo_kwh ...]} mais-recente-primeiro, 1 valor por mês."""
+    from collections import defaultdict
+    bruto = defaultdict(list)
+    for it in faturas:
+        uc = str(it.get("uc", "")).lstrip("0")
+        mo = _mes_ord_br(it.get("mes_referencia", ""))
+        if not uc or not mo:
+            continue
+        bruto[uc].append((mo, float(it.get("consumo_kwh", 0) or 0)))
+    out = {}
+    for uc, lst in bruto.items():
+        lst.sort(key=lambda x: -x[0])
+        vistos, vals = set(), []
+        for mo, c in lst:               # dedup por mês (fatura mais recente do mês vence)
+            if mo in vistos:
+                continue
+            vistos.add(mo); vals.append(c)
+        out[uc] = vals
+    return out
+
+
+def _geracoes_por_usina(geracao_mensal: dict) -> dict:
+    """{id_usina(str): [kwh_gerado ...]} mais-recente-primeiro."""
+    out = {}
+    for uid, meses in (geracao_mensal or {}).items():
+        itens = sorted(meses.items(), key=lambda kv: -_mes_ord_br(kv[0]))
+        out[str(uid)] = [float(mv.get("kwh_gerado") or 0) for _, mv in itens]
+    return out
+
+
 def _algoritmo_distribuicao(usinas: list, clientes: list,
                              kwh_fixo_por_usina: dict = None,
                              ignorar_saldo: bool = False,
@@ -4654,6 +4716,35 @@ def usinas_distribuir():
         flash("Distribuição concluída! " + " · ".join(msgs),
               "warning" if erros else "success")
         return redirect(url_for("usinas_lista"))
+
+    # ── Dados mais fiéis: consumo (cliente) e geração (usina) vindos das
+    #    faturas Equatorial, com prioridade 6m → 3-5m → última. Sem histórico,
+    #    cai no valor do cadastro. Sobrescreve ANTES de FIXO/algoritmo/display.
+    from db import carregar_faturas, carregar_geracao_mensal
+    consumos_uc = _consumos_por_uc(carregar_faturas())
+    geracoes_u  = _geracoes_por_usina(carregar_geracao_mensal())
+    n_cons_fat = n_ger_fat = 0
+    for c in clientes:
+        uc = str(c.get("cod_uc", "")).lstrip("0")
+        serie = consumos_uc.get(uc, [])
+        d = _media_tiered(serie)
+        if d is not None and d > 0:
+            c["qtd_consumo_medio_kwh"] = round(d, 2)
+            c["_consumo_origem"] = f"fatura ({len([v for v in serie if v > 0])}m)"
+            n_cons_fat += 1
+        else:
+            c["_consumo_origem"] = "cadastro"
+    for u in usinas:
+        serie = geracoes_u.get(str(u.get("id_usina")), [])
+        d = _media_tiered(serie)
+        if d is not None and d > 0:
+            u["qtd_geracao_media_mensal"] = round(d, 2)
+            u["_geracao_origem"] = f"fatura ({len([v for v in serie if v > 0])}m)"
+            n_ger_fat += 1
+        else:
+            u["_geracao_origem"] = "cadastro"
+    app.logger.info(f"[distribuir] consumo via fatura: {n_cons_fat}/{len(clientes)} · "
+                    f"geração via fatura: {n_ger_fat}/{len(usinas)}")
 
     # ── GET: busca saldo atual e calcula preview ────────────────
     # Saldo atual = saldo da vinculação ativa OU saldo_inicial do cadastro
