@@ -80,6 +80,19 @@ PORTAL_BASE_URL = os.environ.get("PORTAL_BASE_URL", "https://app.solevenergia.co
 # fica aberto — a máquina local não está exposta na internet.
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 
+# Usuários adicionais (ex.: funcionários) — cada um com a PRÓPRIA senha, separada
+# da do dono. Env USUARIOS no formato "Nome1:senha1,Nome2:senha2" (sem ':' nem ','
+# nas senhas). O dono continua entrando com ADMIN_PASSWORD (identificado como "Admin").
+def _parse_usuarios(raw: str) -> dict:
+    out = {}
+    for par in (raw or "").split(","):
+        nome, sep, senha = par.partition(":")
+        nome, senha = nome.strip(), senha.strip()
+        if sep and nome and senha:
+            out[nome] = senha
+    return out
+USUARIOS = _parse_usuarios(os.environ.get("USUARIOS", ""))
+
 # Endpoints liberados SEM login (cliente / portal / pagamento / saúde)
 PUBLIC_ENDPOINTS = {
     "static", "portal_cliente", "fatura_redirect", "pagar_pix",
@@ -93,8 +106,8 @@ def _exigir_login():
         return  # rota pública (ou 404) — segue sem login
     if session.get("auth"):
         return  # já autenticado
-    if not ADMIN_PASSWORD:
-        return  # senha não configurada (dev local) → painel aberto
+    if not ADMIN_PASSWORD and not USUARIOS:
+        return  # nenhuma senha configurada (dev local) → painel aberto
     return redirect(url_for("login", next=request.full_path))
 
 @app.route("/login", methods=["GET", "POST"])
@@ -104,9 +117,19 @@ def login():
     if request.method == "POST":
         import hmac
         senha = request.form.get("senha", "")
+        # Dono (ADMIN_PASSWORD) → "Admin"; senão tenta as senhas dos funcionários.
+        usuario = None
         if ADMIN_PASSWORD and hmac.compare_digest(senha, ADMIN_PASSWORD):
+            usuario = "Admin"
+        else:
+            for nome, s in USUARIOS.items():
+                if hmac.compare_digest(senha, s):
+                    usuario = nome
+                    break
+        if usuario:
             session.permanent = True
             session["auth"] = True
+            session["usuario"] = usuario
             nxt = request.values.get("next", "") or ""
             if not nxt.startswith("/") or nxt.startswith("//"):  # evita open-redirect
                 nxt = url_for("dashboard")
