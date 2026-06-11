@@ -3666,11 +3666,21 @@ def fatura_usina_excluir(id_fu):
 
 @app.route("/faturas/usina/<int:id_fu>/pdf")
 def fatura_usina_pdf(id_fu):
-    """Serve o PDF da fatura da usina (CDN se houver, senão arquivo local)."""
+    """Serve o PDF da fatura da usina: Storage (URL assinada) > URL externa > local."""
     from db import tb_get_fatura_usina
     fu = tb_get_fatura_usina(id_fu) or {}
-    if fu.get("pdf_url"):
-        return redirect(fu["pdf_url"])
+    pu = fu.get("pdf_url") or ""
+    if pu:
+        if pu.startswith("http"):
+            return redirect(pu)
+        # storage path (ex: "faturas/usinas/...") → gera URL assinada temporária
+        try:
+            from db import storage_signed_url
+            su = storage_signed_url(pu, expires_in=3600)
+            if su:
+                return redirect(su)
+        except Exception as _e:
+            app.logger.warning(f"[fatura_usina_pdf] URL assinada falhou: {_e}")
     path = fu.get("pdf_path") or ""
     if path and os.path.exists(path):
         return send_file(path, mimetype="application/pdf")
@@ -5687,6 +5697,17 @@ def registrar_geracao_mensal(uid):
     except:
         pass
 
+    # ── Sobe o PDF pro Supabase Storage (o disco da Railway é EFÊMERO — sem isso
+    #    o boleto somia ao reimplantar). Guarda o storage path; servido via URL
+    #    assinada na aba Faturas → Usinas.
+    pdf_storage = ""
+    try:
+        from db import storage_ensure_bucket, storage_upload_pdf
+        storage_ensure_bucket("faturas")
+        pdf_storage = storage_upload_pdf(pdf_path, f"usinas/{fname_final}", bucket="faturas")
+    except Exception as _e:
+        app.logger.warning(f"[geracao_mensal] upload do PDF pro Storage falhou: {_e}")
+
     # Calcula nº de dias se nao veio da extracao
     if n_dias == 0:
         try:
@@ -5711,6 +5732,7 @@ def registrar_geracao_mensal(uid):
         "data_registro": datetime.now().strftime("%d/%m/%Y %H:%M"),
         "origem": "extraido",
         "fatura_pdf": pdf_path,
+        "fatura_pdf_storage": pdf_storage,
     }
 
     geracao[uid][mes_ref] = entrada
@@ -5750,6 +5772,7 @@ def registrar_geracao_mensal(uid):
                 "cod_barras":      (extraido.get("codigo_barras") or "").strip() or None,
                 "pix_copia_cola":  (extraido.get("pix_br_code") or "").strip() or None,
                 "pdf_path":        pdf_path,
+                "pdf_url":         pdf_storage or None,   # storage path → URL assinada ao servir
             }
             # status_pgto fica de fora de propósito: na 1ª vez cai no default
             # 'pendente'; em reupload, o merge preserva o que já estava.
