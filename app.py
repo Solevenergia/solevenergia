@@ -6789,8 +6789,16 @@ def rateio_dashboard(uid):
     # Base para calculo:
     #   1) Se tem fatura real → usa geracao real
     #   2) Se tem registros diarios → usa estimativa 30d
-    #   3) Fallback → previsao mensal da usina
-    geracao_prevista = usina.get("geracao_media_mensal", 0) or 0
+    #   3) Fallback → PREVISAO baseada nas faturas Equatorial (media 6/3/ultima),
+    #      e so cai no valor digitado do cadastro se nao houver historico de geracao.
+    #      (Mesma regra do Distribuir Clientes — dado mais fiel que o cadastro.)
+    _serie_ger = [
+        (mv.get("kwh_gerado") or 0)
+        for _m, mv in sorted(geracao_mensal_all.items(), key=lambda kv: -_sort_mes(kv[0]))
+    ]
+    _ger_fatura = _media_tiered(_serie_ger)
+    geracao_prevista = _ger_fatura if (_ger_fatura and _ger_fatura > 0) \
+                       else (usina.get("geracao_media_mensal", 0) or 0)
     if tem_geracao_real:
         base_kwh = kwh_gerado_real
     elif dias_registrados > 0:
