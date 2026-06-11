@@ -397,10 +397,10 @@
                 <td class="text-center py-2">
                     <span class="badge dia-leitura-badge" style="background:rgba(26,42,74,0.08);color:var(--db)">{{ dia_c }}</span>
                 </td>
-                <td class="text-end py-2">
+                <td class="text-end py-2 td-consumo">
                     {{ item.kwh_bruto|fmt_kwh_br }} kWh
                 </td>
-                <td class="text-end py-2">
+                <td class="text-end py-2 td-saldo">
                     {% if item.saldo > 0 %}
                     <span style="color:#16a34a;font-weight:600">
                         {{ item.saldo|fmt_kwh_br }} kWh
@@ -422,6 +422,7 @@
                     {% else %}
                     <strong style="color:var(--or)">{{ item.pct }}%</strong>
                     {% endif %}
+                    <button type="button" class="btn-dividir" title="Dividir este cliente em 2 usinas"><i class="bi bi-diagram-2"></i></button>
                 </td>
             </tr>
             {% endfor %}
@@ -633,6 +634,41 @@
     </div>
 </div>
 
+{# ── Modal: Dividir cliente em 2 usinas (split manual) ───────────── #}
+<div id="modalDividir" class="d-none"
+     style="position:fixed;inset:0;z-index:1080;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;display:flex">
+    <div class="card shadow" style="width:340px;max-width:92vw">
+        <div class="card-header py-2 px-3 d-flex justify-content-between align-items-center" style="background:var(--db);color:#fff">
+            <strong style="font-size:14px"><i class="bi bi-diagram-2 me-1"></i>Dividir cliente em 2 usinas</strong>
+            <button type="button" class="btn-close btn-close-white" id="divFechar" style="font-size:10px"></button>
+        </div>
+        <div class="card-body py-3 px-3" style="font-size:13px">
+            <div class="mb-3"><i class="bi bi-person me-1 text-muted"></i><strong id="divClienteNome"></strong></div>
+            <div class="mb-2">
+                <label class="form-label small mb-1">Fica em <span id="divUsinaAtualNome" class="fw-semibold" style="color:var(--db)"></span></label>
+                <div class="input-group input-group-sm">
+                    <input type="number" id="divPct1" class="form-control text-end" min="1" max="99" step="1" value="50">
+                    <span class="input-group-text">%</span>
+                </div>
+            </div>
+            <div class="text-center text-muted my-1"><i class="bi bi-arrow-down"></i></div>
+            <div class="mb-2">
+                <label class="form-label small mb-1">Vai também para</label>
+                <select id="divUsinaDestino" class="form-select form-select-sm mb-1"></select>
+                <div class="input-group input-group-sm">
+                    <input type="number" id="divPct2" class="form-control text-end" min="1" max="99" step="1" value="50">
+                    <span class="input-group-text">%</span>
+                </div>
+            </div>
+            <div id="divInfo" class="small" style="font-size:11px;min-height:16px"></div>
+        </div>
+        <div class="card-footer py-2 px-3 text-end" style="background:#fafafa">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="divCancelar">Cancelar</button>
+            <button type="button" class="btn btn-sm btn-cta" id="divConfirmar"><i class="bi bi-check-lg me-1"></i>Dividir</button>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -698,21 +734,20 @@
                     badge.innerHTML = diaCli || '?';
                 }
             }
-            // Calcula bruto e efetivo baseado no pct atual (consolidação de split)
+            // Usa os valores PROPORCIONAIS da linha (data-kwhBruto/saldo já são
+            // consumo×pct/100). Assim um split manual com 2 linhas coexistindo
+            // soma certo — não conta o cliente cheio em cada usina.
             var bruto = parseFloat(r.dataset.kwhBruto) || 0;
             var saldo = parseFloat(r.dataset.saldo)    || 0;
-            var pct   = parseFloat(r.dataset.pct)      || 100;
-            var brutoOrig = bruto / (pct / 100);
-            var saldoOrig = saldo / (pct / 100);
-            var efetivoComSaldo = Math.max(0, brutoOrig - saldoOrig);
+            var efetivoComSaldo = Math.max(0, bruto - saldo);
             // Acumula conforme o modo de visualização
-            kwhAlocado += (modoSaldo === 'sem') ? brutoOrig : efetivoComSaldo;
+            kwhAlocado += (modoSaldo === 'sem') ? bruto : efetivoComSaldo;
             // Atualiza visual da coluna "Demanda efetiva" da linha
             var tdDemanda = r.querySelector('.td-demanda');
             if (tdDemanda) {
                 if (modoSaldo === 'sem') {
                     // Sem saldo: mostra sempre o bruto, sem destacar "saldo cobre"
-                    tdDemanda.innerHTML = '<strong>' + fmtKwhBR(brutoOrig) + ' kWh</strong>';
+                    tdDemanda.innerHTML = '<strong>' + fmtKwhBR(bruto) + ' kWh</strong>';
                     r.style.background = '';
                 } else {
                     if (efetivoComSaldo === 0) {
@@ -884,7 +919,11 @@
                      // Placeholder de usina vazia: some assim que entra um cliente (:has reativo)
                      + 'tbody.sortable-clientes:has(.cli-row) .cli-empty-hint{display:none}'
                      + '.cli-empty-hint td{background:#fafbfc;border:1px dashed #d8dee6;border-radius:6px}'
-                     + '.usina-vazia .card-header{opacity:0.92}';
+                     + '.usina-vazia .card-header{opacity:0.92}'
+                     // Botão "Dividir": some em linhas já em split (só divide quem está 100%)
+                     + '.btn-dividir{border:none;background:transparent;color:#c2c7cf;cursor:pointer;font-size:12px;padding:0 3px;margin-left:5px;line-height:1}'
+                     + '.btn-dividir:hover{color:var(--or)}'
+                     + '.cli-row:not([data-pct="100"]) .btn-dividir{display:none}';
     document.head.appendChild(style);
 
     // ── Ordenação por coluna (clique no <th>) ───────────────────
@@ -1296,6 +1335,141 @@
         reconstruirPayload();
         marcarModificado();
         atualizarSelecao();
+    });
+
+    // ──────────────────────────────────────────────────────────────
+    // SPLIT MANUAL — botão "Dividir" divide um cliente (100%) em 2 usinas
+    // ──────────────────────────────────────────────────────────────
+    var modalDiv = document.getElementById('modalDividir');
+    var divCtx   = null;  // {idCliente, idUsinaAtual}
+
+    function _nomeUsinaDe(tb) {
+        var card = tb.closest('[data-usina-card]');
+        var pai  = card ? card.parentElement : null;
+        var h    = pai ? pai.querySelector('.card-header strong') : null;
+        return h ? h.textContent.trim() : ('Usina ' + tb.dataset.idUsina);
+    }
+
+    function _aplicarPctRow(row, pct, fullBruto, fullSaldo) {
+        var bruto = fullBruto * pct / 100;
+        var saldo = fullSaldo * pct / 100;
+        var efetivo = Math.max(0, bruto - saldo);
+        row.dataset.pct = pct;
+        row.dataset.kwhBruto = bruto.toFixed(2);
+        row.dataset.saldo = saldo.toFixed(2);
+        row.dataset.kwhEfetivo = efetivo.toFixed(2);
+        row.dataset.cobertoSaldo = (efetivo === 0) ? '1' : '0';
+        var tdC = row.querySelector('.td-consumo');
+        if (tdC) tdC.textContent = fmtKwhBR(bruto) + ' kWh';
+        var tdS = row.querySelector('.td-saldo');
+        if (tdS) tdS.innerHTML = saldo > 0
+            ? '<span style="color:#16a34a;font-weight:600">' + fmtKwhBR(saldo) + ' kWh</span>'
+            : '<span class="text-muted">—</span>';
+        var tdR = row.querySelector('.td-rateio');
+        if (tdR) {
+            var btn = tdR.querySelector('.btn-dividir');  // preserva o botão
+            tdR.innerHTML = (pct >= 100)
+                ? '<span class="text-muted">100%</span>'
+                : '<strong style="color:var(--or)">' + pct + '%</strong>';
+            if (btn) tdR.appendChild(btn);
+        }
+        var tdCli = row.children[1];  // célula do cliente
+        var bs = row.querySelector('.badge-split');
+        if (pct < 100 && !bs && tdCli) {
+            var b = document.createElement('span');
+            b.className = 'badge badge-split ms-1';
+            b.setAttribute('style', 'background:rgba(245,166,35,0.15);color:var(--or);font-size:10px');
+            b.textContent = 'split';
+            tdCli.appendChild(b);
+        } else if (pct >= 100 && bs) {
+            bs.remove();
+        }
+    }
+
+    function _fazerSplit(idCliente, idUsinaAtual, idUsinaDest, pct1, pct2) {
+        var tbA = document.querySelector('tbody.sortable-clientes[data-id-usina="' + idUsinaAtual + '"]');
+        var tbD = document.querySelector('tbody.sortable-clientes[data-id-usina="' + idUsinaDest + '"]');
+        if (!tbA || !tbD) { alert('Usina não encontrada.'); return; }
+        var row = tbA.querySelector('tr.cli-row[data-id-cliente="' + idCliente + '"]');
+        if (!row) { alert('Cliente não encontrado.'); return; }
+        if (tbD.querySelector('tr.cli-row[data-id-cliente="' + idCliente + '"]')) {
+            alert('Este cliente já está na usina de destino.'); return;
+        }
+        var pAtual = parseFloat(row.dataset.pct) || 100;
+        var fullBruto = (parseFloat(row.dataset.kwhBruto) || 0) / (pAtual / 100);
+        var fullSaldo = (parseFloat(row.dataset.saldo) || 0) / (pAtual / 100);
+        var nova = row.cloneNode(true);
+        var chk = nova.querySelector('input.cli-check'); if (chk) chk.checked = false;
+        _aplicarPctRow(row, pct1, fullBruto, fullSaldo);
+        _aplicarPctRow(nova, pct2, fullBruto, fullSaldo);
+        tbD.appendChild(nova);
+        recalcularUsina(tbA);
+        recalcularUsina(tbD);
+        if (typeof marcarUsinaComoNaoSalva === 'function') {
+            marcarUsinaComoNaoSalva(tbA.dataset.idUsina);
+            marcarUsinaComoNaoSalva(tbD.dataset.idUsina);
+        }
+        reconstruirPayload();
+        marcarModificado();
+    }
+
+    function _fecharModalDiv() { if (modalDiv) modalDiv.classList.add('d-none'); divCtx = null; }
+
+    function _abrirModalDiv(row, tb) {
+        divCtx = { idCliente: row.dataset.idCliente, idUsinaAtual: tb.dataset.idUsina };
+        document.getElementById('divClienteNome').textContent = row.dataset.nome || '—';
+        document.getElementById('divUsinaAtualNome').textContent = _nomeUsinaDe(tb);
+        var sel = document.getElementById('divUsinaDestino');
+        sel.innerHTML = '';
+        document.querySelectorAll('tbody.sortable-clientes').forEach(function(t) {
+            if (t.dataset.idUsina === tb.dataset.idUsina) return;
+            var opt = document.createElement('option');
+            opt.value = t.dataset.idUsina;
+            opt.textContent = _nomeUsinaDe(t);
+            sel.appendChild(opt);
+        });
+        document.getElementById('divPct1').value = 50;
+        document.getElementById('divPct2').value = 50;
+        var info = document.getElementById('divInfo');
+        info.innerHTML = sel.options.length ? '' : '<span class="text-danger">Não há outra usina não-travada disponível.</span>';
+        modalDiv.classList.remove('d-none');
+    }
+
+    // Abre o modal (delegado — funciona inclusive em linhas clonadas)
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-dividir');
+        if (!btn) return;
+        var row = btn.closest('tr.cli-row');
+        var tb  = btn.closest('tbody.sortable-clientes');
+        if (row && tb) _abrirModalDiv(row, tb);
+    });
+
+    var iP1 = document.getElementById('divPct1'), iP2 = document.getElementById('divPct2');
+    if (iP1 && iP2) {
+        iP1.addEventListener('input', function() {
+            var v = Math.max(1, Math.min(99, parseInt(this.value) || 1)); iP2.value = 100 - v;
+        });
+        iP2.addEventListener('input', function() {
+            var v = Math.max(1, Math.min(99, parseInt(this.value) || 1)); iP1.value = 100 - v;
+        });
+    }
+    var bConf = document.getElementById('divConfirmar');
+    if (bConf) bConf.addEventListener('click', function() {
+        if (!divCtx) return;
+        var p1 = parseInt(document.getElementById('divPct1').value) || 0;
+        var p2 = parseInt(document.getElementById('divPct2').value) || 0;
+        var dest = document.getElementById('divUsinaDestino').value;
+        if (p1 < 1 || p2 < 1 || (p1 + p2) !== 100) { alert('Os percentuais devem somar 100% (cada um ≥ 1%).'); return; }
+        if (!dest) { alert('Escolha a 2ª usina.'); return; }
+        _fazerSplit(divCtx.idCliente, divCtx.idUsinaAtual, dest, p1, p2);
+        _fecharModalDiv();
+    });
+    ['divCancelar', 'divFechar'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('click', _fecharModalDiv);
+    });
+    if (modalDiv) modalDiv.addEventListener('click', function(e) {
+        if (e.target === modalDiv) _fecharModalDiv();  // clique no fundo fecha
     });
 })();
 
