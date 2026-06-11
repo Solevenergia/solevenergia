@@ -1148,6 +1148,20 @@ def tb_delete_usina(id_usina: int) -> None:
 # ==================================================================
 #  RATEIOS MENSAIS (tb_rateios_mensais)
 # ==================================================================
+def _rateio_row_dict(r: dict) -> dict:
+    """Normaliza uma linha de tb_rateios_mensais para o dict usado nas telas.
+    Os campos de protocolo so existem se as colunas tiverem sido criadas na
+    tabela (ALTER TABLE) — r.get() degrada para "" sem quebrar."""
+    return {
+        "data_registro":  r.get("data_registro", ""),
+        "soma_percentual": float(r.get("soma_percentual") or 0),
+        "beneficiarios":  r.get("beneficiarios") or [],
+        "protocolo":      r.get("protocolo") or "",
+        "via_envio":      r.get("via_envio") or "",
+        "data_protocolo": r.get("data_protocolo") or "",
+    }
+
+
 def tb_get_rateio_mes(id_usina: int, mes_ref: str) -> Optional[dict]:
     """Retorna o registro de rateio de uma usina em determinado mes, ou None."""
     rows = _db().select(
@@ -1156,27 +1170,14 @@ def tb_get_rateio_mes(id_usina: int, mes_ref: str) -> Optional[dict]:
     )
     if not rows:
         return None
-    r = rows[0]
-    return {
-        "data_registro":  r.get("data_registro", ""),
-        "soma_percentual": float(r.get("soma_percentual") or 0),
-        "beneficiarios":  r.get("beneficiarios") or [],
-    }
+    return _rateio_row_dict(rows[0])
 
 
 def tb_get_rateios_usina(id_usina: int) -> dict:
     """Retorna dict {mes_ref: {data_registro, soma_percentual, beneficiarios}}
     com todos os meses cadastrados para a usina."""
     rows = _db().select("tb_rateios_mensais", filtros={"id_usina": id_usina})
-    result = {}
-    for r in rows:
-        mes = r["mes_referencia"]
-        result[mes] = {
-            "data_registro":  r.get("data_registro", ""),
-            "soma_percentual": float(r.get("soma_percentual") or 0),
-            "beneficiarios":  r.get("beneficiarios") or [],
-        }
-    return result
+    return {r["mes_referencia"]: _rateio_row_dict(r) for r in rows}
 
 
 def tb_get_todos_rateios() -> dict:
@@ -1184,14 +1185,24 @@ def tb_get_todos_rateios() -> dict:
     rows = _db().select("tb_rateios_mensais")
     result = {}
     for r in rows:
-        uid_str = str(r["id_usina"])
-        mes = r["mes_referencia"]
-        result.setdefault(uid_str, {})[mes] = {
-            "data_registro":  r.get("data_registro", ""),
-            "soma_percentual": float(r.get("soma_percentual") or 0),
-            "beneficiarios":  r.get("beneficiarios") or [],
-        }
+        result.setdefault(str(r["id_usina"]), {})[r["mes_referencia"]] = _rateio_row_dict(r)
     return result
+
+
+def _rateio_data_iso(s: str = "") -> str:
+    """data_registro e timestamptz no Postgres — string BR 'DD/MM/YYYY' ambigua
+    (dia <= 12) era interpretada como MM/DD e invertia a data (11/06 virou 6/nov).
+    Converte BR -> ISO antes de gravar; vazio = agora."""
+    from datetime import datetime as _dt
+    s = str(s or "").strip()
+    if not s:
+        return _dt.now().isoformat()
+    for f in ("%d/%m/%Y %H:%M", "%d/%m/%Y"):
+        try:
+            return _dt.strptime(s, f).isoformat()
+        except ValueError:
+            continue
+    return s  # ja e ISO (ou formato desconhecido — deixa o Postgres validar)
 
 
 def tb_save_rateio_mes(
@@ -1202,15 +1213,42 @@ def tb_save_rateio_mes(
     data_registro: str = "",
 ) -> None:
     """Salva (upsert) o rateio de uma usina em determinado mes."""
-    from datetime import datetime as _dt
     row = {
         "id_usina":       id_usina,
         "mes_referencia": mes_ref,
         "beneficiarios":  beneficiarios,
         "soma_percentual": round(float(soma_pct or 0), 4),
-        "data_registro":  data_registro or _dt.now().strftime("%d/%m/%Y %H:%M"),
+        "data_registro":  _rateio_data_iso(data_registro),
     }
     _db().upsert("tb_rateios_mensais", row, on_conflict="id_usina,mes_referencia")
+
+
+def tb_set_protocolo_rateio(id_usina: int, mes_ref: str, protocolo: str,
+                             via_envio: str = "email") -> bool:
+    """Grava o protocolo de envio no registro do mes. Retorna False se as
+    colunas (protocolo/via_envio/data_protocolo) ainda nao existirem na
+    tabela — o chamador avisa o usuario sem quebrar o fluxo.
+    SQL para criar: alter table tb_rateios_mensais
+      add column if not exists protocolo text,
+      add column if not exists via_envio text,
+      add column if not exists data_protocolo text;"""
+    from datetime import datetime as _dt
+    try:
+        _db().patch(
+            "tb_rateios_mensais",
+            {"id_usina": id_usina, "mes_referencia": mes_ref},
+            {"protocolo": protocolo, "via_envio": via_envio,
+             "data_protocolo": _dt.now().strftime("%d/%m/%Y %H:%M")},
+        )
+        # patch() descarta silenciosamente colunas inexistentes (PGRST204) —
+        # "sucesso" nao garante gravacao. Confere lendo de volta.
+        rows = _db().select("tb_rateios_mensais",
+                            filtros={"id_usina": id_usina, "mes_referencia": mes_ref})
+        return bool(rows and (rows[0].get("protocolo") or "") == protocolo)
+    except Exception as e:
+        import logging
+        logging.warning(f"[tb_set_protocolo_rateio] usina={id_usina} mes={mes_ref}: {e}")
+        return False
 
 
 def tb_delete_rateio_mes(id_usina: int, mes_ref: str) -> None:

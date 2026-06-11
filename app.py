@@ -7187,14 +7187,13 @@ def rateio_dashboard(uid):
                 "delta": delta,
             })
 
-    _rateios_all = carregar_rateios_mensais()
-    rateio_mes = _rateios_all.get(uid_leg, {}).get(_mes_key, {}) or _rateios_all.get(str(id_usina), {}).get(_mes_key, {})
+    # rateio_registrado (com campos de protocolo via _rateio_row_dict), _mes_key
+    # e modo_conferencia ja foram calculados no topo.
     protocolo_info = {
-        "protocolo":      rateio_mes.get("protocolo", ""),
-        "via_envio":      rateio_mes.get("via_envio", ""),
-        "data_protocolo": rateio_mes.get("data_protocolo", ""),
+        "protocolo":      rateio_registrado.get("protocolo", ""),
+        "via_envio":      rateio_registrado.get("via_envio", ""),
+        "data_protocolo": rateio_registrado.get("data_protocolo", ""),
     }
-    # rateio_registrado, _mes_key e modo_conferencia ja foram calculados no topo.
 
     return render_template("rateio.html",
         usina=usina, uid=uid_leg, id_usina=id_usina, alocacoes=alocacoes,
@@ -7219,25 +7218,93 @@ def rateio_dashboard(uid):
         now_str=datetime.now().strftime("%Y%m%d"),
     )
 
-# RATEIO - Registrar protocolo
+def _resolver_id_usina(uid):
+    """uid pode ser o id inteiro (novo) ou a chave legada (string) — resolve
+    para o id_usina inteiro das tabelas tb_, ou None."""
+    from db import tb_get_usina_por_nome
+    try:
+        return int(uid)
+    except (ValueError, TypeError):
+        nome_u = carregar_usinas().get(uid, {}).get("nome", "")
+        u_tb = tb_get_usina_por_nome(nome_u) if nome_u else None
+        return u_tb["id_usina"] if u_tb else None
+
+
+# RATEIO - Registrar protocolo (fecha o ciclo)
 @app.route("/usinas/rateio/protocolo/<uid>", methods=["POST"])
 def rateio_registrar_protocolo(uid):
+    """Confirma o envio do rateio a Equatorial: registra o RETRATO do rateio
+    atual (vinculos com pct > 0) em tb_rateios_mensais + o protocolo. Isso
+    fecha o ciclo (tela vira conferencia; usina trava no Distribuir).
+    Antes, criava registro com beneficiarios=[] (nao travava nada) e o
+    protocolo era descartado na gravacao (tb_save_rateio_mes nao o recebia)."""
+    from db import (tb_get_rateio_mes, tb_save_rateio_mes, tb_set_protocolo_rateio,
+                    tb_get_clientes_da_usina, tb_carregar_clientes)
     mes_ref  = _norm_mes(request.form.get("mes_ref", "").strip())
     protocolo = request.form.get("protocolo", "").strip()
     via_envio = request.form.get("via_envio", "email")
     if not mes_ref or not protocolo:
         flash("Numero do protocolo e obrigatorio!", "danger")
         return redirect(url_for("rateio_dashboard", uid=uid))
-    rateios = carregar_rateios_mensais()
-    if uid not in rateios:
-        rateios[uid] = {}
-    if mes_ref not in rateios[uid]:
-        rateios[uid][mes_ref] = {"data_registro": datetime.now().strftime("%d/%m/%Y %H:%M"), "soma_percentual": 0, "beneficiarios": []}
-    rateios[uid][mes_ref]["protocolo"]      = protocolo
-    rateios[uid][mes_ref]["via_envio"]      = via_envio
-    rateios[uid][mes_ref]["data_protocolo"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-    salvar_rateios_mensais(rateios)
-    flash(f"Protocolo {protocolo} registrado para {mes_ref}!", "success")
+
+    id_usina = _resolver_id_usina(uid)
+    if not id_usina:
+        flash("Usina nao encontrada para registrar o protocolo.", "danger")
+        return redirect(url_for("rateio_dashboard", uid=uid))
+
+    # Snapshot dos vinculos atuais — so se o ciclo ainda nao tem retrato
+    # (ex.: registrado antes pela conciliacao). Mesmo formato da conciliacao.
+    existente = tb_get_rateio_mes(id_usina, mes_ref) or {}
+    if not existente.get("beneficiarios"):
+        cli_map = {c["id_cliente"]: c for c in tb_carregar_clientes()}
+        beneficiarios = []
+        for v in tb_get_clientes_da_usina(id_usina):
+            pct = float(v.get("pct_rateio") or 0)
+            c = cli_map.get(v.get("id_cliente"), {})
+            if pct <= 0 or not c.get("cod_uc"):
+                continue
+            beneficiarios.append({
+                "uc":         c["cod_uc"],
+                "cpf":        c.get("desc_cpf", "") or "",
+                "nome":       c.get("desc_nome", "") or "",
+                "percentual": round(pct, 4),
+            })
+        soma = round(sum(b["percentual"] for b in beneficiarios), 2)
+        tb_save_rateio_mes(id_usina, mes_ref, beneficiarios, soma)
+        if abs(soma - 100) > 0.01:
+            flash(f"Atencao: rateio registrado com soma {soma}% (deveria ser 100%).", "warning")
+
+    if tb_set_protocolo_rateio(id_usina, mes_ref, protocolo, via_envio):
+        flash(f"Protocolo {protocolo} registrado — ciclo {mes_ref} fechado!", "success")
+    else:
+        flash(f"Ciclo {mes_ref} fechado com o retrato do rateio, mas o protocolo nao foi "
+              "gravado: a tabela tb_rateios_mensais ainda nao tem as colunas "
+              "protocolo/via_envio/data_protocolo (rode o ALTER TABLE no Supabase).", "warning")
+    return redirect(url_for("rateio_dashboard", uid=uid) + f"?mes={mes_ref}")
+
+
+# RATEIO - Excluir registro do ciclo (refazer)
+@app.route("/usinas/rateio/excluir-registro/<uid>", methods=["POST"])
+def rateio_excluir_registro(uid):
+    """Apaga o rateio registrado do ciclo (tb_rateios_mensais, incluindo o
+    protocolo). O ciclo reabre para edicao (modo planejamento) e a usina
+    destrava na tela Distribuir. Os vinculos/percentuais atuais ficam."""
+    from db import tb_delete_rateio_mes
+    mes_ref = _norm_mes(request.form.get("mes_ref", "").strip())
+    if not mes_ref:
+        flash("Mes nao informado para excluir o registro.", "danger")
+        return redirect(url_for("rateio_dashboard", uid=uid))
+    id_usina = _resolver_id_usina(uid)
+    if not id_usina:
+        flash("Usina nao encontrada.", "danger")
+        return redirect(url_for("rateio_dashboard", uid=uid))
+    try:
+        tb_delete_rateio_mes(id_usina, mes_ref)
+        flash(f"Rateio registrado de {mes_ref} excluido — ciclo reaberto para edicao. "
+              "Ajuste os percentuais, gere o PDF e registre o envio novamente.", "warning")
+    except Exception as e:
+        app.logger.error(f"[rateio_excluir_registro] usina={id_usina} mes={mes_ref}: {e}")
+        flash(f"Erro ao excluir o registro: {e}", "danger")
     return redirect(url_for("rateio_dashboard", uid=uid) + f"?mes={mes_ref}")
 
 
@@ -7418,6 +7485,28 @@ def rateio_gerar_pdf(uid):
             vinculados.sort(key=lambda x: -(x[1].get("rateio_pct", 0) or 0))
 
         _mes_ref_rat = request.args.get("mes", "")
+        # ── Ciclo com rateio REGISTRADO → o PDF reproduz o retrato registrado
+        # (o que foi de fato enviado), nao os vinculos atuais — que podem ter
+        # mudado depois do envio.
+        if id_usina and _mes_ref_rat:
+            from db import tb_get_rateio_mes as _tb_rat_mes
+            _snap = _tb_rat_mes(id_usina, _norm_mes(_mes_ref_rat)) or {}
+            _bens = _snap.get("beneficiarios") or []
+            if _bens:
+                import re as _re_pdf
+                def _ucd_pdf(s): return _re_pdf.sub(r"\D", "", str(s or "")).lstrip("0")
+                _cli_uc = {_ucd_pdf(c.get("cod_uc")): c
+                           for c in tb_carregar_clientes() if c.get("cod_uc")}
+                vinculados = []
+                for b in _bens:
+                    c_tb = _cli_uc.get(_ucd_pdf(b.get("uc")), {})
+                    uc_full = c_tb.get("cod_uc") or b.get("uc", "")
+                    vinculados.append((uc_full, {
+                        "nome":       c_tb.get("desc_nome") or b.get("nome", ""),
+                        "rateio_pct": round(float(b.get("percentual") or 0), 2),
+                        "uc_display": _fmt_uc15(uc_full),
+                    }))
+                vinculados.sort(key=lambda x: -(x[1].get("rateio_pct", 0) or 0))
         pdf_path = gerar_pdf_rateio(usina, uid, vinculados, mes_ref=_mes_ref_rat)
         nome_download = os.path.basename(pdf_path)
         with open(pdf_path, "rb") as f:
