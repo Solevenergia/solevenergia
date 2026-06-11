@@ -35,15 +35,15 @@
         {% endif %}
         {% if total_salvos %}
         <span class="badge ms-2" style="background:#e0f2fe;color:#0369a1;font-size:12px"
-              title="Clientes confirmados anteriormente — mantidos na usina em que foram salvos">
-            <i class="bi bi-pin-angle-fill me-1"></i>{{ total_salvos }} cliente(s) mantido(s) do salvo
+              title="Clientes projetados do último rateio executado da usina — ponto de partida móvel">
+            <i class="bi bi-pin-angle-fill me-1"></i>{{ total_salvos }} cliente(s) do último rateio executado
         </span>
         {% endif %}
         <small class="text-muted ms-auto" style="font-size:11px">
             {% if manter_vinculos %}
-            Vínculos confirmados são mantidos — o automático só distribui quem não tem vínculo. Usinas com rateio do mês ficam travadas.
+            Rateio executado no mês = usina travada · sem rateio no mês = parte do último executado (badge azul) · nunca executado = livre (algoritmo).
             {% else %}
-            <strong style="color:#d97706">Redistribuição do zero</strong> — vínculos salvos ignorados no preview (nada muda até confirmar).
+            <strong style="color:#d97706">Redistribuição do zero</strong> — projeções de rateios executados ignoradas no preview (nada muda até confirmar).
             {% endif %}
         </small>
     </div>
@@ -182,12 +182,12 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small mb-1">
-                        Vínculos salvos
+                        Rateios executados
                         <i class="bi bi-question-circle text-muted ms-1" style="cursor:help"
-                           title="Manter: clientes já confirmados ficam na usina/% em que foram salvos; o automático só distribui quem não tem vínculo. Redistribuir do zero: ignora o salvo e refaz a proposta inteira (nada muda no banco até você confirmar)."></i>
+                           title="Projetar: usinas sem rateio neste mês partem do último rateio executado (clientes com badge azul, móveis); o automático só distribui quem sobra. Redistribuir do zero: ignora as projeções e refaz a proposta inteira (nada muda no banco até você confirmar)."></i>
                     </label>
                     <select name="manter_vinculos" class="form-select form-select-sm">
-                        <option value="1" {% if manter_vinculos %}selected{% endif %}>Manter (padrão)</option>
+                        <option value="1" {% if manter_vinculos %}selected{% endif %}>Projetar último executado (padrão)</option>
                         <option value="0" {% if not manter_vinculos %}selected{% endif %}>Redistribuir do zero</option>
                     </select>
                 </div>
@@ -215,7 +215,7 @@
                         <strong>Excesso (+%)</strong>: teto absoluto acima da geração.
                         <strong>Folga (−%)</strong>: alvo preferencial de reserva. Se nada couber respeitando a folga, algoritmo recorre ao excesso como fallback.
                         <strong>Combinar</strong>: ex. folga 10% + excesso 0% = sempre 10% livres (estrito); folga 5% + excesso 10% = tenta 5% livres mas aceita até +10% se necessário.
-                        <strong>Vínculos salvos</strong>: "Manter" preserva o arranjo confirmado (badge <i class="bi bi-pin-angle-fill" style="color:#0369a1"></i> salvo) e distribui só os demais; "Redistribuir do zero" refaz tudo no preview.
+                        <strong>Rateios executados</strong>: "Projetar" usa o último rateio executado da usina como ponto de partida (badge <i class="bi bi-pin-angle-fill" style="color:#0369a1"></i>) e distribui só quem sobra; "Redistribuir do zero" refaz tudo no preview.
                     </small>
                 </div>
             </form>
@@ -420,8 +420,8 @@
                     {% endif %}
                     {% if item.salvo %}
                     <span class="badge badge-salvo ms-1" style="background:#e0f2fe;color:#0369a1;font-size:10px"
-                          title="Vínculo ativo salvo no sistema (confirmação anterior ou tela de Rateio) — o automático não move este cliente">
-                        <i class="bi bi-pin-angle-fill"></i> salvo
+                          title="Projeção do último rateio executado desta usina{% if item.salvo_origem %} ({{ item.salvo_origem }}){% endif %} — o automático não move este cliente; arraste para alterar e confirme">
+                        <i class="bi bi-pin-angle-fill"></i> rateio {{ item.salvo_origem or 'executado' }}
                     </span>
                     {% endif %}
                 </td>

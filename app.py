@@ -4733,9 +4733,10 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
                         Quando folga=5 e excesso=10 → tenta deixar 5%, aceita até +10% se necessário.
       ordem:            "maior" = clientes com maior demanda primeiro; "menor" = menor primeiro
       permitir_split:   True permite dividir cliente em 2 usinas
-      pre_alocados:     [(id_usina, cliente, pct)] — vínculos JÁ SALVOS (tb_cliente_usina):
-                        entram primeiro na usina/% exatos e o algoritmo não os move;
-                        só distribui automaticamente quem não tem vínculo salvo.
+      pre_alocados:     [(id_usina, cliente, pct, mes_origem)] — projeção do último
+                        rateio EXECUTADO (tb_rateios_mensais): entram primeiro e o
+                        algoritmo não os move; só distribui quem não está em nenhuma
+                        projeção. mes_origem = mês do rateio de onde veio (display).
     Retorna:
       alocacao  = {id_usina: {'usina': {...}, 'itens': [...]}}
       sem_usina = [{'cliente': {...}, 'motivo': str}]
@@ -4788,17 +4789,18 @@ def _algoritmo_distribuicao(usinas: list, clientes: list,
         })
         alocacao[id_u]["kwh_alocado"] += kwh_efetivo
 
-    # ── Pré-alocação: vínculos já salvos entram primeiro, na usina/% em que
-    # foram confirmados. Ocupam capacidade (via _registrar) e saem do pool do
-    # algoritmo — garante que o arranjo salvo volte intacto ao reabrir a tela.
+    # ── Pré-alocação: projeção do último rateio executado entra primeiro.
+    # Ocupa capacidade (via _registrar) e sai do pool do algoritmo — o ponto
+    # de partida do mês é o que foi executado por último, não um re-embaralho.
     ids_pre = set()
-    for id_u, cli, pct in (pre_alocados or []):
+    for id_u, cli, pct, origem in (pre_alocados or []):
         if id_u not in alocacao:
             continue  # usina sem dia de leitura/geração disponível → cliente cai no algoritmo
         consumo_bruto = float(cli.get("qtd_consumo_medio_kwh") or 0)
         saldo         = 0.0 if ignorar_saldo else float(cli.get("_saldo_atual") or 0)
         _registrar(id_u, cli, pct, consumo_bruto, saldo)
         alocacao[id_u]["itens"][-1]["salvo"] = True
+        alocacao[id_u]["itens"][-1]["salvo_origem"] = origem
         ids_pre.add(cli["id_cliente"])
     if ids_pre:
         clientes = [c for c in clientes if c["id_cliente"] not in ids_pre]
@@ -5153,39 +5155,47 @@ def usinas_distribuir():
     usinas_distrib   = [u for u in usinas if u["id_usina"] not in locked_ids]
     clientes_distrib = [c for c in clientes if _ucdig(c.get("cod_uc")) not in ucs_locked]
 
-    # Pré-alocação: vínculos ativos (não-FIXO) já salvos em tb_cliente_usina.
-    # Cliente confirmado fica na usina em que foi salvo — independente de o
-    # rateio do mês ter sido registrado ou não — e o arranjo se projeta igual
-    # para os meses seguintes até alguém mudar e confirmar de novo.
+    # Pré-alocação: PROJEÇÃO DO ÚLTIMO RATEIO EXECUTADO (tb_rateios_mensais).
+    # Modelo do negócio (definido pelo usuário em 11/06/2026):
+    #   • rateio EXECUTADO no mês selecionado → usina TRAVADA (seção própria);
+    #   • usina sem rateio no mês → parte do último rateio executado em mês
+    #     ANTERIOR (clientes entram como "salvo", móveis — ponto de partida);
+    #   • usina que nunca executou rateio → totalmente livre (só algoritmo).
+    # Os VÍNCULOS (tb_cliente_usina) são estado de FATURAMENTO — não entram
+    # aqui como plano do mês (era o bug: todo cliente faturado tem vínculo,
+    # então tudo aparecia "salvo").
     #
-    # ⚠️ pct_rateio tem SEMÂNTICA MISTA: a tela de Rateio grava % da GERAÇÃO
-    # da usina (0.1, 9, 25... somando 100 entre clientes); o Distribuir grava
-    # % do CONSUMO do cliente (split, soma 100 por cliente). Interpretar
-    # rateio-% como split gerava falsos "split 25%" aqui. Regra:
-    #   1 vínculo ativo  → cliente INTEIRO na usina (pct 100);
-    #   2+ vínculos      → split real: normaliza os pcts para somar 100.
-    pre_alocados = []
+    # ⚠️ percentual do snapshot é % da GERAÇÃO da usina (semântica do rateio),
+    # não % do consumo do cliente. Regra: cliente em 1 snapshot → inteiro
+    # (100%); em 2+ usinas → split normalizado para somar 100.
+    pre_alocados = []   # [(id_usina, cliente, pct, mes_origem)]
     if manter_vinculos:
-        ids_usinas_distrib = {u["id_usina"] for u in usinas_distrib}
-        cli_por_id = {c["id_cliente"]: c for c in clientes_distrib}
-        vincs_cli: dict = {}
-        for v in vinculos_ativos_full:
-            if (v.get("desc_saldo_obs") or "").upper() == "FIXO":
+        _cli_distrib_uc = {_ucdig(c.get("cod_uc")): c
+                           for c in clientes_distrib if c.get("cod_uc")}
+        _ord_sel = _ord_mes(mes_norm)
+        claims: dict = {}   # id_cliente -> [(id_usina, pct_snap, mes_origem, cli)]
+        for u in usinas_distrib:
+            meses_u = rateios_all.get(str(u["id_usina"]), {})
+            cands = [(m, s) for m, s in meses_u.items()
+                     if s.get("beneficiarios") and 0 < _ord_mes(m) < _ord_sel]
+            if not cands:
                 continue
-            cli = cli_por_id.get(v.get("id_cliente"))
-            if not cli or v.get("id_usina") not in ids_usinas_distrib:
+            m_ult, snap = max(cands, key=lambda ms: _ord_mes(ms[0]))
+            for b in snap["beneficiarios"]:
+                cli = _cli_distrib_uc.get(_ucdig(b.get("uc")))
+                if not cli:
+                    continue  # inativo, FIXO, ou preso em usina travada deste mês
+                claims.setdefault(cli["id_cliente"], []).append(
+                    (u["id_usina"], float(b.get("percentual") or 0), m_ult, cli))
+        for id_c, lst in claims.items():
+            cli = lst[0][3]
+            if len(lst) == 1:
+                pre_alocados.append((lst[0][0], cli, 100.0, lst[0][2]))
                 continue
-            vincs_cli.setdefault(v["id_cliente"], []).append(v)
-        for id_c, vs in vincs_cli.items():
-            cli = cli_por_id[id_c]
-            if len(vs) == 1:
-                pre_alocados.append((vs[0]["id_usina"], cli, 100.0))
-                continue
-            soma_pct = sum(float(v.get("pct_rateio") or 0) for v in vs)
-            for v in vs:
-                p = float(v.get("pct_rateio") or 0)
-                pct = round(p / soma_pct * 100.0, 2) if soma_pct > 0 else round(100.0 / len(vs), 2)
-                pre_alocados.append((v["id_usina"], cli, pct))
+            soma_p = sum(p for _u, p, _m, _c in lst)
+            for id_u, p, m, _c in lst:
+                pct = round(p / soma_p * 100.0, 2) if soma_p > 0 else round(100.0 / len(lst), 2)
+                pre_alocados.append((id_u, cli, pct, m))
 
     alocacao, sem_usina = _algoritmo_distribuicao(
         usinas_distrib, clientes_distrib, kwh_fixo_por_usina,
@@ -7248,6 +7258,34 @@ def _resolver_id_usina(uid):
         return u_tb["id_usina"] if u_tb else None
 
 
+def _snapshot_rateio_vinculos(id_usina: int, mes_ref: str):
+    """Registra em tb_rateios_mensais o RETRATO dos vinculos atuais da usina
+    (pct > 0) para o mes — mesmo formato da conciliacao. Nao sobrescreve um
+    retrato ja existente. Retorna (n_beneficiarios, soma_pct, ja_existia)."""
+    from db import (tb_get_rateio_mes, tb_save_rateio_mes,
+                    tb_get_clientes_da_usina, tb_carregar_clientes)
+    existente = tb_get_rateio_mes(id_usina, mes_ref) or {}
+    if existente.get("beneficiarios"):
+        bens = existente["beneficiarios"]
+        return len(bens), round(float(existente.get("soma_percentual") or 0), 2), True
+    cli_map = {c["id_cliente"]: c for c in tb_carregar_clientes()}
+    beneficiarios = []
+    for v in tb_get_clientes_da_usina(id_usina):
+        pct = float(v.get("pct_rateio") or 0)
+        c = cli_map.get(v.get("id_cliente"), {})
+        if pct <= 0 or not c.get("cod_uc"):
+            continue
+        beneficiarios.append({
+            "uc":         c["cod_uc"],
+            "cpf":        c.get("desc_cpf", "") or "",
+            "nome":       c.get("desc_nome", "") or "",
+            "percentual": round(pct, 4),
+        })
+    soma = round(sum(b["percentual"] for b in beneficiarios), 2)
+    tb_save_rateio_mes(id_usina, mes_ref, beneficiarios, soma)
+    return len(beneficiarios), soma, False
+
+
 # RATEIO - Registrar protocolo (fecha o ciclo)
 @app.route("/usinas/rateio/protocolo/<uid>", methods=["POST"])
 def rateio_registrar_protocolo(uid):
@@ -7256,8 +7294,7 @@ def rateio_registrar_protocolo(uid):
     fecha o ciclo (tela vira conferencia; usina trava no Distribuir).
     Antes, criava registro com beneficiarios=[] (nao travava nada) e o
     protocolo era descartado na gravacao (tb_save_rateio_mes nao o recebia)."""
-    from db import (tb_get_rateio_mes, tb_save_rateio_mes, tb_set_protocolo_rateio,
-                    tb_get_clientes_da_usina, tb_carregar_clientes)
+    from db import tb_set_protocolo_rateio
     mes_ref  = _norm_mes(request.form.get("mes_ref", "").strip())
     protocolo = request.form.get("protocolo", "").strip()
     via_envio = request.form.get("via_envio", "email")
@@ -7270,27 +7307,9 @@ def rateio_registrar_protocolo(uid):
         flash("Usina nao encontrada para registrar o protocolo.", "danger")
         return redirect(url_for("rateio_dashboard", uid=uid))
 
-    # Snapshot dos vinculos atuais — so se o ciclo ainda nao tem retrato
-    # (ex.: registrado antes pela conciliacao). Mesmo formato da conciliacao.
-    existente = tb_get_rateio_mes(id_usina, mes_ref) or {}
-    if not existente.get("beneficiarios"):
-        cli_map = {c["id_cliente"]: c for c in tb_carregar_clientes()}
-        beneficiarios = []
-        for v in tb_get_clientes_da_usina(id_usina):
-            pct = float(v.get("pct_rateio") or 0)
-            c = cli_map.get(v.get("id_cliente"), {})
-            if pct <= 0 or not c.get("cod_uc"):
-                continue
-            beneficiarios.append({
-                "uc":         c["cod_uc"],
-                "cpf":        c.get("desc_cpf", "") or "",
-                "nome":       c.get("desc_nome", "") or "",
-                "percentual": round(pct, 4),
-            })
-        soma = round(sum(b["percentual"] for b in beneficiarios), 2)
-        tb_save_rateio_mes(id_usina, mes_ref, beneficiarios, soma)
-        if abs(soma - 100) > 0.01:
-            flash(f"Atencao: rateio registrado com soma {soma}% (deveria ser 100%).", "warning")
+    _n, soma, _ja = _snapshot_rateio_vinculos(id_usina, mes_ref)
+    if not _ja and abs(soma - 100) > 0.01:
+        flash(f"Atencao: rateio registrado com soma {soma}% (deveria ser 100%).", "warning")
 
     if tb_set_protocolo_rateio(id_usina, mes_ref, protocolo, via_envio):
         flash(f"Protocolo {protocolo} registrado — ciclo {mes_ref} fechado!", "success")
@@ -7298,6 +7317,33 @@ def rateio_registrar_protocolo(uid):
         flash(f"Ciclo {mes_ref} fechado com o retrato do rateio, mas o protocolo nao foi "
               "gravado: a tabela tb_rateios_mensais ainda nao tem as colunas "
               "protocolo/via_envio/data_protocolo (rode o ALTER TABLE no Supabase).", "warning")
+    return redirect(url_for("rateio_dashboard", uid=uid) + f"?mes={mes_ref}")
+
+
+# RATEIO - Fechar ciclo sem protocolo (registra o rateio executado do mes)
+@app.route("/usinas/rateio/fechar-ciclo/<uid>", methods=["POST"])
+def rateio_fechar_ciclo(uid):
+    """Marca o rateio do mes como EXECUTADO sem exigir protocolo: registra o
+    retrato dos vinculos atuais em tb_rateios_mensais. A usina trava no
+    Distribuir e os meses seguintes partem deste retrato. O protocolo pode
+    ser registrado depois (mesmo registro)."""
+    mes_ref = _norm_mes(request.form.get("mes_ref", "").strip())
+    if not mes_ref:
+        flash("Mes nao informado.", "danger")
+        return redirect(url_for("rateio_dashboard", uid=uid))
+    id_usina = _resolver_id_usina(uid)
+    if not id_usina:
+        flash("Usina nao encontrada.", "danger")
+        return redirect(url_for("rateio_dashboard", uid=uid))
+    n, soma, ja_existia = _snapshot_rateio_vinculos(id_usina, mes_ref)
+    if ja_existia:
+        flash(f"O ciclo {mes_ref} ja estava fechado ({n} beneficiarios, {soma}%).", "info")
+    elif n == 0:
+        flash("Nenhum cliente com percentual > 0 para registrar — ajuste o rateio antes.", "warning")
+    elif abs(soma - 100) > 0.01:
+        flash(f"Ciclo {mes_ref} fechado com {n} beneficiarios, mas soma {soma}% (deveria ser 100%).", "warning")
+    else:
+        flash(f"Ciclo {mes_ref} fechado: rateio executado registrado com {n} beneficiarios (100%).", "success")
     return redirect(url_for("rateio_dashboard", uid=uid) + f"?mes={mes_ref}")
 
 

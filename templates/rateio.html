@@ -459,6 +459,17 @@
                 </div>
                 <button type="submit" class="btn btn-cta btn-sm w-100"><i class="bi bi-patch-check me-1"></i>Confirmar Envio</button>
             </form>
+            {% if not modo_conferencia %}
+            <div class="text-center text-muted my-2" style="font-size:10px">— ou —</div>
+            <form method="POST" action="/usinas/rateio/fechar-ciclo/{{ uid }}"
+                  onsubmit="return confirm('Fechar o ciclo {{ mes_sel }} sem protocolo?\n\nO rateio atual ({{ alocacoes|length }} cliente(s)) será registrado como EXECUTADO: a usina trava na tela Distribuir e os próximos meses partem deste retrato.\n\nO protocolo pode ser registrado depois. Para refazer, use \'Excluir rateio\'.')">
+                <input type="hidden" name="mes_ref" value="{{ mes_sel }}">
+                <button type="submit" class="btn btn-outline-secondary btn-sm w-100" style="font-size:11px"
+                        title="Registra o rateio executado sem protocolo — a usina trava no Distribuir e o protocolo pode ser adicionado depois">
+                    <i class="bi bi-check2-circle me-1"></i>Fechar ciclo sem protocolo
+                </button>
+            </form>
+            {% endif %}
         </div></div>
         {% endif %}
 
