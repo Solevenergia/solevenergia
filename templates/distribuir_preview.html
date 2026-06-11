@@ -12,6 +12,32 @@
 {% endblock %}
 {% block content %}
 
+{# ── Seletor de MÊS de referência ────────────────────────────────── #}
+<div class="card mb-3" style="border-color:var(--db)">
+    <div class="card-body py-2 px-3 d-flex align-items-center flex-wrap gap-2">
+        <label for="selMes" class="mb-0 fw-semibold" style="font-size:14px;color:var(--db)">
+            <i class="bi bi-calendar3 me-1" style="color:var(--or)"></i>Mês de referência
+        </label>
+        <form method="get" action="" class="d-inline mb-0">
+            <input type="hidden" name="modo" value="{{ modo }}">
+            <select id="selMes" name="mes" class="form-select form-select-sm d-inline-block"
+                    style="width:auto;font-size:14px;font-weight:600" onchange="this.form.submit()">
+                {% for m in meses_disponiveis %}
+                <option value="{{ m }}" {% if m == mes_sel %}selected{% endif %}>{{ m }}</option>
+                {% endfor %}
+            </select>
+        </form>
+        {% if usinas_travadas %}
+        <span class="badge ms-2" style="background:#dcfce7;color:#16a34a;font-size:12px">
+            <i class="bi bi-lock-fill me-1"></i>{{ usinas_travadas|length }} usina(s) travada(s) neste mês
+        </span>
+        {% endif %}
+        <small class="text-muted ms-auto" style="font-size:11px">
+            Usinas com rateio já realizado no mês ficam travadas (read-only).
+        </small>
+    </div>
+</div>
+
 {# ── Banner de rascunho restaurado ─────────────────────────────── #}
 <div id="bannerRascunho" class="alert alert-warning mb-3 d-none align-items-center justify-content-between"
      style="font-size:13px">
@@ -62,6 +88,14 @@
         <div class="card text-center" style="border-color:#7c3aed"><div class="card-body py-3">
             <div style="font-size:26px;font-weight:700;color:#7c3aed">{{ total_fixos }}</div>
             <div class="text-muted" style="font-size:11px">Vínculos fixos</div>
+        </div></div>
+    </div>
+    {% endif %}
+    {% if usinas_travadas %}
+    <div class="col-6 col-md-2">
+        <div class="card text-center" style="border-color:#16a34a"><div class="card-body py-3">
+            <div style="font-size:26px;font-weight:700;color:#16a34a">{{ usinas_travadas|sum(attribute='n_benef') }}</div>
+            <div class="text-muted" style="font-size:11px"><i class="bi bi-lock-fill me-1"></i>Travados ({{ mes_sel }})</div>
         </div></div>
     </div>
     {% endif %}
@@ -404,6 +438,51 @@
     </div>
 </div>
 {% endfor %}
+
+
+{# ── Usinas TRAVADAS (rateio do mês já realizado) ────────────────── #}
+{% if usinas_travadas %}
+<div class="card mb-3" data-filtro-aux style="border-color:#16a34a">
+    <div class="card-header py-2 px-4" style="background:#f0fdf4">
+        <strong style="color:#16a34a"><i class="bi bi-lock-fill me-2"></i>Usinas com rateio realizado em {{ mes_sel }} — travadas</strong>
+        <small class="ms-2 text-muted">Read-only: não entram na distribuição automática nem podem receber/perder clientes. Para editar, use "Refazer".</small>
+    </div>
+    <div class="card-body p-0">
+        {% for t in usinas_travadas %}
+        <div class="px-4 py-3" style="border-top:1px solid #eef2f7">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <i class="bi bi-sun-fill me-1" style="color:var(--or)"></i>
+                    <strong>{{ t.usina.desc_nome }}</strong>
+                    <small class="text-muted ms-2"><i class="bi bi-calendar2 me-1"></i>Leitura dia {{ t.usina.qtd_dia_leitura }}</small>
+                    <span class="badge ms-2" style="background:#dcfce7;color:#16a34a;font-size:11px">
+                        <i class="bi bi-people me-1"></i>{{ t.n_benef }} cliente(s) · {{ t.soma_pct }}%
+                    </span>
+                    {% if t.data_registro %}<small class="text-muted ms-1" style="font-size:11px">· registrado {{ t.data_registro }}</small>{% endif %}
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <a href="/usinas/rateio/{{ t.usina.id_usina }}?mes={{ mes_sel }}"
+                       class="btn btn-sm btn-outline-secondary" style="font-size:11px"><i class="bi bi-eye me-1"></i>Ver rateio</a>
+                    <button type="button" class="btn btn-sm btn-outline-warning btn-refazer-rateio"
+                            data-id-usina="{{ t.usina.id_usina }}" data-nome="{{ t.usina.desc_nome }}"
+                            data-mes="{{ mes_sel }}" style="font-size:11px">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Refazer
+                    </button>
+                </div>
+            </div>
+            <div class="mt-2 d-flex flex-wrap gap-x-3 gap-y-1" style="font-size:11px;color:#555">
+                {% for b in t.beneficiarios %}
+                <span style="white-space:nowrap" class="me-3">
+                    {{ b.nome }} <strong style="color:var(--db)">{{ b.pct }}%</strong>
+                    <span class="text-muted">({{ b.kwh|fmt_kwh_br }} kWh)</span>
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
 
 
 {# ── Clientes sem usina ──────────────────────────────────────────── #}
@@ -1312,6 +1391,27 @@
         if (salvo && selUsina.querySelector('option[value="' + salvo + '"]')) selUsina.value = salvo;
     }
     aplicar();
+})();
+
+// ── Refazer rateio: destrava a usina no mês (apaga o registro) ──────
+(function() {
+    document.querySelectorAll('.btn-refazer-rateio').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var id = btn.dataset.idUsina, nome = btn.dataset.nome, mes = btn.dataset.mes;
+            var msg = 'Refazer o rateio de ' + nome + ' em ' + mes + '?\n\n'
+                    + 'Isso APAGA o rateio registrado deste mês e destrava a usina para edição. '
+                    + 'Você precisará registrar o rateio de novo depois.';
+            if (!confirm(msg)) return;
+            var f = document.createElement('form');
+            f.method = 'POST';
+            f.action = '/usinas/distribuir/refazer-rateio/' + id;
+            var inp = document.createElement('input');
+            inp.type = 'hidden'; inp.name = 'mes'; inp.value = mes;
+            f.appendChild(inp);
+            document.body.appendChild(f);
+            f.submit();
+        });
+    });
 })();
 </script>
 {% endblock %}

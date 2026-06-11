@@ -4867,8 +4867,9 @@ def usinas_distribuir():
     #    faturas Equatorial, com prioridade 6m → 3-5m → última. Sem histórico,
     #    cai no valor do cadastro. Sobrescreve ANTES de FIXO/algoritmo/display.
     from db import carregar_faturas, carregar_geracao_mensal
+    geracao_mensal_all = carregar_geracao_mensal()
     consumos_uc = _consumos_por_uc(carregar_faturas())
-    geracoes_u  = _geracoes_por_usina(carregar_geracao_mensal())
+    geracoes_u  = _geracoes_por_usina(geracao_mensal_all)
     n_cons_fat = n_ger_fat = 0
     for c in clientes:
         uc = str(c.get("cod_uc", "")).lstrip("0")
@@ -4891,6 +4892,68 @@ def usinas_distribuir():
             u["_geracao_origem"] = "cadastro"
     app.logger.info(f"[distribuir] consumo via fatura: {n_cons_fat}/{len(clientes)} · "
                     f"geração via fatura: {n_ger_fat}/{len(usinas)}")
+
+    # ── Visão por MÊS + usinas TRAVADAS (rateio já registrado no mês) ──────────
+    # Para o mês selecionado, uma usina cujo rateio já foi registrado em
+    # tb_rateios_mensais (beneficiarios) fica TRAVADA: aparece read-only (snapshot)
+    # e sai da distribuição automática — evita "bagunça" ao mexer em quem já foi
+    # rateado. Destravar = "Refazer" (apaga o registro do mês). O split continua
+    # nas usinas não-travadas.
+    rateios_all = carregar_rateios_mensais()
+    from datetime import datetime as _dtm
+    _now = _dtm.now()
+    _mes_atual = f"{_now.month}/{_now.year}"
+    def _ord_mes(m):
+        try:
+            p = str(m).split("/"); return int(p[1]) * 100 + int(p[0])
+        except Exception:
+            return 0
+    # geracao_mensal_all/rateios_all são {id_usina: {mes: ...}} — os MESES estão
+    # nas chaves internas (não confundir com a chave externa = id da usina).
+    _meses_ger = set()
+    for _mm in geracao_mensal_all.values(): _meses_ger.update(_mm.keys())
+    meses_set = {_mes_atual} | _meses_ger
+    for _mm in rateios_all.values():        meses_set.update(_mm.keys())
+    meses_disponiveis = sorted(meses_set, key=_ord_mes, reverse=True)
+    # Default: mês mais recente COM geração registrada (ciclo real); senão mês atual.
+    mes_sel = request.args.get("mes", "").strip() or (
+        max(_meses_ger, key=_ord_mes) if _meses_ger else _mes_atual)
+    mes_norm = _norm_mes(mes_sel)
+
+    import re as _re_ucd
+    def _ucdig(s): return _re_ucd.sub(r"\D", "", str(s or "")).lstrip("0")
+    _cli_por_uc = {_ucdig(c.get("cod_uc")): c for c in clientes if c.get("cod_uc")}
+
+    usinas_travadas = []
+    locked_ids = set()
+    ucs_locked = set()
+    for u in usinas:
+        snap = rateios_all.get(str(u["id_usina"]), {}).get(mes_norm) or {}
+        benef = snap.get("beneficiarios") or []
+        if not benef:
+            continue
+        locked_ids.add(u["id_usina"])
+        ger_u = float(u.get("qtd_geracao_media_mensal") or 0)
+        linhas = []
+        for b in benef:
+            ucd = _ucdig(b.get("uc")); ucs_locked.add(ucd)
+            c = _cli_por_uc.get(ucd, {})
+            pct = round(float(b.get("percentual") or 0), 2)
+            linhas.append({
+                "nome": c.get("desc_nome") or b.get("nome") or b.get("uc"),
+                "uc":   c.get("cod_uc") or b.get("uc"),
+                "pct":  pct,
+                "kwh":  round(ger_u * pct / 100, 0),
+            })
+        linhas.sort(key=lambda x: -x["pct"])
+        usinas_travadas.append({
+            "usina":         u,
+            "data_registro": snap.get("data_registro", ""),
+            "soma_pct":      round(float(snap.get("soma_percentual") or 0), 2),
+            "n_benef":       len(linhas),
+            "beneficiarios": linhas,
+        })
+    usinas_travadas.sort(key=lambda t: int(t["usina"].get("qtd_dia_leitura") or 0))
 
     # ── GET: busca saldo atual e calcula preview ────────────────
     # Saldo atual = saldo da vinculação ativa OU saldo_inicial do cadastro
@@ -4965,8 +5028,13 @@ def usinas_distribuir():
     if modo not in ("concentrar", "espalhar"):
         modo = "concentrar"
 
+    # Distribuição automática só nas usinas NÃO-travadas, com clientes ainda
+    # não comprometidos em usinas travadas deste mês.
+    usinas_distrib   = [u for u in usinas if u["id_usina"] not in locked_ids]
+    clientes_distrib = [c for c in clientes if _ucdig(c.get("cod_uc")) not in ucs_locked]
+
     alocacao, sem_usina = _algoritmo_distribuicao(
-        usinas, clientes, kwh_fixo_por_usina,
+        usinas_distrib, clientes_distrib, kwh_fixo_por_usina,
         ignorar_saldo=ignorar_saldo,
         janela_dias=janela_dias,
         excesso_pct=excesso_pct,
@@ -5029,7 +5097,10 @@ def usinas_distribuir():
                            excesso_pct=excesso_pct,
                            folga_pct=folga_pct,
                            permitir_split=permitir_split,
-                           modo=modo)
+                           modo=modo,
+                           mes_sel=mes_sel,
+                           meses_disponiveis=meses_disponiveis,
+                           usinas_travadas=usinas_travadas)
 
 
 # ============================================================
@@ -5135,6 +5206,24 @@ def usinas_distribuir_confirmar_usina(id_usina):
 
     # Redireciona pra tela de rateio dessa usina
     return redirect(url_for("rateio_dashboard", uid=id_usina))
+
+
+@app.route("/usinas/distribuir/refazer-rateio/<int:id_usina>", methods=["POST"])
+def usinas_distribuir_refazer(id_usina):
+    """Destrava uma usina no mês: apaga o rateio registrado (tb_rateios_mensais),
+    voltando a usina pro modo planejamento (editável)."""
+    from db import tb_delete_rateio_mes
+    mes = _norm_mes((request.form.get("mes") or "").strip())
+    if not mes:
+        flash("Mês não informado para refazer.", "danger")
+        return redirect(url_for("usinas_distribuir"))
+    try:
+        tb_delete_rateio_mes(id_usina, mes)
+        flash(f"Rateio de {mes} desfeito — usina destravada para edição.", "warning")
+    except Exception as e:
+        app.logger.error(f"[refazer-rateio] usina={id_usina} mes={mes}: {e}")
+        flash(f"Erro ao destravar: {e}", "danger")
+    return redirect(url_for("usinas_distribuir") + f"?mes={mes}")
 
 
 # USINAS - Ver detalhes + geracao
