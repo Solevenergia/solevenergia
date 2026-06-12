@@ -30,6 +30,9 @@ cadastro_usinas_template.xlsx.bak
 _gerar_champion_boleto.py
 static/boletos_manuais/
 
+# Contrato one-off: locacao de usina investidor->SOLEV (dados pessoais, fora do sistema)
+_gerar_contrato_fabio_locacao.py
+
 # Paliativo Juliano (2 usinas: local do locador @30% + SoLev @25%) — fora do sistema
 _gerar_juliano_lucas_mes.py
 GERAR_JULIANO_LUCAS.bat
