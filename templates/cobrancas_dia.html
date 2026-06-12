@@ -120,6 +120,16 @@
                                 <span class="badge bg-{{ c._status_color }}">
                                     {{ c._status_icon }} {{ c._status_label }}
                                 </span>
+                                <div id="wa-envio-{{ c._id_fatura }}">
+                                {% if c._envio_wa_br %}
+                                    <small style="color:#128c4b;font-size:10px;white-space:nowrap"
+                                           title="Cobrança enviada por WhatsApp{% if c._envio_wa_por %} por {{ c._envio_wa_por }}{% endif %}">
+                                        <i class="bi bi-whatsapp"></i> enviada {{ c._envio_wa_br }}
+                                    </small>
+                                {% elif c._status == 'cobranca' %}
+                                    <small class="text-muted" style="font-size:10px">não enviada</small>
+                                {% endif %}
+                                </div>
                             </td>
                             <td class="text-end">
                                 {% if c._id_fatura %}
@@ -130,6 +140,14 @@
                                         data-mes-ref="{{ c._mes_ref }}">
                                     <i class="bi bi-lightning-charge-fill"></i>
                                 </button>
+                                {% endif %}
+                                {% if c._pdf_solev and c._status != 'pago' %}
+                                <a href="/whatsapp/{{ c._pdf_solev }}?id={{ c._id_fatura }}" target="_blank"
+                                   class="btn btn-sm" style="background:#25D366;color:white"
+                                   title="Enviar cobrança por WhatsApp"
+                                   onclick="waEnvioVisual({{ c._id_fatura }})">
+                                    <i class="bi bi-whatsapp"></i>
+                                </a>
                                 {% endif %}
                                 {% if c._status == 'cobranca' or c._status == 'pago' or c._status == 'baixada' %}
                                 <a href="{{ url_for('cliente_ver', uc=c.cod_uc) }}" class="btn btn-sm btn-outline-secondary" title="Ver cliente">
@@ -303,6 +321,11 @@
 
 {% block scripts %}
 <script>
+// O servidor registra o envio na rota /whatsapp/...; aqui só atualizamos o selo na hora.
+function waEnvioVisual(idFatura) {
+    var el = document.getElementById('wa-envio-' + idFatura);
+    if (el) el.innerHTML = '<small style="color:#128c4b;font-size:10px"><i class="bi bi-whatsapp"></i> enviada agora</small>';
+}
 (function() {
     // Mascara DD/MM/AAAA
     function maskData(v) {

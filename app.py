@@ -1613,6 +1613,10 @@ def cobrancas_dia():
                 c["_status_color"] = "warning"
             c["_id_fatura"] = f.get("id_fatura") if f else None
             c["_mes_ref"]   = f"{pl.month}/{pl.year}"
+            c["_pdf_solev"] = (f.get("pdf_solev") or "") if f else ""
+            _env = f.get("dt_envio_whatsapp") if f else None
+            c["_envio_wa_br"]  = _ts_envio_br(_env) if _env else ""
+            c["_envio_wa_por"] = (f.get("envio_whatsapp_por") or "") if f else ""
 
     return render_template(
         "cobrancas_dia.html",
@@ -3248,6 +3252,15 @@ def enviar_whatsapp(filename):
     uc    = item.get("uc", "")
     item_id = item.get("id", "")
 
+    # Controle de envio: registra que a cobrança foi aberta no WhatsApp
+    # (badge "enviada" nas telas Faturas e Cobranças do Dia)
+    if item_id:
+        try:
+            from db import tb_registrar_envio_whatsapp
+            tb_registrar_envio_whatsapp(int(item_id), usuario=session.get("usuario"))
+        except Exception as _e:
+            app.logger.warning(f"[whatsapp] registro de envio falhou (fatura {item_id}): {_e}")
+
     # 1. Telefone do cliente — busca em tb_clientes
     telefone_digits = ""
     try:
@@ -3386,6 +3399,27 @@ def enviar_whatsapp_pix(id_fatura):
     return redirect(url)
 
 
+# CONTROLE DE ENVIO WHATSAPP — marcar/desfazer manualmente
+@app.route("/fatura/<int:id_fatura>/envio-whatsapp", methods=["POST"])
+def fatura_envio_whatsapp(id_fatura):
+    """Marca ou desfaz o registro de envio da cobrança por WhatsApp.
+
+    O registro automático acontece na rota /whatsapp/<pdf>; esta rota cobre
+    correções manuais (enviou por fora, clicou sem mandar, etc.).
+    """
+    from db import tb_registrar_envio_whatsapp, tb_limpar_envio_whatsapp
+    acao = request.form.get("acao", "marcar")
+    try:
+        if acao == "desfazer":
+            tb_limpar_envio_whatsapp(id_fatura)
+            return jsonify({"ok": True, "enviada": False})
+        r = tb_registrar_envio_whatsapp(id_fatura, usuario=session.get("usuario"))
+        return jsonify({"ok": True, "enviada": True, "dt": r.get("dt_envio_whatsapp")})
+    except Exception as e:
+        app.logger.exception(f"[envio-whatsapp] falha id_fatura={id_fatura}")
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
 # PAGAMENTO
 @app.route("/pagamento", methods=["GET", "POST"])
 def pagamento():
@@ -3502,6 +3536,27 @@ def historico_redirect():
     return redirect(target, code=301)
 
 
+def _ts_envio_br(v, com_hora=True):
+    """timestamptz ISO do Supabase (UTC) → 'dd/mm HH:MM' no horário de Goiânia.
+
+    Brasil aboliu o horário de verão: UTC-3 fixo o ano todo."""
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    if not v:
+        return ""
+    try:
+        s = str(v).strip().replace("Z", "+00:00")
+        try:
+            dt = _dt.fromisoformat(s)
+        except ValueError:
+            dt = _dt.fromisoformat(s[:19])
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_tz.utc)
+        dt = dt.astimezone(_tz(_td(hours=-3)))
+        return dt.strftime("%d/%m %H:%M") if com_hora else dt.strftime("%d/%m/%Y")
+    except Exception:
+        return str(v)[:16]
+
+
 @app.route("/faturas")
 def faturas():
     from db import tb_get_faturas_paginado, tb_mapa_uc_para_usina
@@ -3516,6 +3571,9 @@ def faturas():
     busca  = request.args.get("q", "").strip()
     mes_br = request.args.get("mes", "").strip()
     status = request.args.get("status", "todos").strip()
+    envio  = request.args.get("envio", "todos").strip()
+    if envio not in ("todos", "enviadas", "nao_enviadas"):
+        envio = "todos"
 
     status_map = {"nao_pago": "pendente", "vencidos": "vencido"}
     status_db  = status_map.get(status, status)
@@ -3533,6 +3591,7 @@ def faturas():
     rows, total = tb_get_faturas_paginado(
         page=page, per_page=per_page, busca=busca,
         ano=ano_filtro, mes=mes_filtro, status=status_db,
+        envio=envio,
     )
     total_pages = max(1, (total + per_page - 1) // per_page)
 
@@ -3572,6 +3631,7 @@ def faturas():
         r["_usina"] = mapa_usina.get(str(r.get("_cod_uc") or ""), "") or \
                       mapa_usina.get(str(r.get("_cod_uc") or ""), "")
         r["_pdf_legado"] = r.get("pdf_solev") or ""
+        r["_envio_wa_br"] = _ts_envio_br(r.get("dt_envio_whatsapp"))
 
     # ── Detecta faturas consolidáveis (modelo FIXO) ──
     try:
@@ -3598,6 +3658,7 @@ def faturas():
         faturas=rows, total=total,
         page=page, total_pages=total_pages,
         per_page=per_page, busca=busca, mes=mes_br, status=status,
+        envio=envio,
         fmt=_fmt_brl)
 
 
@@ -6409,6 +6470,22 @@ def _calcular_resumo_rateio_consolidado(mes_sel: str = ""):
         if tem_protocolo:
             n_protocolo_ok += 1
 
+        # Data de leitura: real (da fatura Equatorial do mes, se ja subiu) ou
+        # prevista (dt_proxima_leitura informada na ultima fatura Equatorial),
+        # esta ultima so quando cai dentro do mes selecionado.
+        data_leitura_show = _iso_to_br(data_leitura_usina)  # BR passa direto
+        leitura_prevista = False
+        if not data_leitura_show:
+            _prox_iso = str(u.get("proxima_leitura", "") or "")[:10]
+            try:
+                _prox_d = datetime.strptime(_prox_iso, "%Y-%m-%d").date()
+                _m_sel, _a_sel = mes_norm.split("/")
+                if _prox_d.month == int(_m_sel) and _prox_d.year == int(_a_sel):
+                    data_leitura_show = _prox_d.strftime("%d/%m/%Y")
+                    leitura_prevista = True
+            except ValueError:
+                pass
+
         linhas.append({
             "uid": uid,
             "nome": u.get("nome", uid),
@@ -6426,7 +6503,8 @@ def _calcular_resumo_rateio_consolidado(mes_sel: str = ""):
             "risco": risco,
             "tem_protocolo": tem_protocolo,
             "protocolo": rateio_mes.get("protocolo", ""),
-            "data_leitura": data_leitura_usina,
+            "data_leitura": data_leitura_show,
+            "leitura_prevista": leitura_prevista,
         })
 
         total_geracao += base_kwh

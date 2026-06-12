@@ -8,21 +8,21 @@
         {% if total_pages > 1 %}
         <div class="d-flex align-items-center gap-1">
             {% if page > 1 %}
-            <a href="/faturas?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+            <a href="/faturas?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}&envio={{ envio }}"
                class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
             {% endif %}
             {% for p in range(1, total_pages + 1) %}
                 {% if p == page %}
                 <span class="btn btn-sm btn-cta" style="min-width:34px">{{ p }}</span>
                 {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-                <a href="/faturas?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+                <a href="/faturas?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}&envio={{ envio }}"
                    class="btn btn-sm btn-outline-secondary" style="min-width:34px">{{ p }}</a>
                 {% elif p == page - 3 or p == page + 3 %}
                 <span class="text-muted px-1">…</span>
                 {% endif %}
             {% endfor %}
             {% if page < total_pages %}
-            <a href="/faturas?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+            <a href="/faturas?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}&envio={{ envio }}"
                class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
             {% endif %}
         </div>
@@ -48,7 +48,7 @@
                        value="{{ busca }}" placeholder="Buscar por nome ou UC..."
                        autocomplete="off">
                 {% if busca %}
-                <a href="/faturas?per_page={{ per_page }}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+                <a href="/faturas?per_page={{ per_page }}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}&envio={{ envio }}"
                    class="btn btn-outline-secondary btn-sm" title="Limpar busca">
                     <i class="bi bi-x-lg"></i>
                 </a>
@@ -65,6 +65,15 @@
                 <option value="20" {% if per_page==20 %}selected{% endif %}>20 por página</option>
                 <option value="50" {% if per_page==50 %}selected{% endif %}>50 por página</option>
                 <option value="100" {% if per_page==100 %}selected{% endif %}>100 por página</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select name="envio" id="filtroEnvio" class="form-select form-select-sm"
+                    onchange="document.getElementById('formFiltro').submit()"
+                    title="Filtrar pelo envio da mensagem de cobrança no WhatsApp">
+                <option value="todos" {% if envio=='todos' %}selected{% endif %}>WhatsApp: todos</option>
+                <option value="nao_enviadas" {% if envio=='nao_enviadas' %}selected{% endif %}>Não enviadas</option>
+                <option value="enviadas" {% if envio=='enviadas' %}selected{% endif %}>Enviadas</option>
             </select>
         </div>
         <div class="col-md-4">
@@ -106,6 +115,7 @@
                 <th>Venc. SOLEV</th>
                 <th>Venc. Equatorial</th>
                 <th>Status</th>
+                <th>Envio</th>
                 <th>Usina</th>
                 <th></th>
             </tr></thead>
@@ -150,6 +160,21 @@
                         </span>
                     {% endif %}
                 </td>
+                <td style="white-space:nowrap" id="envio-badge-{{ item.id_fatura }}">
+                    {% if item._envio_wa_br %}
+                        <span class="badge" style="background:#e7f7ee;color:#128c4b;border:1px solid #bfe8d2;cursor:pointer;font-size:11px"
+                              onclick="toggleEnvio({{ item.id_fatura }}, 'desfazer')"
+                              title="Cobrança enviada por WhatsApp{% if item.envio_whatsapp_por %} por {{ item.envio_whatsapp_por }}{% endif %}{% if (item.qtd_envios_whatsapp or 0) > 1 %} · {{ item.qtd_envios_whatsapp }} envios{% endif %} — clique para desfazer">
+                            <i class="bi bi-whatsapp me-1"></i>{{ item._envio_wa_br }}
+                        </span>
+                    {% elif item._status_classe != 'cancelado' %}
+                        <span class="badge" style="background:#f4f5f7;color:#8a929c;border:1px dashed #cfd6dd;cursor:pointer;font-weight:500"
+                              onclick="toggleEnvio({{ item.id_fatura }}, 'marcar')"
+                              title="Mensagem ainda não enviada — clique para marcar como enviada manualmente">
+                            não enviada
+                        </span>
+                    {% endif %}
+                </td>
                 <td style="font-size:11px;white-space:nowrap;color:#555">
                     {% if item._usina %}
                         <i class="bi bi-lightning-fill me-1" style="color:var(--or)"></i>{{ item._usina }}
@@ -179,7 +204,8 @@
                     {% endif %}
                     {% if item._pdf_legado %}
                         <a href="/whatsapp/{{ item._pdf_legado }}?id={{ item.id_fatura }}" target="_blank"
-                           class="btn btn-sm" style="background:#25D366;color:white" title="Enviar cobrança por WhatsApp">
+                           class="btn btn-sm" style="background:#25D366;color:white" title="Enviar cobrança por WhatsApp"
+                           onclick="marcarEnvioVisual({{ item.id_fatura }})">
                             <i class="bi bi-whatsapp"></i>
                         </a>
                     {% endif %}
@@ -210,21 +236,21 @@
         </span>
         <div class="d-flex align-items-center gap-1">
             {% if page > 1 %}
-            <a href="/faturas?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+            <a href="/faturas?page={{ page - 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}&envio={{ envio }}"
                class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
             {% endif %}
             {% for p in range(1, total_pages + 1) %}
                 {% if p == page %}
                 <span class="btn btn-sm btn-cta" style="min-width:34px">{{ p }}</span>
                 {% elif p == 1 or p == total_pages or (p >= page - 2 and p <= page + 2) %}
-                <a href="/faturas?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+                <a href="/faturas?page={{ p }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}&envio={{ envio }}"
                    class="btn btn-sm btn-outline-secondary" style="min-width:34px">{{ p }}</a>
                 {% elif p == page - 3 or p == page + 3 %}
                 <span class="text-muted px-1">…</span>
                 {% endif %}
             {% endfor %}
             {% if page < total_pages %}
-            <a href="/faturas?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}"
+            <a href="/faturas?page={{ page + 1 }}&per_page={{ per_page }}{% if busca %}&q={{ busca }}{% endif %}{% if mes %}&mes={{ mes }}{% endif %}&status={{ status }}&envio={{ envio }}"
                class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
             {% endif %}
         </div>
@@ -312,6 +338,29 @@ function setStatus(val) {
     if (!inp) { inp = document.createElement('input'); inp.type='hidden'; inp.name='page'; form.appendChild(inp); }
     inp.value = '1';
     form.submit();
+}
+
+// Controle de envio WhatsApp — marcar/desfazer manualmente (badge da coluna Envio)
+function toggleEnvio(idFatura, acao) {
+    if (acao === 'desfazer' && !confirm('Desfazer a marcação de envio desta fatura?')) return;
+    var fd = new FormData();
+    fd.append('acao', acao);
+    fetch('/fatura/' + idFatura + '/envio-whatsapp', {method: 'POST', body: fd})
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.ok) location.reload();
+            else alert('Falha ao atualizar envio: ' + (d.erro || 'erro desconhecido'));
+        })
+        .catch(function(e) { alert('Falha ao atualizar envio: ' + e); });
+}
+
+// Ao clicar no botão verde, o servidor registra o envio (rota /whatsapp/...);
+// aqui só atualizamos o badge na hora, sem recarregar a página.
+function marcarEnvioVisual(idFatura) {
+    var el = document.getElementById('envio-badge-' + idFatura);
+    if (!el) return;
+    el.innerHTML = '<span class="badge" style="background:#e7f7ee;color:#128c4b;border:1px solid #bfe8d2;font-size:11px">' +
+                   '<i class="bi bi-whatsapp me-1"></i>agora</span>';
 }
 
 // Dar baixa (id_fatura inteiro de tb_faturas)

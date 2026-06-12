@@ -2372,6 +2372,7 @@ def tb_get_faturas_paginado(
     busca: str = "",
     ano: Optional[int] = None, mes: Optional[int] = None,
     status: str = "todos",
+    envio: str = "todos",
 ) -> tuple:
     """Lista paginada com filtros server-side. Retorna (lista, total)."""
     db = _db()
@@ -2401,6 +2402,12 @@ def tb_get_faturas_paginado(
         from datetime import date as _date
         params["status"]            = "eq.pendente"
         params["dt_venc_solev"]  = f"lt.{_date.today().isoformat()}"
+
+    # Filtro pelo controle de envio WhatsApp (requer migration 002)
+    if envio == "enviadas":
+        params["dt_envio_whatsapp"] = "not.is.null"
+    elif envio == "nao_enviadas":
+        params["dt_envio_whatsapp"] = "is.null"
 
     if busca and busca.strip():
         b = busca.strip().replace("'", "")
@@ -2504,6 +2511,34 @@ def tb_marcar_fatura_pago(
         campos["vlr_juros_proxima"] = round(float(vlr_juros_proxima), 2)
     _db().patch("tb_faturas", {"id_fatura": id_fatura}, campos)
     return {"id_fatura": id_fatura, **campos}
+
+
+def tb_registrar_envio_whatsapp(id_fatura: int, usuario: str = None) -> dict:
+    """Registra que a mensagem de cobranca foi aberta no WhatsApp.
+
+    Chamado automaticamente pela rota /whatsapp/<pdf> (botao verde) e pela
+    marcacao manual na tela de Faturas. Timestamp ISO — colunas timestamptz
+    nunca aceitam data BR (dd/mm/aaaa inverte).
+    """
+    from datetime import datetime, timezone
+    campos = {"dt_envio_whatsapp": datetime.now(timezone.utc).isoformat()}
+    if usuario:
+        campos["envio_whatsapp_por"] = str(usuario)[:60]
+    try:
+        rows = _db().select("tb_faturas", columns="qtd_envios_whatsapp",
+                            filtros={"id_fatura": id_fatura})
+        atual = int(rows[0].get("qtd_envios_whatsapp") or 0) if rows else 0
+        campos["qtd_envios_whatsapp"] = atual + 1
+    except Exception:
+        pass  # coluna ainda nao migrada — patch() abaixo descarta o que nao existir
+    _db().patch("tb_faturas", {"id_fatura": id_fatura}, campos)
+    return {"id_fatura": id_fatura, **campos}
+
+
+def tb_limpar_envio_whatsapp(id_fatura: int) -> None:
+    """Desfaz a marcacao de envio (contador permanece como historico)."""
+    _db().patch("tb_faturas", {"id_fatura": id_fatura},
+                {"dt_envio_whatsapp": None, "envio_whatsapp_por": None})
 
 
 def tb_reservar_id_fatura(id_cliente: int, ano: int, mes: int) -> int:

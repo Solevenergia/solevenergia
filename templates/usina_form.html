@@ -344,7 +344,7 @@
                 <div class="col-md-4 mb-3">
                     <label class="form-label">Data de Nascimento</label>
                     <input type="text" name="inv_dt_nascimento" class="form-control"
-                        value="{{ investidor.dt_nascimento | fmt_data_br if investidor and investidor.dt_nascimento else '' }}"
+                        value="{{ investidor.dt_nascimento | data_br if investidor and investidor.dt_nascimento else '' }}"
                         placeholder="dd/mm/aaaa" maxlength="10">
                 </div>
                 <div class="col-md-4 mb-3">
