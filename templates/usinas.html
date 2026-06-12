@@ -131,11 +131,29 @@
 
 {% else %}
 <!-- ── ABA USINAS ───────────────────────────────────────────── -->
+{% if usinas %}
+<div class="card mb-3"><div class="card-body py-2 px-3">
+    <div class="row align-items-center g-2">
+        <div class="col-md-3">
+            <select id="filtroStatusUsina" class="form-select form-select-sm">
+                <option value="">Todos os status</option>
+                <option value="ativa">Ativas</option>
+                <option value="inativa">Inativas</option>
+            </select>
+        </div>
+        <div class="col-md-9 text-end">
+            <span class="text-muted" style="font-size:12px">
+                <span id="contagemUsinas">{{ usinas|length }}</span> de {{ usinas|length }} usinas
+            </span>
+        </div>
+    </div>
+</div></div>
+{% endif %}
 <div class="card">
     <div class="card-body p-0">
         {% if usinas %}
         <div class="table-responsive">
-        <table class="table table-sm mb-0" style="font-size:13px">
+        <table class="table table-sm mb-0" id="tabelaUsinas" style="font-size:13px">
             <thead>
                 <tr style="background:var(--db);color:white">
                     <th class="ps-3 py-3">Usina</th>
@@ -144,12 +162,15 @@
                     <th class="text-end">Geração média</th>
                     <th class="text-center">Clientes</th>
                     <th>Localização</th>
+                    <th class="text-center">Status</th>
                     <th class="text-center pe-3">Ações</th>
                 </tr>
             </thead>
             <tbody>
             {% for u in usinas %}
-            <tr style="border-bottom:1px solid #f0f0f0;cursor:pointer" onclick="location.href='/usinas/ver/{{ u.id_usina }}'">
+            <tr style="border-bottom:1px solid #f0f0f0;cursor:pointer{% if not u.status %};opacity:0.55{% endif %}"
+                data-status="{{ 'ativa' if u.status else 'inativa' }}"
+                onclick="location.href='/usinas/ver/{{ u.id_usina }}'">
                 <td class="ps-3 py-3">
                     <div class="d-flex align-items-center gap-2">
                         <div style="width:32px;height:32px;border-radius:8px;background:rgba(245,166,35,0.12);display:flex;align-items:center;justify-content:center;flex-shrink:0">
@@ -188,6 +209,17 @@
                         <span class="text-muted">—</span>
                     {% endif %}
                 </td>
+                <td class="text-center py-3">
+                    {% if u.status %}
+                    <span class="badge rounded-pill" style="background:rgba(25,135,84,0.12);color:#198754;font-size:12px">
+                        <i class="bi bi-check-circle-fill me-1"></i>Ativa
+                    </span>
+                    {% else %}
+                    <span class="badge rounded-pill" style="background:rgba(108,117,125,0.12);color:#6c757d;font-size:12px">
+                        <i class="bi bi-dash-circle me-1"></i>Inativa
+                    </span>
+                    {% endif %}
+                </td>
                 <td class="text-center pe-3 py-3" onclick="event.stopPropagation()">
                     <div class="d-flex gap-1 justify-content-center">
                         <a href="/usinas/ver/{{ u.id_usina }}" class="btn btn-sm btn-db" title="Detalhes">
@@ -216,5 +248,25 @@
         {% endif %}
     </div>
 </div>
+
+{% if usinas %}
+<script>
+// Filtro de status (client-side, igual à tela de clientes)
+var filtroStatusUsina = document.getElementById('filtroStatusUsina');
+var contagemUsinas    = document.getElementById('contagemUsinas');
+
+filtroStatusUsina.addEventListener('change', function() {
+    var status = filtroStatusUsina.value;
+    var rows   = document.querySelectorAll('#tabelaUsinas tbody tr');
+    var vis    = 0;
+    rows.forEach(function(tr) {
+        var match = !status || tr.dataset.status === status;
+        tr.style.display = match ? '' : 'none';
+        if (match) vis++;
+    });
+    if (contagemUsinas) contagemUsinas.textContent = vis;
+});
+</script>
+{% endif %}
 {% endif %}
 {% endblock %}

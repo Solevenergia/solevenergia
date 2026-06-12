@@ -63,6 +63,8 @@ def _calcular_alertas_rateio():
     geracao_mensal_all = carregar_geracao_mensal()  # geração real por usina (fatura)
 
     for uid, u in usinas.items():
+        if u.get("status") is False:
+            continue  # usina inativa nao gera alerta de rateio
         prox = u.get("proxima_leitura", "")
         if not prox:
             continue

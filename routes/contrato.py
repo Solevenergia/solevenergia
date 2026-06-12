@@ -20,7 +20,7 @@ _PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def contrato_form():
     from db import tb_carregar_clientes, tb_carregar_usinas
     clientes = tb_carregar_clientes()
-    usinas = tb_carregar_usinas()
+    usinas = [u for u in tb_carregar_usinas() if u.get("STATUS") is not False]
     return render_template("contrato_form.html", clientes=clientes, usinas=usinas)
 
 
@@ -33,7 +33,7 @@ def contrato_cliente(uc):
 
     id_cliente = cliente["id_cliente"]
     endereco = tb_get_endereco_cliente(id_cliente) or {}
-    usinas = tb_carregar_usinas()
+    usinas = [u for u in tb_carregar_usinas() if u.get("STATUS") is not False]
 
     # Pré-preenche com dados do cliente
     cliente_data = {

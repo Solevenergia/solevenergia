@@ -229,7 +229,7 @@ def simulacao_importar(id_sim):
         flash("Simulacao nao encontrada!", "danger")
         return redirect(url_for(".simulador"))
 
-    tb_usinas_lst = tb_carregar_usinas()
+    tb_usinas_lst = [u for u in tb_carregar_usinas() if u.get("STATUS") is not False]
 
     if request.method == "POST":
         uc = request.form.get("uc", "").strip()

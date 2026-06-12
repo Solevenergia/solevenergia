@@ -1117,7 +1117,7 @@ def tb_save_usina(dados: dict) -> dict:
         "qtd_geracao_prevista_diaria", "desc_observacoes",
         "desc_documento_titular_pdf",
         "qtd_dia_leitura", "dt_proxima_leitura", "qtd_saldo_kwh",
-        "desc_pix_recebimento",
+        "desc_pix_recebimento", "STATUS",
         "path_doc_cnh_rg", "path_doc_procuracao", "path_doc_cnh_rg_proc",
     ]
     # Colunas opcionais que so entram no payload se tiverem valor
@@ -1326,6 +1326,8 @@ def carregar_usinas() -> dict:
                 "documento_titular_pdf":     row.get("desc_documento_titular_pdf", "") or "",
                 "proxima_leitura":           row.get("dt_proxima_leitura", "") or "",
                 "saldo_kwh":                 row.get("qtd_saldo_kwh") or 0,
+                # STATUS ausente/None = ativa (coluna pode nao existir antes da migration)
+                "status":                    row.get("STATUS") is not False,
                 # Campos extras apenas em tb_usinas
                 "classe":                    row.get("desc_classe", "") or "",
                 "telefone_titular":          row.get("desc_telefone_titular", "") or "",

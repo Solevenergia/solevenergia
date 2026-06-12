@@ -965,6 +965,8 @@ def dashboard():
 
     usinas_chart = []
     for u in tb_usinas_lst:
+        if u.get("STATUS") is False:
+            continue  # usina inativa fica fora do grafico
         nome    = u.get("desc_nome", "")
         uid_leg = nome_para_uid.get(nome, "")
 
@@ -1262,7 +1264,7 @@ def cliente_deletar_documento(uc, id_doc):
 @app.route("/clientes/novo", methods=["GET", "POST"])
 def cliente_novo():
     from db import tb_save_cliente, tb_save_endereco, tb_save_cliente_usina, tb_carregar_usinas_com_titular
-    usinas = tb_carregar_usinas_com_titular()
+    usinas = [u for u in tb_carregar_usinas_com_titular() if u.get("STATUS") is not False]
     if request.method == "POST":
         nome_cliente = request.form.get("desc_nome", "").strip().upper()
         logger.info(f"[CLIENTE_NOVO] Tentativa de cadastro do cliente: {nome_cliente}")
@@ -1344,8 +1346,10 @@ def cliente_nova_uc(uc):
         flash("Cliente nao encontrado!", "danger")
         return redirect(url_for("clientes_lista"))
     id_cliente = origem["id_cliente"]
-    usinas = tb_carregar_usinas_com_titular()
     usinas_cliente = [v["id_usina"] for v in tb_get_usinas_do_cliente(id_cliente)]
+    # Inativas saem do dropdown, exceto as que o cliente já tem vinculadas
+    usinas = [u for u in tb_carregar_usinas_com_titular()
+              if u.get("STATUS") is not False or u.get("id_usina") in usinas_cliente]
     return render_template("cliente_form.html",
                            cliente=None,
                            prefill=origem,
@@ -1366,7 +1370,10 @@ def cliente_editar(uc):
         flash("Cliente nao encontrado!", "danger")
         return redirect(url_for("clientes_lista"))
     id_cliente = cliente["id_cliente"]
-    usinas = tb_carregar_usinas_com_titular()
+    # Inativas saem do dropdown, exceto as que o cliente já tem vinculadas
+    _ids_vinculadas = {v["id_usina"] for v in tb_get_usinas_do_cliente(id_cliente)}
+    usinas = [u for u in tb_carregar_usinas_com_titular()
+              if u.get("STATUS") is not False or u.get("id_usina") in _ids_vinculadas]
 
     if request.method == "POST":
         nome_cliente = request.form.get("desc_nome", "").strip().upper()
@@ -4200,6 +4207,10 @@ def usinas_lista():
             end.get("desc_cidade", ""),
             end.get("desc_estado", ""),
         ]))
+        # Normaliza STATUS (igual clientes): ausente/None = ativa
+        u["status"] = u.get("STATUS") is not False
+    # Inativas vao para o fim da lista (mantendo ordem alfabetica em cada grupo)
+    usinas = sorted(usinas, key=lambda u: (not u["status"], (u.get("desc_nome") or "").lower()))
     for inv in investidores:
         inv["_usinas_count"] = usinas_por_inv.get(inv["id_investidor"], 0)
     tab = request.args.get("tab", "usinas")
@@ -4311,6 +4322,7 @@ def usina_nova():
                 "qtd_geracao_prevista_diaria": float(request.form.get("qtd_geracao_prevista_diaria", "0").replace(",", ".") or "0"),
                 "desc_observacoes": request.form.get("desc_observacoes", "").strip(),
                 "desc_pix_recebimento": request.form.get("desc_pix_recebimento", "").strip() or None,
+                "STATUS": request.form.get("status_ativo", "1") == "1",
             }
             # Ciclo de leitura — habitual + próxima exata
             _dia_leit = request.form.get("qtd_dia_leitura", "").strip()
@@ -4432,6 +4444,7 @@ def usina_editar(id_usina):
                 "qtd_geracao_prevista_diaria": float(request.form.get("qtd_geracao_prevista_diaria", "0").replace(",", ".") or "0"),
                 "desc_observacoes": request.form.get("desc_observacoes", "").strip(),
                 "desc_pix_recebimento": request.form.get("desc_pix_recebimento", "").strip() or None,
+                "STATUS": request.form.get("status_ativo", "1") == "1",
             }
             # Ciclo de leitura — habitual + próxima exata
             _dia_leit = request.form.get("qtd_dia_leitura", "").strip()
@@ -4899,6 +4912,9 @@ def usinas_distribuir():
     from db import tb_carregar_usinas, tb_carregar_clientes, tb_carregar_enderecos_usinas, _db
 
     usinas   = tb_carregar_usinas()
+    # Usinas inativas saem do planejamento: clientes delas voltam ao pool
+    # e são redistribuídos nas demais (vínculos só mudam ao confirmar).
+    usinas   = [u for u in usinas if u.get("STATUS") is not False]
     clientes = tb_carregar_clientes()
     # Todos os ativos (incluindo já vinculados)
     clientes = [c for c in clientes if str(c.get("STATUS") or "").upper() != "INATIVO"]
@@ -5449,6 +5465,7 @@ def usina_ver(uid):
 
     # Dict compativel com o template (nomes antigos → valores novos)
     usina = {
+        "status":                  usina_tb.get("STATUS") is not False,
         "nome":                    usina_tb.get("desc_nome", ""),
         "potencia_kwp":            usina_tb.get("qtd_potencia_kwp", 0) or 0,
         "geracao_media_mensal":    usina_tb.get("qtd_geracao_media_mensal", 0) or 0,

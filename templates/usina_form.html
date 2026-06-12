@@ -38,6 +38,29 @@
                         placeholder="Ex: B1">
                 </div>
             </div>
+            <div class="mb-1">
+                <label class="form-label">Status</label>
+                <div class="d-flex align-items-center gap-3">
+                    {# STATUS ausente/None = ativa (coluna pode nao existir antes da migration) #}
+                    {% set ativa = false if (usina and usina.get('STATUS') is sameas false) else true %}
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch"
+                            id="switchStatusAtivo" name="status_ativo_check"
+                            onchange="document.getElementById('hiddenStatusAtivo').value = this.checked ? '1' : '0';
+                                      document.getElementById('labelStatusAtivo').textContent = this.checked ? 'Ativa' : 'Inativa'"
+                            {{ 'checked' if ativa else '' }}>
+                        <label class="form-check-label fw-semibold" for="switchStatusAtivo"
+                            id="labelStatusAtivo">
+                            {{ 'Ativa' if ativa else 'Inativa' }}
+                        </label>
+                    </div>
+                    <input type="hidden" name="status_ativo" id="hiddenStatusAtivo"
+                        value="{{ '1' if ativa else '0' }}">
+                </div>
+                <small class="text-muted" style="font-size:11px">
+                    Usina inativa sai da distribuição de clientes, dos alertas de rateio e dos cadastros novos.
+                </small>
+            </div>
         </div></div>
 
         {# Localização #}
