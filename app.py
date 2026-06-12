@@ -4916,8 +4916,12 @@ def usinas_distribuir():
     # e são redistribuídos nas demais (vínculos só mudam ao confirmar).
     usinas   = [u for u in usinas if u.get("STATUS") is not False]
     clientes = tb_carregar_clientes()
-    # Todos os ativos (incluindo já vinculados)
-    clientes = [c for c in clientes if str(c.get("STATUS") or "").upper() != "INATIVO"]
+    # Todos os ativos (incluindo já vinculados). STATUS no banco é boolean —
+    # o filtro antigo só comparava com a string legada "INATIVO" e deixava
+    # passar False, então cliente inativado continuava sendo distribuído.
+    clientes = [c for c in clientes
+                if c.get("STATUS") is not False
+                and str(c.get("STATUS") or "").upper() != "INATIVO"]
 
     if request.method == "POST":
         # ── CONFIRMAR ──────────────────────────────────────────
@@ -6961,6 +6965,7 @@ def rateio_dashboard(uid):
                 "dt_saldo_conferido": (vinc or {}).get("dt_saldo_conferido", "") or "",
                 "desc_saldo_obs":     (vinc or {}).get("desc_saldo_obs", "") or "",
                 "uc_display":         _fmt_uc15(c_tb.get("cod_uc") or "") or _fmt_uc15(b.get("uc", "")) or uc_key,
+                "inativo":            bool(c_tb) and c_tb.get("STATUS") is False,
             }
             vinculados_ucs.add(uc_key)
     else:
@@ -6978,16 +6983,23 @@ def rateio_dashboard(uid):
                     "dt_saldo_conferido": v.get("dt_saldo_conferido", "") or "",
                     "desc_saldo_obs":    v.get("desc_saldo_obs", "") or "",
                     "uc_display":        _fmt_uc15(uc_alt) if uc_alt else uc,
+                    # Inativo NÃO é escondido: o vínculo segue valendo no rateio
+                    # até ser desvinculado/redistribuído — esconder deixaria a
+                    # soma da tela ≠ soma real do banco (e do PDF da Equatorial).
+                    "inativo":           c_tb.get("STATUS") is False,
                 }
                 vinculados_ucs.add(uc)
 
     # Nao vinculados — legado para compatibilidade com form /vincular
+    # Clientes inativos ficam fora do dropdown de vincular.
     clientes_leg  = carregar_clientes()
     _uc_alt_map = {c["cod_uc"]: _fmt_uc15(c.get("cod_uc") or "") for c in todos_clientes}
+    _ucs_inativas = {c["cod_uc"] for c in todos_clientes
+                     if c.get("STATUS") is False and c.get("cod_uc")}
     nao_vinculados = {
         uc: {**c, "uc_display": _uc_alt_map.get(uc) or uc}
         for uc, c in clientes_leg.items()
-        if uc not in vinculados_ucs
+        if uc not in vinculados_ucs and uc not in _ucs_inativas
     }
 
     # ── Estimativa diaria (geracao em andamento) ──────────
@@ -7161,6 +7173,7 @@ def rateio_dashboard(uid):
 
         alocacoes.append({
             "uc": uc, "uc_display": c.get("uc_display", uc), "nome": c["nome"], "rateio_pct": pct,
+            "cliente_inativo": c.get("inativo", False),
             "id_cliente": _uc_para_id_cliente.get(uc),
             "kwh_esperado": round(kwh_esperado, 1),
             "kwh_compensado": round(kwh_compensado, 1),

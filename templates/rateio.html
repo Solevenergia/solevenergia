@@ -152,6 +152,12 @@
                 style="{% if a.status == 'deficit' %}background:rgba(239,68,68,0.03){% elif a.status == 'excedente' %}background:rgba(34,197,94,0.03){% endif %}">
                 <td>
                     <strong>{{ a.nome[:20] }}</strong>
+                    {% if a.cliente_inativo %}
+                    <span class="badge rounded-pill ms-1" style="background:rgba(239,68,68,0.1);color:#ef4444;font-size:10px"
+                          title="Cliente inativo que ainda tem % nesta usina — desvincule ou redistribua (Distribuir Clientes + confirmar) para liberar a cota.">
+                        <i class="bi bi-dash-circle me-1"></i>Inativo
+                    </span>
+                    {% endif %}
                     <br><code style="font-size:10px">{{ a.uc_display or (a.uc | fmt_uc15) }}</code>
                 </td>
                 <td class="text-end" style="position:relative">
