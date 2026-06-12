@@ -3227,6 +3227,29 @@ def pagar_pix(code):
         nome_recebedor=nome_recebedor,
         qr_base64=qr_base64)
 
+def _montar_link_whatsapp(telefone_digits: str, msg_quoted: str) -> str:
+    """Monta o link de envio garantindo que a cobrança saia pelo WhatsApp
+    BUSINESS da SOLEV, não pelo WhatsApp pessoal de quem clicou.
+
+    - Desktop: web.whatsapp.com força a conversa a abrir no WhatsApp Web do
+      navegador — que deve estar pareado com o número Business da SOLEV.
+      (wa.me deixava o Windows escolher, e o app instalado podia estar
+      logado no número pessoal.)
+    - Celular: web.whatsapp.com não funciona em navegador mobile; mantém
+      wa.me e o aparelho define o app padrão (marcar WhatsApp Business
+      como "Sempre" no Android).
+    - Sem telefone: wa.me abre a tela de escolher contato (o /send do
+      web.whatsapp.com exige phone).
+    """
+    ua = (request.headers.get("User-Agent") or "").lower()
+    eh_mobile = any(p in ua for p in ("android", "iphone", "ipad", "mobile"))
+    if telefone_digits and not eh_mobile:
+        return f"https://web.whatsapp.com/send?phone={telefone_digits}&text={msg_quoted}"
+    if telefone_digits:
+        return f"https://wa.me/{telefone_digits}?text={msg_quoted}"
+    return f"https://wa.me/?text={msg_quoted}"
+
+
 # ENVIAR POR WHATSAPP
 @app.route("/whatsapp/<path:filename>")
 def enviar_whatsapp(filename):
@@ -3243,7 +3266,7 @@ def enviar_whatsapp(filename):
     if not item:
         # Fallback: mensagem generica de simulacao
         msg = "Ola! Segue sua simulacao SOLEV."
-        return redirect(f"https://wa.me/?text={urllib.parse.quote(msg)}")
+        return redirect(_montar_link_whatsapp("", urllib.parse.quote(msg)))
 
     nome  = item.get("nome", "Cliente")
     mes   = item.get("mes_referencia", "")
@@ -3327,13 +3350,9 @@ def enviar_whatsapp(filename):
 
     msg = "\n".join(linhas)
 
-    # 4. URL wa.me - quote com encoding UTF-8 explicito para garantir emojis
+    # 4. URL de envio - quote com encoding UTF-8 explicito para garantir emojis
     msg_quoted = urllib.parse.quote(msg, safe="", encoding="utf-8")
-    if telefone_digits:
-        url = f"https://wa.me/{telefone_digits}?text={msg_quoted}"
-    else:
-        url = f"https://wa.me/?text={msg_quoted}"
-    return redirect(url)
+    return redirect(_montar_link_whatsapp(telefone_digits, msg_quoted))
 
 
 # ENVIAR CHAVE PIX POR WHATSAPP (mensagem separada — facil de copiar, nao expira)
@@ -3392,11 +3411,7 @@ def enviar_whatsapp_pix(id_fatura):
 
     # Mensagem com APENAS a chave PIX — long-press > Copy copia exatamente isto
     msg_quoted = urllib.parse.quote(pix_chave, safe="", encoding="utf-8")
-    if telefone_digits:
-        url = f"https://wa.me/{telefone_digits}?text={msg_quoted}"
-    else:
-        url = f"https://wa.me/?text={msg_quoted}"
-    return redirect(url)
+    return redirect(_montar_link_whatsapp(telefone_digits, msg_quoted))
 
 
 # CONTROLE DE ENVIO WHATSAPP — marcar/desfazer manualmente
@@ -7223,6 +7238,11 @@ def rateio_dashboard(uid):
         if id_c and c_tb.get("cod_uc"):
             _uc_para_id_cliente[c_tb["cod_uc"]] = id_c
 
+    # proxima_leitura do cadastro do cliente (tb_clientes) — vira a data
+    # PREVISTA da fatura que compensa este ciclo enquanto ela nao chega
+    _uc_prox_leitura = {c["cod_uc"]: (c.get("proxima_leitura") or "")
+                        for c in todos_clientes if c.get("cod_uc")}
+
     alocacoes = []
     for uc, c in vinculados.items():
         pct = c.get("rateio_pct", 0) or 0
@@ -7261,6 +7281,8 @@ def rateio_dashboard(uid):
             elif leit_usina and dl <= leit_usina:
                 anteriores.append((dl, item))
         saldo_fim = None   # saldo apos a fatura que compensa este ciclo (sobrou)
+        data_leitura_cliente = ""       # leitura da fatura que compensa este ciclo
+        leitura_cliente_prevista = False
         if candidatas:
             candidatas.sort(key=lambda x: x[0])  # a 1a leitura posterior a da usina
             item = candidatas[0][1]
@@ -7269,6 +7291,14 @@ def rateio_dashboard(uid):
             # fatura usa coluna 'qtd_saldo_kwh' (carregar_faturas nao cria alias 'saldo_kwh')
             saldo_fim = item.get("qtd_saldo_kwh", 0) or 0
             tem_fatura = True
+            data_leitura_cliente = candidatas[0][0].strftime("%d/%m/%Y")
+        else:
+            # Fatura ainda nao chegou: mostra a proxima_leitura do cadastro como
+            # prevista — so vale se respeitar a regra (posterior a leitura da usina)
+            _prox_c = _dia_br(_uc_prox_leitura.get(uc, ""))
+            if _prox_c and (not leit_usina or _prox_c > leit_usina):
+                data_leitura_cliente = _prox_c.strftime("%d/%m/%Y")
+                leitura_cliente_prevista = True
         # Saldo "da epoca" (tinha): ultima fatura ate a leitura da usina; senao saldo conferido
         if anteriores:
             anteriores.sort(key=lambda x: x[0])
@@ -7319,6 +7349,8 @@ def rateio_dashboard(uid):
             "diferenca": round(diferenca, 1),
             "tem_fatura": tem_fatura,
             "status": status,
+            "data_leitura_cliente": data_leitura_cliente,
+            "leitura_cliente_prevista": leitura_cliente_prevista,
         })
     alocacoes.sort(key=lambda x: -x["rateio_pct"])
 
