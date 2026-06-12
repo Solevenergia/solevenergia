@@ -62,14 +62,26 @@ def _gerar_assinatura_image_dinamica(uid):
     d.rectangle([(1200, 95), (new_w, 190)], fill=(255, 255, 255, 255))
     d.rectangle([(1300, 350), (new_w, 432)], fill=(255, 255, 255, 255))
 
-    # Arial Narrow 72px → cap height ~52, mesmo corpo das demais linhas do bloco direito
+    # Arial Narrow 72px → cap height ~52, mesmo corpo das demais linhas do bloco direito.
+    # Em producao (Linux/Railway) nao existem fontes do Windows: a cascata cai na
+    # Liberation Sans Narrow do repo (metricamente compativel com a Arial Narrow).
+    candidatas = (
+        ("C:/Windows/Fonts/ARIALN.TTF", 72),
+        ("C:/Windows/Fonts/arialn.ttf", 72),
+        (os.path.join(_DIR, "assets", "fonts", "LiberationSansNarrow-Regular.ttf"), 72),
+        ("C:/Windows/Fonts/arial.ttf", 60),
+        (os.path.join(_DIR, "static", "fonts", "Manrope-400-normal.ttf"), 60),
+    )
     font = None
-    for fp in ("C:/Windows/Fonts/ARIALN.TTF", "C:/Windows/Fonts/arialn.ttf"):
+    for fp, tam in candidatas:
         if os.path.exists(fp):
-            font = ImageFont.truetype(fp, 72)
+            font = ImageFont.truetype(fp, tam)
             break
     if font is None:
-        font = ImageFont.truetype("C:/Windows/Fonts/arial.ttf", 60)
+        try:
+            font = ImageFont.load_default(size=60)  # Pillow >= 10.1
+        except TypeError:
+            font = ImageFont.load_default()
 
     brt = timezone(timedelta(hours=-3))
     now = datetime.now(brt)
