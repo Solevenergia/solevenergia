@@ -182,10 +182,6 @@
                            class="btn btn-sm" style="background:#25D366;color:white" title="Enviar cobrança por WhatsApp">
                             <i class="bi bi-whatsapp"></i>
                         </a>
-                        <a href="/whatsapp-pix/{{ item.id_fatura }}" target="_blank"
-                           class="btn btn-sm" style="background:#0e9b65;color:white" title="Enviar código PIX por WhatsApp (mensagem separada)">
-                            <i class="bi bi-qr-code"></i> PIX
-                        </a>
                     {% endif %}
                     {% if item._pode_consolidar %}
                         <form method="post" action="/fatura/consolidar-fixo/{{ item.id_fatura }}" style="display:inline">
