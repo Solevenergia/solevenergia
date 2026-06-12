@@ -51,7 +51,7 @@ from utils import (
     _iso_to_br, _fmt_uc15, _fmt_cpf_cnpj, _fmt_cep, _data_br_para_iso,
     PIX_CHAVE, PIX_NOME, PIX_CIDADE,
     _build_pix_payload, gerar_qrcode_pix, _formatar_chave_pix_display,
-    _buscar_cliente_por_uc, _carregar_cliente_hibrido,
+    _buscar_cliente_por_uc, _carregar_cliente_hibrido, ucs_equivalentes,
     obter_tarifa_mes,
 )
 
@@ -1388,6 +1388,23 @@ def cliente_editar(uc):
                 return redirect(url_for("cliente_editar", uc=uc))
             novo_cod_uc = nova_uc_antiga if nova_uc_antiga else nova_uc_nova
 
+            # ── Guarda-corpo: trocar a UC re-atribui as faturas existentes ──
+            # tb_faturas aponta para id_cliente, nao para a UC: mudar o cod_uc
+            # faz TODAS as faturas ja emitidas deste cadastro responderem pela
+            # UC nova silenciosamente (caso Juliana, 12/06). Detecta e avisa.
+            uc_atual_db = str(cliente.get("cod_uc") or "")
+            uc_vai_mudar = (bool(nova_uc_nova) and bool(uc_atual_db)
+                            and not ucs_equivalentes(nova_uc_nova, uc_atual_db))
+            qtd_faturas_presas = 0
+            if uc_vai_mudar:
+                try:
+                    from db import _db as _get_db_fat
+                    qtd_faturas_presas = len(_get_db_fat().select(
+                        "tb_faturas", columns="id_fatura",
+                        filtros={"id_cliente": id_cliente}))
+                except Exception as _e_fat:
+                    logger.warning(f"[CLIENTE_EDITAR] Guarda-corpo: falha ao contar faturas do id_cliente {id_cliente}: {_e_fat}")
+
             desc = float(request.form.get("pct_desconto", "20").replace(",", ".") or "20")
             if desc > 1: desc = desc / 100
 
@@ -1440,6 +1457,15 @@ def cliente_editar(uc):
 
             logger.info(f"[CLIENTE_EDITAR] Cliente atualizado com sucesso - ID: {id_cliente}, Novo UC: {novo_cod_uc}")
             flash("Cliente atualizado!", "success")
+            if uc_vai_mudar and qtd_faturas_presas:
+                logger.warning(
+                    f"[CLIENTE_EDITAR] UC do id_cliente {id_cliente} mudou de {uc_atual_db} para "
+                    f"{nova_uc_nova} com {qtd_faturas_presas} fatura(s) vinculadas")
+                flash(f"Atencao: a UC deste cadastro mudou de {_fmt_uc15(uc_atual_db)} para "
+                      f"{_fmt_uc15(nova_uc_nova)} e {qtd_faturas_presas} fatura(s) ja emitida(s) "
+                      "continuam vinculadas a ele — passam a responder pela UC nova. Se a UC "
+                      "anterior pertencia a OUTRO consumidor, o correto e criar um cadastro novo "
+                      "(acao 'Nova UC' na lista de clientes) e conferir essas faturas.", "warning")
             return redirect(url_for("clientes_lista"))
         except Exception as e:
             import traceback; traceback.print_exc()
@@ -2245,17 +2271,42 @@ def gerar_manual():
 
             # ── Fatura Equatorial em anexo (sem extracao) ──
             equatorial_pdf_path = None
+            pdf_recem_anexado = False
             if "equatorial_pdf" in request.files:
                 f = request.files["equatorial_pdf"]
                 if f and f.filename:
                     fname = f"{mes_ref.replace('/', '')}-EQUATORIAL-{chave_real}.pdf"
                     equatorial_pdf_path = os.path.join(UPLOAD_FOLDER, fname)
                     f.save(equatorial_pdf_path)
+                    pdf_recem_anexado = True
             # Path persistido vindo do preview (preserva anexo entre preview→confirmar)
             if not equatorial_pdf_path:
                 persisted = request.form.get("_equatorial_pdf_path", "").strip()
                 if persisted and os.path.exists(persisted):
                     equatorial_pdf_path = persisted
+
+            # ── Guarda-corpo: PDF anexado tem que ser da UC do cliente casado ──
+            # A fatura fica vinculada por id_cliente; se o operador anexar o PDF
+            # de OUTRA UC (cliente errado selecionado, ou cadastro reaproveitado),
+            # a cobranca nasce presa no cadastro errado. Bloqueia antes de gerar.
+            if equatorial_pdf_path:
+                uc_pdf = ""
+                try:
+                    uc_pdf = (extrair_equatorial(equatorial_pdf_path, verbose=False) or {}).get("uc", "") or ""
+                except Exception as _e_guard:
+                    app.logger.warning(f"[gerar_manual] guarda-corpo UC: extracao do PDF falhou: {_e_guard}")
+                if uc_pdf and not ucs_equivalentes(uc_pdf, chave_real):
+                    if pdf_recem_anexado:
+                        # arquivo acabou de ser salvo com a UC errada no nome
+                        try: os.remove(equatorial_pdf_path)
+                        except OSError: pass
+                    app.logger.warning(
+                        f"[gerar_manual] BLOQUEADO: PDF da UC {uc_pdf} anexado na cobranca da UC {chave_real}")
+                    flash(f"PDF Equatorial anexado e da UC {_fmt_uc15(uc_pdf)}, mas a cobranca seria "
+                          f"gravada na UC {_fmt_uc15(chave_real)} ({cliente.get('nome', '')}). "
+                          "Confira se o cliente selecionado e o correto — geracao bloqueada para "
+                          "evitar fatura vinculada ao cadastro errado.", "danger")
+                    return redirect(url_for("gerar_manual"))
 
             # ── Economia acumulada: override manual ou valor do cadastro ──
             if economia_acum_manual:

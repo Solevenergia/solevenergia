@@ -231,27 +231,36 @@ def resolver_tarifa_bandeira(equatorial: dict, ba_stored: float = 0.0,
 
 # ── Clientes ─────────────────────────────────────────────────
 
+def norm_uc(v):
+    """Normaliza UC para comparacao: remove pontuacao/espacos e zeros a esquerda."""
+    return re.sub(r'[.\-\s]', '', str(v or "")).lstrip("0")
+
+def ucs_equivalentes(a, b) -> bool:
+    """True se as duas UCs representam a MESMA unidade consumidora.
+    Mesma regra de matching de _buscar_cliente_por_uc: ignora formatacao e
+    zeros a esquerda, e tolera presenca/ausencia dos 2 digitos verificadores.
+    UC vazia nunca casa com nada."""
+    a, b = norm_uc(a), norm_uc(b)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) == 2:
+        shorter, longer = (a, b) if len(a) < len(b) else (b, a)
+        if longer[:len(shorter)] == shorter:
+            return True
+    return False
+
 def _buscar_cliente_por_uc(uc, clientes):
     """Busca cliente por UC principal OU UC Antiga (formato legado).
     Retorna (chave_real, cliente) ou (None, None)."""
     if not uc:
         return None, None
-    def _norm_uc(v):
-        return re.sub(r'[.\-\s]', '', str(v)).lstrip("0")
-    def _match(a, b):
-        if a == b:
-            return True
-        if abs(len(a) - len(b)) == 2:
-            shorter, longer = (a, b) if len(a) < len(b) else (b, a)
-            if longer[:len(shorter)] == shorter:
-                return True
-        return False
-    uc_norm = _norm_uc(uc)
     for key, cli in clientes.items():
-        if _match(_norm_uc(key), uc_norm):
+        if ucs_equivalentes(key, uc):
             return key, cli
         alt = cli.get("uc_alternativa", "") or ""
-        if alt and _match(_norm_uc(alt), uc_norm):
+        if alt and ucs_equivalentes(alt, uc):
             return key, cli
     return None, None
 
