@@ -124,6 +124,10 @@
             <thead style="background:#f8f9fa">
             <tr>
                 <th style="font-size:11px">UC / Cliente</th>
+                <th class="text-center" style="font-size:11px">
+                    Leitura
+                    <i class="bi bi-question-circle text-muted ms-1" title="Data de leitura da fatura do cliente que compensa esta geração — por regra, a primeira leitura POSTERIOR à da usina. Em amarelo: prevista (fatura ainda não chegou; data do cadastro do cliente)." style="cursor:help"></i>
+                </th>
                 <th class="text-end" style="font-size:11px">
                     {% if modo_conferencia %}Tinha (saldo){% else %}Saldo atual{% endif %}
                     <i class="bi bi-question-circle text-muted ms-1" title="{% if modo_conferencia %}Saldo de créditos que o cliente tinha quando o rateio foi enviado (última fatura até a leitura da usina).{% else %}Saldo de créditos kWh acumulado. Clique para conferir.{% endif %}" style="cursor:help"></i>
@@ -159,6 +163,14 @@
                     </span>
                     {% endif %}
                     <br><code style="font-size:10px">{{ a.uc_display or (a.uc | fmt_uc15) }}</code>
+                </td>
+                <td class="text-center" style="white-space:nowrap">
+                    {% if a.data_leitura_cliente %}
+                        <small>{{ a.data_leitura_cliente }}</small>
+                        {% if a.leitura_cliente_prevista %}<div style="font-size:10px;color:#eab308"><i class="bi bi-hourglass-split"></i> prevista</div>{% endif %}
+                    {% else %}
+                        <span class="text-muted">—</span>
+                    {% endif %}
                 </td>
                 <td class="text-end" style="position:relative">
                     {% if modo_conferencia %}
@@ -265,7 +277,7 @@
             </tr>
             {% else %}
             <tr>
-                <td colspan="11" class="text-center text-muted py-4">
+                <td colspan="12" class="text-center text-muted py-4">
                     <i class="bi bi-people" style="font-size:32px;opacity:.3"></i>
                     <p class="mt-2 mb-0">Nenhum cliente vinculado.</p>
                 </td>
