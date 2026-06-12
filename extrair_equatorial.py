@@ -24,7 +24,9 @@ Campos retornados (identicos ao extrair_equatorial original + novos):
 """
 import dataclasses
 from extracao import extrair
+from extracao.exceptions import ExtracaoError
 from extracao.models import Fatura
+from extracao import ia as extracao_ia
 
 
 def _fatura_para_dict(f: Fatura) -> dict:
@@ -62,8 +64,27 @@ def extrair_equatorial(caminho_pdf: str, verbose: bool = False) -> dict:
     Retorna
     -------
     dict com todos os campos (inclui aliases legados).
+
+    Reforco com IA (extracao/ia.py) — so atua quando ANTHROPIC_API_KEY existe:
+      - PDF nao reconhecido pelo regex -> IA extrai tudo;
+      - campos vitais zerados (secao quebrou em silencio) -> IA preenche os buracos.
+    Sem chave, o comportamento e identico ao regex puro.
     """
-    fatura = extrair(caminho_pdf)
+    try:
+        fatura = extrair(caminho_pdf)
+    except ExtracaoError:
+        if not extracao_ia.ia_disponivel():
+            raise
+        print(f"[extracao] regex nao reconheceu o PDF — extraindo com IA: {caminho_pdf}")
+        fatura = extracao_ia.extrair_com_ia(caminho_pdf)
+    else:
+        motivos = extracao_ia.motivos_escalonamento(fatura)
+        if motivos and extracao_ia.ia_disponivel():
+            print(f"[extracao] campos vitais ausentes ({', '.join(motivos)}) — completando com IA")
+            try:
+                fatura = extracao_ia.mesclar(fatura, extracao_ia.extrair_com_ia(caminho_pdf))
+            except Exception as e:
+                print(f"[extracao] IA falhou ({e}) — mantendo resultado do regex")
     return _fatura_para_dict(fatura)
 
 

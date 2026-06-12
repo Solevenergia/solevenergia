@@ -21,6 +21,9 @@ pypdf
 httpx
 python-dotenv
 
+# Claude API — reforco da extracao de faturas (extracao/ia.py)
+anthropic
+
 # Excel (template de cadastro de usinas)
 openpyxl
 

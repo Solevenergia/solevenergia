@@ -149,3 +149,6 @@ class Fatura:
     tensao_nominal: float = 0.0
     vrc: float = 0.0
     _n_paginas: int = 1
+
+    # Proveniencia: "regex" | "ia" | "regex+ia" (ver extracao/ia.py)
+    fonte_extracao: str = "regex"
