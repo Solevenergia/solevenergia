@@ -97,7 +97,9 @@ def extrair_com_ia(caminho_pdf: str) -> Fatura:
     with open(caminho_pdf, "rb") as fh:
         pdf_b64 = base64.standard_b64encode(fh.read()).decode("ascii")
 
-    client = anthropic.Anthropic(timeout=180.0)
+    # timeout < gunicorn --timeout 120 (Procfile): a chamada precisa caber
+    # dentro do request de upload sem o worker ser morto no meio.
+    client = anthropic.Anthropic(timeout=90.0, max_retries=0)
     resposta = client.messages.parse(
         model=os.environ.get("SOLEV_IA_MODELO", MODELO_PADRAO),
         max_tokens=16000,
